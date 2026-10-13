@@ -10,6 +10,8 @@ body {
   height: 100%;
   background: var(--black);
   overflow: hidden;
+  /* sem puxar-para-recarregar nem elástico: a rolagem é toda do app */
+  overscroll-behavior: none;
 }
 
 body {
@@ -40,7 +42,7 @@ img {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Palco fixo de 1920×1080; Stage.tsx aplica a escala para caber na janela. */
+/* Palco em px de TV; Stage.tsx define o tamanho e a escala para ocupar a janela. */
 .viewport {
   position: fixed;
   top: 0;
@@ -77,6 +79,8 @@ img {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  /* o arrasto do dedo é tratado pelo app (useTouchScroll), não pelo navegador */
+  touch-action: none;
 }
 
 .scroll-inner {

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { focusElement, focusPageDefault, forgetPage } from '../focus/FocusContext';
 import { useFocusable, useFocusMove } from '../focus/useFocusable';
 import { Icon, type IconName } from './Icon';
+import { useStage } from './Stage';
 
 const ITEMS: { path: string; label: string; icon: IconName }[] = [
   { path: '/search', label: 'Buscar', icon: 'search' },
@@ -36,13 +37,17 @@ function Item({
   );
 }
 
-/** Menu lateral: coluna de ícones em repouso, abre com rótulos ao receber foco. */
+/**
+ * Menu lateral: coluna de ícones em repouso, abre com rótulos ao receber foco.
+ * No layout compacto vira uma barra de ícones no pé da tela, sem estado aberto.
+ */
 export function Sidebar() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const nav = useRef<HTMLElement>(null);
   const cameFrom = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
+  const { compact } = useStage();
 
   const activePath = ITEMS.some((i) => i.path === pathname) ? pathname : null;
 
@@ -50,9 +55,9 @@ export function Sidebar() {
     if (!focusElement(cameFrom.current)) focusPageDefault();
   };
 
-  // Direita devolve o foco para onde ele estava no conteúdo.
+  // Direita (ou cima, na barra do pé da tela) devolve o foco para onde ele estava no conteúdo.
   useFocusMove(nav, (dir) => {
-    if (dir !== 'right') return false;
+    if (dir !== (compact ? 'up' : 'right')) return false;
     backToContent();
     return true;
   });
@@ -75,7 +80,7 @@ export function Sidebar() {
   };
 
   return (
-    <aside className={`sidebar${open ? ' is-open' : ''}`}>
+    <aside className={`sidebar${open && !compact ? ' is-open' : ''}`}>
       <div className="sidebar__shade" />
       <div className="sidebar__shade sidebar__shade--open" />
       <div className="sidebar__brand display">Freeflix</div>
@@ -83,8 +88,9 @@ export function Sidebar() {
         ref={nav}
         className="sidebar__nav"
         data-focus-group=""
-        data-focus-enter="left"
-        data-focus-lock="up down"
+        data-focus-enter={compact ? 'left down' : 'left'}
+        data-focus-lock={compact ? 'down' : 'up down'}
+        data-focus-edge={compact ? 'left' : undefined}
         onFocus={onFocus}
         onBlur={() => setOpen(false)}
       >

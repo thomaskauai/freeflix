@@ -6,6 +6,7 @@ import { findNext, type Direction } from './spatial';
 // geometria. Atributos de grupo em [data-focus-group]:
 //   data-focus-enter="up down"  só se entra no grupo por essas direções
 //   data-focus-lock="up down"   nessas direções o foco não sai do grupo
+//   data-focus-edge="left"      recebe o foco quando não há vizinho alinhado nessa direção
 // Ao entrar num grupo o foco vai para [data-focus-default], senão para o
 // último elemento focado ali, senão para o vizinho geométrico.
 
@@ -55,6 +56,15 @@ const groupOf = (el: Element) => el.closest('[data-focus-group]');
 const allows = (attr: string | null | undefined, dir: Direction) =>
   !!attr && attr.split(' ').indexOf(dir) >= 0;
 
+/** Os dois elementos se sobrepõem no eixo perpendicular ao movimento. */
+function sameLine(a: HTMLElement, b: HTMLElement, dir: Direction) {
+  const ra = a.getBoundingClientRect();
+  const rb = b.getBoundingClientRect();
+  return dir === 'left' || dir === 'right'
+    ? Math.min(ra.bottom, rb.bottom) > Math.max(ra.top, rb.top)
+    : Math.min(ra.right, rb.right) > Math.max(ra.left, rb.left);
+}
+
 function move(dir: Direction) {
   const root = layerRoot();
   const current = document.activeElement as HTMLElement | null;
@@ -82,6 +92,13 @@ function move(dir: Direction) {
   // item do menu, que é largo, ganhava do card anterior por estar "mais perto".
   const siblings = currentGroup ? candidates.filter((el) => groupOf(el) === currentGroup) : [];
   let next = findNext(current, dir, siblings) || findNext(current, dir, candidates);
+
+  // Menu que não fica ao lado do conteúdo (barra no pé da tela, no layout
+  // compacto): a geometria não o acha, então a borda da tela leva até ele.
+  const edge = root.querySelector<HTMLElement>(`[data-focus-edge~="${dir}"]`);
+  if (edge && edge !== currentGroup && (!next || !sameLine(current, next, dir))) {
+    next = edge.querySelector<HTMLElement>(SELECTOR) || next;
+  }
   if (!next) return;
 
   const nextGroup = groupOf(next);
@@ -118,6 +135,13 @@ function onKeyDown(e: KeyboardEvent) {
   }
 }
 
+function keepInView(el: HTMLElement, box: HTMLElement) {
+  const top = el.offsetTop;
+  const bottom = top + el.offsetHeight;
+  if (top < box.scrollTop) box.scrollTop = top;
+  else if (bottom > box.scrollTop + box.clientHeight) box.scrollTop = bottom - box.clientHeight;
+}
+
 function onFocusIn(e: FocusEvent) {
   const el = e.target as HTMLElement;
   if (!el.matches || !el.matches(SELECTOR)) return;
@@ -130,6 +154,12 @@ function onFocusIn(e: FocusEvent) {
   // WebViews sem preventScroll rolam o container recortado ao focar; a rolagem
   // aqui é toda por transform, então qualquer scroll nativo é desfeito.
   for (let node = el.parentElement; node; node = node.parentElement) {
+    // Exceção: listas [data-native-scroll] rolam de verdade. Com o controle, o
+    // item focado é mantido à vista; com ponteiro ou dedo, quem rola é o gesto.
+    if (node.hasAttribute('data-native-scroll')) {
+      if (!pointerFocus) keepInView(el, node);
+      continue;
+    }
     if (node.scrollLeft) node.scrollLeft = 0;
     if (node.scrollTop) node.scrollTop = 0;
   }
@@ -148,15 +178,22 @@ function onMouseMove(e: MouseEvent) {
   pointerFocus = false;
 }
 
+// Dedo na tela vale como ponteiro desde o primeiro toque, antes de qualquer mousemove emulado.
+function onTouchStart() {
+  document.documentElement.classList.add('is-pointer');
+}
+
 export function FocusProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     window.addEventListener('keydown', onKeyDown);
     document.addEventListener('focusin', onFocusIn);
     window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('touchstart', onTouchStart);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('focusin', onFocusIn);
       window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('touchstart', onTouchStart);
     };
   }, []);
   return <>{children}</>;

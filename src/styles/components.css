@@ -158,8 +158,8 @@
   position: absolute;
   top: 0;
   left: 0;
-  width: 1920px;
-  height: 1080px;
+  width: 100%;
+  height: var(--backdrop-h);
   overflow: hidden;
   background: var(--black);
 }
@@ -170,8 +170,8 @@
   position: absolute;
   top: 0;
   right: 0;
-  width: 1500px;
-  height: 1080px;
+  width: 78.125%;
+  height: 100%;
   object-fit: cover;
   object-position: 50% 30%;
   opacity: 0;
@@ -184,12 +184,12 @@
 
 /* imagem widescreen cobre a tela inteira */
 .backdrop__img--wide {
-  width: 1920px;
+  width: 100%;
   object-position: 50% 20%;
 }
 
 .backdrop__img--poster {
-  width: 1920px;
+  width: 100%;
   -webkit-filter: blur(48px) saturate(1.2);
   filter: blur(48px) saturate(1.2);
   transform: scale(1.2);
@@ -203,10 +203,10 @@
 .backdrop__poster {
   position: absolute;
   top: 104px;
-  right: 168px;
+  right: 8.75%;
   width: auto;
   height: auto;
-  max-width: 600px;
+  max-width: 31.25%;
   max-height: 624px;
   border-radius: var(--card-radius);
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.1);
@@ -247,7 +247,8 @@
   position: absolute;
   top: var(--hero-top);
   left: var(--content-left);
-  width: 1100px;
+  right: var(--content-left);
+  max-width: 1100px;
   animation: hero-in 700ms var(--ease) both;
 }
 
@@ -294,6 +295,7 @@
 .hero__title--logo,
 .details__title--logo {
   width: 620px;
+  max-width: 100%;
 }
 
 .details__title--logo {
@@ -309,7 +311,9 @@
 }
 
 .hero__synopsis {
-  width: var(--hero-text-w);
+  /* fração da coluna de texto: em palco estreito o texto não invade o cartaz */
+  width: 59.1%;
+  max-width: var(--hero-text-w);
   height: 111px;
   margin-top: 19px;
   font-size: 24px;
@@ -388,6 +392,7 @@
 
 .meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   font-size: 22px;
   line-height: 30px;
@@ -648,8 +653,8 @@
 }
 
 .empty {
-  margin: 200px 0 0 var(--content-left);
-  width: 760px;
+  margin: 200px var(--content-left) 0;
+  max-width: 760px;
 }
 
 .empty__title {
@@ -681,7 +686,8 @@
   position: absolute;
   top: 150px;
   left: var(--content-left);
-  width: 1100px;
+  right: var(--content-left);
+  max-width: 1100px;
 }
 
 .details__title {
@@ -710,7 +716,8 @@
 }
 
 .details__synopsis {
-  width: 760px;
+  width: 69.1%;
+  max-width: 760px;
   /* quatro linhas: o bloco de cima tem altura fixa e a sinopse longa invadia as fileiras */
   max-height: 152px;
   margin-top: 20px;
@@ -879,7 +886,8 @@
   position: absolute;
   top: 0;
   left: 650px;
-  width: 1270px;
+  right: 0;
+  width: auto;
   height: 100%;
   overflow: hidden;
 }
@@ -936,8 +944,12 @@
 }
 
 /* Prévia sem vídeo: o fotograma cobre a tela; sem fotograma, o cartaz vai ao centro. */
+.player .backdrop {
+  height: 100%;
+}
+
 .player .backdrop__img {
-  width: 1920px;
+  width: 100%;
 }
 
 .player .backdrop__poster {
@@ -958,6 +970,8 @@
 
 .shell.is-hidden {
   opacity: 0;
+  /* toque em controle invisível não aciona nada: o primeiro só os traz de volta */
+  pointer-events: none;
 }
 
 .shell::before,
@@ -1005,13 +1019,22 @@
   top: 196px;
   right: 80px;
   width: 620px;
-  max-height: 640px;
+  max-width: calc(100% - 160px);
+  /* 640 px numa tela de 1080: a lista termina antes da barra de progresso */
+  max-height: calc(100% - 440px);
   z-index: 2;
   padding: 14px;
   border-radius: 12px;
   background: rgba(20, 20, 20, 0.96);
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 24px 70px rgba(0, 0, 0, 0.6);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.shell__menu::-webkit-scrollbar {
+  display: none;
 }
 
 .shell__menu-title {
@@ -1122,7 +1145,7 @@
 
 .shell__bottom {
   position: absolute;
-  top: 937px;
+  bottom: 79px;
   left: 0;
   width: 100%;
   height: 64px;
@@ -1152,15 +1175,17 @@
 }
 
 .shell__time--total {
-  left: 1529px;
+  right: 271px;
 }
 
 .shell__bar {
   position: absolute;
   top: 30px;
   left: 424px;
-  width: 1100px;
+  right: 396px;
   height: 4px;
+  /* arrastar a barra percorre o vídeo; não é gesto do navegador */
+  touch-action: none;
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.92);
 }
@@ -1204,7 +1229,8 @@
 
 .shell__error {
   position: absolute;
-  top: 430px;
+  top: 50%;
+  margin-top: -110px;
   left: 0;
   width: 100%;
   z-index: 1;
@@ -1243,6 +1269,8 @@
 
 .splash__mark {
   flex: none;
+  max-width: 86%;
+  height: auto;
   animation: splash-mark 2000ms both;
   will-change: transform, opacity;
 }
@@ -1379,7 +1407,8 @@
   position: absolute;
   top: 330px;
   left: var(--content-left);
-  width: 900px;
+  right: var(--content-left);
+  max-width: 900px;
 }
 
 .player__message-title {
@@ -1403,8 +1432,8 @@
 /* ---------- Configurações ---------- */
 
 .settings__block {
-  width: 1180px;
-  margin: 0 0 54px var(--content-left);
+  max-width: 1180px;
+  margin: 0 var(--content-left) 54px;
 }
 
 .settings__title {
@@ -1414,16 +1443,23 @@
 }
 
 .settings__note {
-  width: 900px;
+  max-width: 900px;
   margin-top: 10px;
   font-size: 23px;
   line-height: 34px;
   color: var(--smoke);
 }
 
+/* 22 px acima dos botões; parte do respiro vai neles, para valer também entre
+   as linhas quando a tela é estreita e os botões quebram */
 .settings__options {
   display: flex;
-  margin-top: 22px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.settings__options .btn {
+  margin-top: 12px;
 }
 
 .settings__empty {
@@ -1433,7 +1469,7 @@
 }
 
 .settings__sources {
-  width: 720px;
+  max-width: 720px;
   margin-top: 18px;
 }
 
@@ -1552,4 +1588,457 @@
 
 .is-pointer .hero.is-away .backdrop {
   opacity: 1;
+}
+
+/* ---------- Toque ---------- */
+
+@media (hover: none) {
+  .row__arrow {
+    display: none !important;
+  }
+}
+
+/* dedo não acerta uma barra de 4 px: a área de toque é bem maior que o traço */
+@media (pointer: coarse) {
+  .shell__bar::before {
+    content: '';
+    position: absolute;
+    top: -30px;
+    left: 0;
+    right: 0;
+    bottom: -30px;
+  }
+}
+
+/* ---------- Pouca altura (celular deitado, janela baixa) ---------- */
+
+.stage.is-short {
+  --sidebar-step: 72px;
+}
+
+.is-short .sidebar__brand {
+  display: none;
+}
+
+.is-short .backdrop__poster {
+  top: 56px;
+  max-height: calc(var(--backdrop-h) - 170px);
+}
+
+.is-short .page-head {
+  padding-top: 40px;
+}
+
+.is-short .details__top {
+  height: 640px;
+}
+
+.is-short .details__body {
+  top: 64px;
+}
+
+.is-short .details__title {
+  font-size: 72px;
+  line-height: 74px;
+  max-height: 148px;
+}
+
+.is-short .search__panel {
+  padding-top: 36px;
+}
+
+.is-short .search__results .scroll-inner {
+  padding-top: 36px;
+}
+
+.is-short .keys {
+  width: 380px;
+  margin-top: 22px;
+}
+
+.is-short .key {
+  width: 56px;
+  height: 56px;
+  font-size: 24px;
+}
+
+.is-short .key--wide {
+  width: 118px;
+  font-size: 18px;
+}
+
+.is-short .shell__top {
+  top: 44px;
+}
+
+.is-short .shell__menu {
+  top: 140px;
+  max-height: calc(100% - 270px);
+}
+
+.is-short .shell__toast {
+  top: 140px;
+}
+
+.is-short .shell__heading {
+  left: 112px;
+  bottom: 128px;
+}
+
+/* controles mais perto das bordas: a barra de progresso ganha o comprimento */
+.is-short .shell__play {
+  left: 112px;
+}
+
+.is-short .shell__time--elapsed {
+  left: 198px;
+}
+
+.is-short .shell__bar {
+  left: 323px;
+  right: 295px;
+}
+
+.is-short .shell__time--total {
+  right: 170px;
+}
+
+.is-short .shell__bottom {
+  bottom: 46px;
+}
+
+.is-short .player__message {
+  top: 150px;
+}
+
+.is-short .player .backdrop__poster {
+  top: 70px;
+}
+
+/* ---------- Compacto (celular em pé, janela estreita) ---------- */
+
+/* Cartazes e teclas passam a ser fração da largura: cabem três por linha em
+   qualquer celular, em vez de sobrar meia coluna. */
+.stage.is-compact {
+  --content-left: 28px;
+  --card-gap: 16px;
+  --row-gap: 30px;
+  --poster-w: calc(var(--stage-w) * 0.29);
+  --poster-h: calc(var(--stage-w) * 0.435);
+  --tall-w: calc(var(--stage-w) * 0.4);
+  --tall-h: calc(var(--stage-w) * 0.6);
+  --episode-w: calc(var(--stage-w) * 0.62);
+  --episode-h: calc(var(--stage-w) * 0.356);
+}
+
+/* a barra de navegação ocupa o pé da tela; as páginas terminam acima dela */
+.is-compact .page {
+  height: var(--page-h);
+}
+
+.is-compact .page.player {
+  height: 100%;
+}
+
+.is-compact .sidebar {
+  top: auto;
+  bottom: 0;
+  width: 100%;
+  height: var(--tabbar-h);
+  background: var(--black);
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.12);
+  pointer-events: auto;
+}
+
+.is-compact .sidebar__shade,
+.is-compact .sidebar__brand,
+.is-compact .sidebar__label {
+  display: none;
+}
+
+.is-compact .sidebar__nav {
+  position: static;
+  display: flex;
+  height: 100%;
+  margin: 0;
+}
+
+.is-compact .sidebar__item {
+  flex: 1;
+  justify-content: center;
+  width: auto;
+  height: 100%;
+  padding: 0;
+}
+
+.is-compact .sidebar__item svg {
+  width: 34px;
+  height: 34px;
+}
+
+.is-compact .sidebar__item.is-active::after {
+  left: 50%;
+  bottom: 20px;
+  width: 34px;
+  margin-left: -17px;
+}
+
+.is-compact .backdrop__img {
+  width: 100%;
+}
+
+.is-compact .backdrop__shade {
+  background: linear-gradient(0deg, #000 0, #000 8%, rgba(0, 0, 0, 0.62) 32%, rgba(0, 0, 0, 0) 62%);
+}
+
+.is-compact .backdrop__poster {
+  top: 48px;
+  right: auto;
+  left: 50%;
+  max-width: 46%;
+  max-height: calc(var(--backdrop-h) - 250px);
+  transform: translate3d(-50%, 0, 0);
+}
+
+/* imagem em cima, texto embaixo dela: a coluna lateral de texto não cabe */
+.is-compact .hero {
+  height: auto;
+  padding-bottom: 40px;
+}
+
+.is-compact .hero__body,
+.is-compact .details__body {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  max-width: none;
+  margin: 0 var(--content-left);
+  padding-top: calc(var(--backdrop-h) - 200px);
+}
+
+.is-compact .hero__title {
+  height: auto;
+  font-size: 68px;
+  line-height: 66px;
+  white-space: normal;
+}
+
+.is-compact .hero__title--long {
+  font-size: 52px;
+  line-height: 52px;
+}
+
+.is-compact .hero__title--logo {
+  height: 130px;
+}
+
+.is-compact .hero__synopsis,
+.is-compact .details__synopsis {
+  width: auto;
+  max-width: none;
+}
+
+.is-compact .hero__actions,
+.is-compact .details__actions,
+.is-compact .empty__actions,
+.is-compact .player__message-actions {
+  flex-wrap: wrap;
+  margin-bottom: -12px;
+}
+
+.is-compact .hero__actions .btn,
+.is-compact .details__actions .btn,
+.is-compact .empty__actions .btn,
+.is-compact .player__message-actions .btn {
+  margin-bottom: 12px;
+}
+
+.is-compact .details__top {
+  height: auto;
+  padding-bottom: 44px;
+}
+
+.is-compact .details__title {
+  font-size: 62px;
+  line-height: 62px;
+  max-height: 186px;
+}
+
+.is-compact .details__title--long {
+  font-size: 48px;
+  line-height: 50px;
+  max-height: 150px;
+}
+
+.is-compact .details__title--logo {
+  height: 140px;
+  max-height: none;
+}
+
+.is-compact .page-head {
+  padding: 44px var(--content-left) 24px;
+}
+
+.is-compact .page-head__title {
+  font-size: 50px;
+  line-height: 50px;
+}
+
+.is-compact .empty {
+  margin-top: 90px;
+}
+
+.is-compact .grid {
+  --poster-w: calc((var(--stage-w) - 88px) / 3);
+  --poster-h: calc((var(--stage-w) - 88px) / 2);
+  padding-bottom: 60px;
+}
+
+.is-compact .grid .card {
+  margin-right: 16px;
+  margin-bottom: 24px;
+}
+
+.is-compact .card__title {
+  font-size: 22px;
+}
+
+/* teclado em cima, na largura toda; resultados embaixo */
+.is-compact .search {
+  display: flex;
+  flex-direction: column;
+}
+
+.is-compact .search__panel {
+  position: relative;
+  flex: none;
+  left: auto;
+  width: auto;
+  height: auto;
+  padding: 36px var(--content-left) 0;
+}
+
+.is-compact .keys {
+  width: auto;
+  margin: 22px -6px 0 0;
+}
+
+.is-compact .key {
+  width: calc((var(--stage-w) - 56px) / 9 - 6.2px);
+  height: 66px;
+}
+
+.is-compact .key--wide {
+  width: calc((var(--stage-w) - 56px) / 3 - 6.2px);
+}
+
+.is-compact .search__results {
+  position: relative;
+  flex: 1;
+  left: auto;
+  width: auto;
+  height: auto;
+  min-height: 0;
+}
+
+.is-compact .search__results .scroll-inner {
+  padding: 24px 0 0 var(--content-left);
+}
+
+.is-compact .search__results .empty {
+  margin: 60px var(--content-left) 0 0;
+}
+
+.is-compact .shell__top {
+  top: 44px;
+  left: 28px;
+}
+
+.is-compact .shell__top--right {
+  left: auto;
+  right: 28px;
+}
+
+.is-compact .shell__btn {
+  margin-right: 30px;
+}
+
+.is-compact .shell__top--right .shell__btn {
+  margin-right: 0;
+  margin-left: 44px;
+}
+
+.is-compact .shell__menu {
+  top: 160px;
+  left: 28px;
+  right: 28px;
+  width: auto;
+  max-width: none;
+  max-height: calc(100% - 440px);
+}
+
+.is-compact .shell__notice,
+.is-compact .shell__toast {
+  right: 28px;
+}
+
+.is-compact .shell__toast {
+  top: 160px;
+  left: 28px;
+}
+
+.is-compact .shell__heading {
+  left: 28px;
+  right: 28px;
+  bottom: 150px;
+}
+
+.is-compact .shell__title {
+  font-size: 40px;
+}
+
+.is-compact .shell__bottom {
+  bottom: 56px;
+}
+
+.is-compact .shell__play {
+  left: 16px;
+}
+
+.is-compact .shell__time {
+  width: 96px;
+  font-size: 21px;
+}
+
+.is-compact .shell__time--elapsed {
+  left: 84px;
+}
+
+.is-compact .shell__bar {
+  left: 190px;
+  right: 134px;
+}
+
+.is-compact .shell__time--total {
+  right: 28px;
+}
+
+.is-compact .shell__error {
+  padding: 0 var(--content-left);
+}
+
+.is-compact .player__message {
+  top: 240px;
+}
+
+.is-compact .player__message-title {
+  font-size: 44px;
+  line-height: 50px;
+}
+
+.is-compact .player .backdrop__poster {
+  top: 110px;
+  max-width: 56%;
+  max-height: 40%;
 }

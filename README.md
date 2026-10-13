@@ -12,7 +12,7 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-O app desenha num palco fixo de 1920×1080 e escala para caber na janela.
+O app desenha em px de TV (palco de 1920×1080 na proporção 16:9) e ocupa a janela toda em qualquer tela: fora do 16:9 o palco cresce no eixo que sobra; em celular em pé o menu vira uma barra no pé da tela e o conteúdo empilha. Com dedo, arrastar rola a página e as fileiras, e a barra de progresso do player aceita toque e arrasto.
 
 | Ação | Teclado | Controle da TV |
 |---|---|---|

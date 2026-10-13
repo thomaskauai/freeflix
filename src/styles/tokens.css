@@ -23,6 +23,14 @@
      referência vem do gradiente do próprio backdrop */
   --sidebar-shade: 150px;
   --sidebar-shade-open: 780px;
+  /* layout compacto: o menu vira barra no pé da tela */
+  --tabbar-h: 104px;
+
+  /* palco: Stage.tsx sobrescreve conforme a janela; estes são os da TV */
+  --stage-w: 1920px;
+  --stage-h: 1080px;
+  --page-h: 1080px;
+  --backdrop-h: 1080px;
 
   /* hero */
   --hero-h: 832px;

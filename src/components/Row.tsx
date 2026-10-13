@@ -2,6 +2,8 @@ import { useRef, useState, type FocusEvent, type ReactNode, type WheelEvent } fr
 import { focusElement, isPointerFocus } from '../focus/FocusContext';
 import { ROW_ANCHOR, ROW_CLIP_PAD, ROW_END_GAP } from '../styles/tokens';
 import { Icon } from './Icon';
+import { useStage } from './Stage';
+import { useTouchScroll } from './useTouchScroll';
 
 /** quantos cards as setas do mouse avançam por clique */
 const ARROW_STEP = 4;
@@ -24,8 +26,12 @@ export function Row({ title, variant, anchor = ROW_ANCHOR, passed, onActivate, c
   const [x, setX] = useState(0);
   const [maxX, setMaxX] = useState(0);
   const [active, setActive] = useState(false);
-  // arrastar com a roda/trackpad acompanha o gesto, sem animação
+  // arrastar com a roda/trackpad ou o dedo acompanha o gesto, sem animação
   const [free, setFree] = useState(false);
+  const { scale } = useStage();
+  // posição atual fora do estado: vários eventos de toque chegam entre dois renders
+  const position = useRef(0);
+  position.current = x;
 
   const limit = () => {
     const t = track.current;
@@ -50,16 +56,23 @@ export function Row({ title, variant, anchor = ROW_ANCHOR, passed, onActivate, c
     setX(Math.min(item.offsetLeft, max));
   };
 
+  const slideFree = (target: number) => {
+    const max = limit();
+    const next = Math.min(max, Math.max(0, target));
+    setMaxX(max);
+    setFree(true);
+    position.current = next;
+    setX(next);
+  };
+
   // Mouse: roda horizontal (trackpad, Shift+roda) desliza a fileira livremente.
   const onWheel = (e: WheelEvent<HTMLElement>) => {
     if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
-    const v = viewport.current;
-    const scale = v ? v.getBoundingClientRect().width / v.offsetWidth || 1 : 1;
-    const max = limit();
-    setMaxX(max);
-    setFree(true);
-    setX((current) => Math.min(max, Math.max(0, current + e.deltaX / scale)));
+    slideFree(position.current + e.deltaX / scale);
   };
+
+  // Toque: arrastar para o lado desliza a fileira.
+  useTouchScroll(viewport, { axis: 'x', scale, get: () => position.current, max: limit, set: slideFree });
 
   // Setas do mouse: levam o foco alguns cards adiante ou atrás, pelo caminho do teclado.
   const page = (direction: 1 | -1) => {

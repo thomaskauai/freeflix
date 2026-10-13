@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react';
 import { useKeyHandler } from '../focus/keys';
 import { focusElement } from '../focus/FocusContext';
 import { useFocusable, useFocusMove } from '../focus/useFocusable';
@@ -133,7 +133,7 @@ export function PlayerShell({
   progressRef.current = onProgress;
   failRef.current = onFail;
 
-  // Qualquer tecla ou movimento do mouse mostra os controles; eles somem
+  // Qualquer tecla, movimento do mouse ou toque mostra os controles; eles somem
   // sozinhos só durante a reprodução.
   const wake = useCallback(() => {
     setVisible(true);
@@ -147,8 +147,10 @@ export function PlayerShell({
   useEffect(() => {
     wake();
     window.addEventListener('mousemove', wake);
+    window.addEventListener('touchstart', wake);
     return () => {
       window.removeEventListener('mousemove', wake);
+      window.removeEventListener('touchstart', wake);
       window.clearTimeout(hideTimer.current);
       window.clearTimeout(toastTimer.current);
     };
@@ -238,6 +240,13 @@ export function PlayerShell({
     setTime(next);
   };
   const seek = (delta: number) => seekTo((media ? media.currentTime : timeRef.current) + delta);
+
+  // Barra de progresso com mouse ou dedo: clicar pula, arrastar percorre.
+  const seekToPointer = (e: PointerEvent<HTMLDivElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    seekTo(((e.clientX - box.left) / box.width) * lengthRef.current);
+    wake();
+  };
 
   const setPlayback = (play: boolean) => {
     if (!media) return;
@@ -424,7 +433,7 @@ export function PlayerShell({
       )}
 
       {menuOpen && sources && onPickSource && (
-        <div ref={menu} className="shell__menu" data-focus-layer="">
+        <div ref={menu} className="shell__menu" data-focus-layer="" data-native-scroll="">
           <div className="shell__menu-title">Fontes deste título</div>
           {sources.map((label, i) => (
             <SourceOption
@@ -438,7 +447,7 @@ export function PlayerShell({
       )}
 
       {subsOpen && (
-        <div ref={menu} className="shell__menu" data-focus-layer="">
+        <div ref={menu} className="shell__menu" data-focus-layer="" data-native-scroll="">
           <div className="shell__menu-title">
             {!subtitlesFor
               ? 'Este título não tem legendas disponíveis'
@@ -491,9 +500,13 @@ export function PlayerShell({
           <div className="shell__time shell__time--elapsed">{formatClock(time)}</div>
           <div
             className="shell__bar"
-            onClick={(e) => {
-              const box = e.currentTarget.getBoundingClientRect();
-              seekTo(((e.clientX - box.left) / box.width) * lengthRef.current);
+            onPointerDown={(e) => {
+              // o arrasto continua valendo mesmo se o dedo sair de cima da barra
+              e.currentTarget.setPointerCapture(e.pointerId);
+              seekToPointer(e);
+            }}
+            onPointerMove={(e) => {
+              if (e.currentTarget.hasPointerCapture(e.pointerId)) seekToPointer(e);
             }}
           >
             <i style={{ width: `${length ? Math.min(100, (time / length) * 100) : 0}%` }} />
