@@ -148,35 +148,15 @@ function onMouseMove(e: MouseEvent) {
   pointerFocus = false;
 }
 
-const WHEEL_EVERY_MS = 240;
-const WHEEL_MIN_DELTA = 12;
-let lastWheel = 0;
-
-// Roda do mouse e trackpad viram passos de foco, pelo mesmo caminho das setas:
-// vertical troca de fileira, horizontal anda dentro dela.
-function onWheel(e: WheelEvent) {
-  e.preventDefault();
-  if (document.querySelector('.splash')) return;
-  const horizontal = Math.abs(e.deltaX) > Math.abs(e.deltaY);
-  const delta = horizontal ? e.deltaX : e.deltaY;
-  const now = Date.now();
-  if (Math.abs(delta) < WHEEL_MIN_DELTA || now - lastWheel < WHEEL_EVERY_MS) return;
-  lastWheel = now;
-  const dir: Direction = horizontal ? (delta > 0 ? 'right' : 'left') : delta > 0 ? 'down' : 'up';
-  if (!dispatchAction(dir)) move(dir);
-}
-
 export function FocusProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     window.addEventListener('keydown', onKeyDown);
     document.addEventListener('focusin', onFocusIn);
     window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('wheel', onWheel, { passive: false });
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('focusin', onFocusIn);
       window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('wheel', onWheel);
     };
   }, []);
   return <>{children}</>;

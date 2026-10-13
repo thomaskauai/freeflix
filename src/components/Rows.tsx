@@ -3,6 +3,7 @@ import type { RowStyle, Title } from '../data/types';
 import { rememberedFocus } from '../focus/FocusContext';
 import { Card } from './Card';
 import { Row } from './Row';
+import { NEAR_END_EVENT } from './ScrollArea';
 
 export interface RowSource {
   id: string;
@@ -127,6 +128,13 @@ export function Rows({ rows, autoFocusFirst, keepHeader, onFocus, onReady }: Row
       if (onReady) onReady();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows.length]);
+
+  // Rolando com o mouse o foco não desce; quem pede mais fileiras é a rolagem.
+  useEffect(() => {
+    const more = () => setReach((prev) => Math.min(rows.length, prev + 2));
+    window.addEventListener(NEAR_END_EVENT, more);
+    return () => window.removeEventListener(NEAR_END_EVENT, more);
   }, [rows.length]);
 
   return (

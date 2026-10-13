@@ -18,6 +18,9 @@ import {
   type ListedSource,
 } from '../streams/sources';
 
+/** quantas fontes da lista entram sozinhas ao ativar o catálogo completo */
+const AUTO_SOURCES = 2;
+
 function qualityFor(mbps: number) {
   const cap = resolutionCap(mbps);
   return cap >= 2160 ? '1080p (4K só se for a única opção)' : `até ${cap}p`;
@@ -61,17 +64,29 @@ export default function Settings() {
   const [sources, setSources] = useState(listSources);
   const [speed, setSpeed] = useState<SpeedReading | null>(lastSpeed);
   const [testing, setTesting] = useState(false);
+  const [switching, setSwitching] = useState<CatalogId | ''>('');
   const [adding, setAdding] = useState('');
   const [addError, setAddError] = useState<{ url: string; message: string } | null>(null);
 
   usePageFocus(true);
 
   const chooseCatalog = (catalog: CatalogId) => {
-    if (catalog === settings.catalog) return;
-    saveSettings({ catalog });
-    // O catálogo é resolvido na partida do app: recarrega no Início já com o novo.
-    window.location.hash = '#/';
-    window.location.reload();
+    if (catalog === settings.catalog || switching) return;
+    setSwitching(catalog);
+    // O catálogo completo depende de fontes: ao ativá-lo, as primeiras da lista
+    // (src/sources.json) já entram junto. Falha em uma delas não impede a troca.
+    const wanted =
+      catalog === 'freeflix'
+        ? LISTED_SOURCES.slice(0, AUTO_SOURCES).filter((s) => !isInstalled(s, listSources()))
+        : [];
+    wanted
+      .reduce((done, s) => done.then(() => installSource(s.url).then(() => undefined, () => undefined)), Promise.resolve())
+      .then(() => {
+        saveSettings({ catalog });
+        // O catálogo é resolvido na partida do app: recarrega no Início já com o novo.
+        window.location.hash = '#/';
+        window.location.reload();
+      });
   };
 
   const chooseAudio = (audio: AudioLanguage) => setSettings(saveSettings({ audio }));
@@ -135,7 +150,7 @@ export default function Settings() {
                 selected={c.id === settings.catalog}
                 onClick={() => chooseCatalog(c.id)}
               >
-                {c.label}
+                {switching === c.id ? 'Ativando…' : c.label}
               </Button>
             ))}
           </div>

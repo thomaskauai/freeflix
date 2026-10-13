@@ -1535,3 +1535,21 @@
   color: var(--white);
   background: rgba(0, 0, 0, 0.6);
 }
+
+/* ---------- Mouse: rolagem livre ---------- */
+
+.scroll-inner.is-free,
+.row__track.is-free {
+  transition: none;
+}
+
+/* Recuar e esconder fileiras é linguagem de foco do controle. Com mouse a
+   página rola livre, então tudo fica visível. */
+.is-pointer .rows.has-focus .row:not(.is-active),
+.is-pointer .rows.has-focus .row.is-passed {
+  opacity: 1;
+}
+
+.is-pointer .hero.is-away .backdrop {
+  opacity: 1;
+}

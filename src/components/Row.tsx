@@ -1,4 +1,4 @@
-import { useRef, useState, type FocusEvent, type ReactNode } from 'react';
+import { useRef, useState, type FocusEvent, type ReactNode, type WheelEvent } from 'react';
 import { focusElement, isPointerFocus } from '../focus/FocusContext';
 import { ROW_ANCHOR, ROW_CLIP_PAD, ROW_END_GAP } from '../styles/tokens';
 import { Icon } from './Icon';
@@ -24,6 +24,8 @@ export function Row({ title, variant, anchor = ROW_ANCHOR, passed, onActivate, c
   const [x, setX] = useState(0);
   const [maxX, setMaxX] = useState(0);
   const [active, setActive] = useState(false);
+  // arrastar com a roda/trackpad acompanha o gesto, sem animação
+  const [free, setFree] = useState(false);
 
   const limit = () => {
     const t = track.current;
@@ -44,7 +46,19 @@ export function Row({ title, variant, anchor = ROW_ANCHOR, passed, onActivate, c
     const t = track.current;
     const item = (e.target as HTMLElement).closest<HTMLElement>('[data-focusable]');
     if (!t || !item || !t.contains(item)) return;
+    setFree(false);
     setX(Math.min(item.offsetLeft, max));
+  };
+
+  // Mouse: roda horizontal (trackpad, Shift+roda) desliza a fileira livremente.
+  const onWheel = (e: WheelEvent<HTMLElement>) => {
+    if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+    const v = viewport.current;
+    const scale = v ? v.getBoundingClientRect().width / v.offsetWidth || 1 : 1;
+    const max = limit();
+    setMaxX(max);
+    setFree(true);
+    setX((current) => Math.min(max, Math.max(0, current + e.deltaX / scale)));
   };
 
   // Setas do mouse: levam o foco alguns cards adiante ou atrás, pelo caminho do teclado.
@@ -57,6 +71,7 @@ export function Row({ title, variant, anchor = ROW_ANCHOR, passed, onActivate, c
       if (Math.abs(item.offsetLeft - x) < Math.abs(items[first].offsetLeft - x)) first = i;
     });
     const target = Math.min(items.length - 1, Math.max(0, first + direction * ARROW_STEP));
+    setFree(false);
     focusElement(items[target]);
   };
 
@@ -69,10 +84,15 @@ export function Row({ title, variant, anchor = ROW_ANCHOR, passed, onActivate, c
       onFocus={onFocus}
       onBlur={() => setActive(false)}
       onMouseEnter={() => setMaxX(limit())}
+      onWheel={onWheel}
     >
       <h2 className="row__title">{title}</h2>
       <div className="row__viewport" ref={viewport}>
-        <div className="row__track" ref={track} style={{ transform: `translate3d(${-x}px, 0, 0)` }}>
+        <div
+          className={`row__track${free ? ' is-free' : ''}`}
+          ref={track}
+          style={{ transform: `translate3d(${-x}px, 0, 0)` }}
+        >
           {children}
         </div>
       </div>

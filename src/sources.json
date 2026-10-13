@@ -1,7 +1,6 @@
 [
     {
         "name": "FrostStream", 
-        
         "url": "https://froststream.cloutteam.com/%7B%22providers%22%3A%7B%22cloutupload%22%3Atrue%2C%22redeflix%22%3Atrue%7D%2C%22resolutions%22%3A%7B%224K%20HDR%22%3Atrue%2C%221080p%22%3Atrue%2C%22720p%22%3Atrue%2C%22SD%22%3Afalse%2C%22Cinema%22%3Afalse%7D%2C%22iptvSources%22%3A%7B%22Astra%22%3Atrue%2C%22Neon%22%3Atrue%2C%22Carbon%22%3Atrue%2C%22Azure%22%3Atrue%7D%2C%22maxSourcesPerResolution%22%3A4%7D/manifest.json"
     },
     {
