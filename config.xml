@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Manifest Tizen (Fase 2). Troque XXXXXXXXXX pelo package id gerado no
+     Certificate Manager; id e package precisam combinar. -->
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
+        id="http://freeflix.local/app" version="0.1.0" viewmodes="maximized">
+  <tizen:application id="XXXXXXXXXX.Freeflix" package="XXXXXXXXXX" required_version="5.0"/>
+  <tizen:profile name="tv"/>
+  <name>Freeflix</name>
+  <content src="index.html"/>
+  <icon src="icon.png"/>
+  <feature name="http://tizen.org/feature/screen.size.normal.1080.1920"/>
+  <!-- teclas de mídia do controle -->
+  <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+  <!-- catálogo remoto e embed -->
+  <tizen:privilege name="http://tizen.org/privilege/internet"/>
+  <access origin="*" subdomains="true"/>
+  <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable"
+                 encryption="disable" install-location="auto" hwkey-event="enable"/>
+</widget>

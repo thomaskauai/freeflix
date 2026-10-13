@@ -1,0 +1,1211 @@
+/* ---------- Sidebar ---------- */
+
+.sidebar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--sidebar-shade-open);
+  height: 100%;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.sidebar__shade {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: var(--sidebar-shade);
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.92) 0, rgba(0, 0, 0, 0.8) 55%, rgba(0, 0, 0, 0) 100%);
+}
+
+.sidebar__shade--open {
+  width: var(--sidebar-shade-open);
+  background: linear-gradient(90deg, #000 0, #000 46%, rgba(0, 0, 0, 0.82) 66%, rgba(0, 0, 0, 0) 100%);
+  opacity: 0;
+  transition: opacity 220ms var(--ease);
+}
+
+.sidebar.is-open .sidebar__shade--open {
+  opacity: 1;
+}
+
+.sidebar__brand {
+  position: absolute;
+  top: 70px;
+  left: 64px;
+  font-size: 46px;
+  color: var(--red);
+  opacity: 0;
+  transform: translate3d(-16px, 0, 0);
+  transition: opacity 220ms var(--ease), transform 220ms var(--ease);
+}
+
+.sidebar.is-open .sidebar__brand {
+  opacity: 1;
+  transform: none;
+}
+
+.sidebar__nav {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  margin-top: calc(var(--sidebar-step) * -3);
+}
+
+.sidebar__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: var(--sidebar-step);
+  padding-left: calc(var(--sidebar-x) - var(--sidebar-icon) / 2);
+  padding-right: 40px;
+  color: rgba(255, 255, 255, 0.72);
+  pointer-events: auto;
+  transition: color var(--focus-ms) linear;
+}
+
+.sidebar__item svg {
+  flex: none;
+  width: var(--sidebar-icon);
+  height: var(--sidebar-icon);
+  transition: transform var(--focus-ms) var(--ease);
+}
+
+.sidebar__label {
+  margin-left: 30px;
+  font-size: 30px;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate3d(-14px, 0, 0);
+  transition: opacity 220ms var(--ease), transform 220ms var(--ease);
+}
+
+.sidebar.is-open .sidebar__label {
+  opacity: 1;
+  transform: none;
+}
+
+.sidebar__item.is-active {
+  color: var(--white);
+}
+
+.sidebar__item.is-active::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--sidebar-x) - var(--sidebar-icon) / 2);
+  bottom: 18px;
+  width: var(--sidebar-icon);
+  height: 3px;
+  background: var(--red);
+}
+
+.sidebar.is-open .sidebar__item {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.sidebar.is-open .sidebar__item:focus {
+  color: var(--white);
+}
+
+.sidebar__item:focus svg {
+  transform: scale(1.18);
+}
+
+.sidebar__item:focus .sidebar__label {
+  font-weight: 700;
+}
+
+/* ---------- Marca e selo de tipo ---------- */
+
+.kind {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  color: var(--smoke);
+  text-transform: uppercase;
+}
+
+.kind__mark {
+  margin-right: 12px;
+  font-size: 30px;
+  letter-spacing: 0;
+  color: var(--red);
+}
+
+/* ---------- Backdrop ---------- */
+
+.backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  background: var(--black);
+}
+
+/* Fotogramas clássicos são 4:3: a imagem encosta à direita em altura cheia
+   e a sombra à esquerda a funde no preto onde fica o texto. */
+.backdrop__img {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1500px;
+  height: 1080px;
+  object-fit: cover;
+  object-position: 50% 30%;
+  opacity: 0;
+  transition: opacity 600ms linear;
+}
+
+.backdrop__img.is-loaded {
+  opacity: 1;
+}
+
+.backdrop__img--poster {
+  width: 1920px;
+  -webkit-filter: blur(48px) saturate(1.2);
+  filter: blur(48px) saturate(1.2);
+  transform: scale(1.2);
+}
+
+.backdrop__img--poster.is-loaded {
+  opacity: 0.45;
+}
+
+/* Cartaz inteiro, na proporção original, como um one-sheet na parede. */
+.backdrop__poster {
+  position: absolute;
+  top: 104px;
+  right: 168px;
+  width: auto;
+  height: auto;
+  max-width: 600px;
+  max-height: 624px;
+  border-radius: var(--card-radius);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  opacity: 0;
+  transition: opacity 500ms linear;
+}
+
+.backdrop__poster.is-loaded {
+  opacity: 1;
+}
+
+.backdrop__shade {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(0deg, #000 0, #000 14%, rgba(0, 0, 0, 0.55) 30%, rgba(0, 0, 0, 0) 52%),
+    linear-gradient(90deg, #000 0, #000 22%, rgba(0, 0, 0, 0.82) 36%, rgba(0, 0, 0, 0.35) 52%, rgba(0, 0, 0, 0) 68%);
+}
+
+/* ---------- Hero ---------- */
+
+.hero {
+  position: relative;
+  height: var(--hero-h);
+}
+
+.hero .backdrop {
+  transition: opacity var(--scroll-ms) linear;
+}
+
+.hero.is-away .backdrop {
+  opacity: 0;
+}
+
+.hero__body {
+  position: absolute;
+  top: var(--hero-top);
+  left: var(--content-left);
+  width: 1100px;
+  animation: hero-in 700ms var(--ease) both;
+}
+
+@keyframes hero-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.hero__title {
+  height: 100px;
+  margin-top: 24px;
+  font-size: 104px;
+  line-height: 100px;
+  white-space: nowrap;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.45);
+}
+
+.hero__title--long {
+  font-size: 80px;
+}
+
+.hero__tagline {
+  margin-top: 23px;
+  font-size: 28px;
+  line-height: 28px;
+  font-weight: 700;
+}
+
+.hero__synopsis {
+  width: var(--hero-text-w);
+  height: 111px;
+  margin-top: 19px;
+  font-size: 24px;
+  line-height: 37px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
+}
+
+.hero__actions {
+  display: flex;
+  margin-top: 26px;
+}
+
+.hero .meta {
+  margin-top: 28px;
+}
+
+/* ---------- Botões ---------- */
+
+.btn {
+  display: flex;
+  align-items: center;
+  flex: none;
+  height: var(--btn-h);
+  padding: 0 34px;
+  margin-right: var(--btn-gap);
+  border-radius: var(--btn-radius);
+  background: rgba(109, 109, 110, 0.72);
+  color: var(--white);
+  font-size: 27px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background-color var(--focus-ms) linear, color var(--focus-ms) linear;
+}
+
+.btn svg {
+  width: 26px;
+  height: 26px;
+  margin-right: 16px;
+  margin-left: -6px;
+}
+
+.btn:focus {
+  background: var(--white);
+  color: var(--black);
+}
+
+.btn--pill {
+  height: 52px;
+  padding: 0 26px;
+  border-radius: 26px;
+  font-size: 22px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.btn--pill.is-selected {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.btn--pill:focus {
+  background: var(--white);
+}
+
+/* ---------- Metadados ---------- */
+
+.meta {
+  display: flex;
+  align-items: center;
+  font-size: 22px;
+  line-height: 30px;
+  color: var(--smoke);
+}
+
+.meta > span {
+  margin-right: 26px;
+}
+
+.meta__year {
+  color: var(--white);
+  font-weight: 600;
+}
+
+.meta__badge {
+  padding: 0 10px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  font-size: 18px;
+  line-height: 26px;
+}
+
+/* ---------- Fileiras ---------- */
+
+.rows {
+  position: relative;
+}
+
+.row {
+  position: relative;
+  margin: 0 0 var(--row-gap) var(--content-left);
+  transition: opacity var(--scroll-ms) linear;
+}
+
+.rows.has-focus .row:not(.is-active) {
+  opacity: var(--dim);
+}
+
+.rows.has-focus .row.is-passed {
+  opacity: 0;
+}
+
+.row__title {
+  height: var(--row-title-size);
+  margin-bottom: var(--row-title-gap);
+  font-size: var(--row-title-size);
+  line-height: var(--row-title-size);
+  font-weight: 700;
+}
+
+/* Recorte começa 8 px antes dos cards: o contorno de foco cabe e os cards
+   que já passaram somem sob a sidebar. */
+.row__viewport {
+  margin: -8px 0 -8px -8px;
+  padding: 8px 0 8px 8px;
+  overflow: hidden;
+}
+
+.row__track {
+  position: relative;
+  display: flex;
+  transition: transform var(--scroll-ms) var(--ease);
+  will-change: transform;
+}
+
+/* ---------- Cards ---------- */
+
+.card {
+  position: relative;
+  flex: none;
+  margin-right: var(--card-gap);
+}
+
+.card--poster {
+  width: var(--poster-w);
+}
+
+.card--tall {
+  width: var(--tall-w);
+}
+
+.card__art {
+  position: relative;
+  border-radius: var(--card-radius);
+  background: var(--coal);
+}
+
+.card--poster .card__art {
+  height: var(--poster-h);
+}
+
+.card--tall .card__art {
+  height: var(--tall-h);
+}
+
+/* Contorno por fora do cartaz, acompanhando o raio, sem empurrar os vizinhos. */
+.card__art::after {
+  content: '';
+  position: absolute;
+  top: calc(var(--focus-w) * -1);
+  left: calc(var(--focus-w) * -1);
+  right: calc(var(--focus-w) * -1);
+  bottom: calc(var(--focus-w) * -1);
+  border: var(--focus-w) solid var(--white);
+  border-radius: calc(var(--card-radius) + var(--focus-w));
+  opacity: 0;
+  transition: opacity var(--focus-ms) linear;
+  pointer-events: none;
+}
+
+.card:focus .card__art::after {
+  opacity: 1;
+}
+
+.card__img {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--card-radius);
+  object-fit: cover;
+  object-position: 50% 20%;
+  opacity: 0;
+  transition: opacity 300ms linear;
+}
+
+.card__img.is-loaded {
+  opacity: 1;
+}
+
+.card__text {
+  padding: 14px 2px 0;
+}
+
+.card__title {
+  font-size: 23px;
+  line-height: 28px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.86);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color var(--focus-ms) linear;
+}
+
+.card--tall .card__title {
+  font-size: 26px;
+  line-height: 32px;
+}
+
+.card:focus .card__title {
+  color: var(--white);
+}
+
+.card__info {
+  margin-top: 2px;
+  font-size: 19px;
+  line-height: 26px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.card__progress {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.35);
+  overflow: hidden;
+}
+
+.card__progress i {
+  display: block;
+  height: 100%;
+  background: var(--red);
+}
+
+/* Cartela de intertítulo para títulos sem pôster. */
+.titlecard {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  border-radius: var(--card-radius);
+  text-align: center;
+}
+
+.titlecard::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: calc(var(--card-radius) - 4px);
+}
+
+.titlecard__name {
+  font-size: 34px;
+  color: #f3ead7;
+}
+
+.card--tall .titlecard__name {
+  font-size: 44px;
+}
+
+/* ---------- Cabeçalho de página ---------- */
+
+.page-head {
+  padding: 68px 0 30px var(--content-left);
+}
+
+.page-head__title {
+  font-size: 64px;
+  line-height: 64px;
+}
+
+.page-head__note {
+  margin-top: 14px;
+  font-size: 24px;
+  color: var(--smoke);
+}
+
+/* ---------- Grade ---------- */
+
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  margin-left: var(--content-left);
+  padding-bottom: 200px;
+}
+
+.grid .card {
+  margin-bottom: 30px;
+}
+
+.empty {
+  margin: 200px 0 0 var(--content-left);
+  width: 760px;
+}
+
+.empty__title {
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.empty__text {
+  margin-top: 18px;
+  font-size: 26px;
+  line-height: 38px;
+  color: var(--smoke);
+}
+
+/* ---------- Detalhes ---------- */
+
+.details__top {
+  position: relative;
+  height: 760px;
+}
+
+.details__body {
+  position: absolute;
+  top: 150px;
+  left: var(--content-left);
+  width: 1100px;
+}
+
+.details__title {
+  margin-top: 22px;
+  font-size: 96px;
+  line-height: 96px;
+  max-height: 192px;
+  overflow: hidden;
+}
+
+.details__title--long {
+  font-size: 72px;
+  line-height: 74px;
+  max-height: 148px;
+}
+
+.details__original {
+  margin-top: 12px;
+  font-size: 22px;
+  color: var(--smoke);
+  font-style: italic;
+}
+
+.details .meta {
+  margin-top: 22px;
+}
+
+.details__synopsis {
+  width: 760px;
+  margin-top: 20px;
+  font-size: 25px;
+  line-height: 38px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
+}
+
+.details__actions {
+  display: flex;
+  margin-top: 34px;
+}
+
+.seasons {
+  display: flex;
+  margin: 0 0 26px var(--content-left);
+}
+
+.episode {
+  position: relative;
+  flex: none;
+  width: var(--episode-w);
+  margin-right: var(--card-gap);
+}
+
+.episode__thumb {
+  position: relative;
+  width: var(--episode-w);
+  height: var(--episode-h);
+  border-radius: var(--card-radius);
+  background: var(--coal);
+  overflow: hidden;
+}
+
+.episode__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.6;
+}
+
+.episode__number {
+  position: absolute;
+  left: 18px;
+  bottom: 8px;
+  font-size: 84px;
+  line-height: 1;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.7);
+}
+
+.episode__thumb::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: var(--focus-w) solid var(--white);
+  border-radius: var(--card-radius);
+  opacity: 0;
+  transition: opacity var(--focus-ms) linear;
+}
+
+.episode:focus .episode__thumb::after {
+  opacity: 1;
+}
+
+.episode__info {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 4px 0;
+  font-size: 22px;
+  color: var(--smoke);
+}
+
+.episode:focus .episode__info {
+  color: var(--white);
+}
+
+/* ---------- Busca ---------- */
+
+.search__panel {
+  position: absolute;
+  top: 0;
+  left: var(--content-left);
+  width: 470px;
+  height: 100%;
+  padding-top: 72px;
+}
+
+.search__query {
+  height: 62px;
+  border-bottom: 3px solid rgba(255, 255, 255, 0.3);
+  font-size: 38px;
+  line-height: 56px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.search__query--empty {
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 400;
+}
+
+.search__caret {
+  display: inline-block;
+  width: 3px;
+  height: 40px;
+  margin-left: 4px;
+  vertical-align: -6px;
+  background: var(--red);
+  animation: caret 1.1s steps(1) infinite;
+}
+
+@keyframes caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.keys {
+  display: flex;
+  flex-wrap: wrap;
+  width: 480px;
+  margin-top: 34px;
+}
+
+.key {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  margin: 0 6px 6px 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 30px;
+  font-weight: 500;
+  text-transform: uppercase;
+  transition: background-color var(--focus-ms) linear, color var(--focus-ms) linear;
+}
+
+.key--wide {
+  width: 150px;
+  font-size: 20px;
+  font-weight: 600;
+  text-transform: none;
+}
+
+.key svg {
+  width: 30px;
+  height: 30px;
+}
+
+.key:focus {
+  background: var(--white);
+  color: var(--black);
+}
+
+.search__results {
+  position: absolute;
+  top: 0;
+  left: 650px;
+  width: 1270px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.search__results .scroll-inner {
+  padding: 72px 0 0 8px;
+}
+
+.search__heading {
+  height: 28px;
+  margin-bottom: 22px;
+  font-size: 28px;
+  line-height: 28px;
+  font-weight: 700;
+}
+
+.search__results .grid {
+  margin-left: 0;
+}
+
+/* cinco por linha ao lado do teclado */
+.search__results .card {
+  margin-right: 18px;
+}
+
+.search__results .empty {
+  margin: 120px 0 0;
+}
+
+/* ---------- Player ---------- */
+
+.player {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--black);
+}
+
+.player__frame,
+.player__video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.player__video {
+  background: var(--black);
+  object-fit: contain;
+}
+
+/* Prévia sem vídeo: o fotograma cobre a tela; sem fotograma, o cartaz vai ao centro. */
+.player .backdrop__img {
+  width: 1920px;
+}
+
+.player .backdrop__poster {
+  top: 150px;
+  right: auto;
+  left: 50%;
+  transform: translate3d(-50%, 0, 0);
+}
+
+.shell {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transition: opacity 300ms linear;
+}
+
+.shell.is-hidden {
+  opacity: 0;
+}
+
+.shell::before,
+.shell::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+}
+
+.shell::before {
+  top: 0;
+  height: 300px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0, rgba(0, 0, 0, 0) 100%);
+}
+
+.shell::after {
+  bottom: 0;
+  height: 340px;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.8) 0, rgba(0, 0, 0, 0) 100%);
+}
+
+.shell__top {
+  position: absolute;
+  top: 82px;
+  left: 112px;
+  display: flex;
+  z-index: 1;
+}
+
+.shell__btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-right: 59px;
+  color: rgba(255, 255, 255, 0.75);
+  transition: color var(--focus-ms) linear, transform var(--focus-ms) var(--ease);
+}
+
+.shell__btn svg {
+  width: 40px;
+  height: 40px;
+}
+
+.shell__btn:focus {
+  color: var(--white);
+  transform: scale(1.3);
+}
+
+.shell__btn-label {
+  position: absolute;
+  top: 68px;
+  left: 50%;
+  width: 160px;
+  margin-left: -80px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--smoke);
+}
+
+.shell__notice {
+  position: absolute;
+  top: 96px;
+  right: 112px;
+  z-index: 1;
+  padding: 8px 18px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  font-size: 20px;
+  color: var(--smoke);
+}
+
+.shell__heading {
+  position: absolute;
+  left: 213px;
+  bottom: 168px;
+  z-index: 1;
+}
+
+.shell__title {
+  font-size: 56px;
+}
+
+.shell__subtitle {
+  margin-top: 10px;
+  font-size: 24px;
+  color: var(--smoke);
+}
+
+.shell__bottom {
+  position: absolute;
+  top: 937px;
+  left: 0;
+  width: 100%;
+  height: 64px;
+  z-index: 1;
+}
+
+.shell__play {
+  position: absolute;
+  left: 213px;
+  top: 0;
+  margin: 0;
+}
+
+.shell__time {
+  position: absolute;
+  top: 18px;
+  width: 120px;
+  text-align: center;
+  font-size: 24px;
+  line-height: 28px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.shell__time--elapsed {
+  left: 299px;
+}
+
+.shell__time--total {
+  left: 1529px;
+}
+
+.shell__bar {
+  position: absolute;
+  top: 30px;
+  left: 424px;
+  width: 1100px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.shell__bar i {
+  display: block;
+  height: 100%;
+  background: var(--red);
+}
+
+.shell__toast {
+  position: absolute;
+  top: 190px;
+  left: 112px;
+  z-index: 1;
+  padding: 14px 22px;
+  border-radius: 8px;
+  background: rgba(20, 20, 20, 0.92);
+  font-size: 22px;
+}
+
+.shell__spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 84px;
+  height: 84px;
+  margin: -42px 0 0 -42px;
+  z-index: 1;
+  border: 6px solid rgba(255, 255, 255, 0.22);
+  border-top-color: var(--white);
+  border-radius: 50%;
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.shell__error {
+  position: absolute;
+  top: 430px;
+  left: 0;
+  width: 100%;
+  z-index: 1;
+  text-align: center;
+  font-size: 26px;
+  line-height: 38px;
+  color: var(--smoke);
+}
+
+.shell__error-title {
+  margin-bottom: 8px;
+  font-size: 44px;
+  line-height: 52px;
+  font-weight: 700;
+  color: var(--white);
+}
+
+/* ---------- Abertura ---------- */
+
+.splash {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--black);
+}
+
+.splash.is-playing {
+  animation: splash-veil 2000ms linear both;
+}
+
+.splash__mark {
+  flex: none;
+  animation: splash-mark 2000ms both;
+  will-change: transform, opacity;
+}
+
+.splash__word {
+  font-family: var(--font);
+  font-stretch: 62%;
+  font-weight: 900;
+  font-size: 236px;
+  letter-spacing: 2px;
+  fill: var(--red);
+}
+
+/* surge, cresce devagar, depois avança sobre o espectador e some */
+@keyframes splash-mark {
+  0% {
+    opacity: 0;
+    transform: scale(0.84);
+    animation-timing-function: ease-out;
+  }
+  12% {
+    opacity: 1;
+    transform: scale(0.9);
+    animation-timing-function: linear;
+  }
+  62% {
+    opacity: 1;
+    transform: scale(1.2);
+    animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.4);
+  }
+  92%,
+  100% {
+    opacity: 0;
+    transform: scale(5.5);
+  }
+}
+
+@keyframes splash-veil {
+  0%,
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---------- Mouse ---------- */
+
+.is-pointer [data-focusable],
+.is-pointer .row__arrow,
+.is-pointer .shell__bar {
+  cursor: pointer;
+}
+
+/* Setas de fileira: só existem para o mouse, que não alcança os cards recortados. */
+.row__arrow {
+  position: absolute;
+  z-index: 2;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-top: -32px;
+  border-radius: 50%;
+  background: rgba(20, 20, 20, 0.88);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.22);
+  color: var(--white);
+}
+
+.row__arrow svg {
+  width: 30px;
+  height: 30px;
+}
+
+.is-pointer .row:hover .row__arrow {
+  display: flex;
+}
+
+.row__arrow:hover {
+  background: var(--white);
+  color: var(--black);
+}
+
+.row__arrow--prev {
+  left: 12px;
+}
+
+.row__arrow--next {
+  right: 36px;
+}
+
+.row--poster .row__arrow {
+  top: calc(var(--row-title-size) + var(--row-title-gap) + var(--poster-h) / 2);
+}
+
+.row--tall .row__arrow {
+  top: calc(var(--row-title-size) + var(--row-title-gap) + var(--tall-h) / 2);
+}
+
+.row--episode .row__arrow {
+  top: calc(var(--row-title-size) + var(--row-title-gap) + var(--episode-h) / 2);
+}
+
+/* a barra do player fica fina, mas com área de clique confortável */
+.is-pointer .shell__bar::before {
+  content: '';
+  position: absolute;
+  top: -16px;
+  left: 0;
+  right: 0;
+  bottom: -16px;
+}

@@ -1,0 +1,58 @@
+/* Valores medidos em reference/SPEC.md, normalizados para 1920×1080.
+   Nenhum componente usa número solto: geometria e tempo saem daqui. */
+:root {
+  /* cor */
+  --black: #000;
+  --coal: #141414;
+  --ash: #2a2a2a;
+  --smoke: #b3b3b3;
+  --white: #fff;
+  --red: #e5202a;
+
+  /* tipo: uma família; títulos de obra usam a largura condensada */
+  --font: 'Archivo Variable', 'Helvetica Neue', Arial, sans-serif;
+  --display-stretch: 68%;
+  --display-weight: 800;
+
+  /* estrutura */
+  --content-left: 158px;
+  --sidebar-x: 80px;
+  --sidebar-step: 88px;
+  --sidebar-icon: 28px;
+  /* fechada, a sombra termina antes do conteúdo; o escuro até ~350 px da
+     referência vem do gradiente do próprio backdrop */
+  --sidebar-shade: 150px;
+  --sidebar-shade-open: 780px;
+
+  /* hero */
+  --hero-h: 832px;
+  --hero-text-w: 650px;
+  --hero-top: 198px;
+
+  /* botões */
+  --btn-h: 66px;
+  --btn-radius: 8px;
+  --btn-gap: 16px;
+
+  /* fileiras */
+  --row-anchor: 72px;
+  --row-title-size: 28px;
+  --row-title-gap: 14px;
+  --row-gap: 34px;
+  --card-gap: 24px;
+  --card-radius: 12px;
+  --poster-w: 233px;
+  --poster-h: 350px;
+  /* destaque: mesmo cartaz 2:3, maior. O 357×704 da referência ficava alto demais */
+  --tall-w: 300px;
+  --tall-h: 450px;
+  --episode-w: 392px;
+  --episode-h: 225px;
+
+  /* foco e movimento (tempos estimados: foto não mostra animação) */
+  --focus-w: 4px;
+  --focus-ms: 150ms;
+  --scroll-ms: 250ms;
+  --dim: 0.5;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}

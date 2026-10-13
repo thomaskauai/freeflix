@@ -1,0 +1,84 @@
+export type IconName =
+  | 'search'
+  | 'home'
+  | 'new'
+  | 'series'
+  | 'movies'
+  | 'plus'
+  | 'check'
+  | 'play'
+  | 'pause'
+  | 'back'
+  | 'options'
+  | 'restart'
+  | 'erase'
+  | 'prev'
+  | 'next';
+
+const STROKED: Partial<Record<IconName, JSX.Element>> = {
+  search: (
+    <>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="M15.5 15.5 21 21" />
+    </>
+  ),
+  home: <path d="M3 11.2 12 3.5l9 7.7M5.5 9.5V20h4.8v-5.8h3.4V20h4.8V9.5" />,
+  new: (
+    <>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="1.5" />
+      <path d="M3.5 10h17M8 3v4M16 3v4M7.5 14h2M11 14h2M14.5 14h2M7.5 17h2M11 17h2" />
+    </>
+  ),
+  series: (
+    <>
+      <rect x="2.5" y="4.5" width="19" height="12.5" rx="1.5" />
+      <path d="M8 21h8M12 17v4" />
+    </>
+  ),
+  movies: (
+    <>
+      <path d="M3.5 10.5h17V20h-17zM3.5 10.5 3 7.2l16.6-3 .6 3.3-16.7 3" />
+      <path d="m7.6 6.4 1.9 3M12.3 5.5l1.9 3M17 4.7l1.9 3" />
+    </>
+  ),
+  plus: <path d="M12 4v16M4 12h16" />,
+  prev: <path d="M15 4.5 7.5 12l7.5 7.5" />,
+  next: <path d="M9 4.5 16.5 12 9 19.5" />,
+  check: <path d="m4.5 12.5 5 5 10-11" />,
+  back: <path d="M20.5 12h-17M10.5 5l-7 7 7 7" />,
+  options: (
+    <>
+      <path d="M3 4.5h18v12.5H10.5L6.5 20.5V17H3z" />
+      <path d="M7 9.3h4M13.5 9.3H17M7 12.7h2.5M12 12.7h5" />
+    </>
+  ),
+  restart: <path d="M5 4.5v15M19.5 4.5 8.5 12l11 7.5z" />,
+  erase: (
+    <>
+      <path d="M8.5 5H21v14H8.5L2.5 12z" />
+      <path d="m11.5 9.5 5 5M16.5 9.5l-5 5" />
+    </>
+  ),
+};
+
+const FILLED: Partial<Record<IconName, JSX.Element>> = {
+  play: <path d="M6 3.5v17l15-8.5z" />,
+  pause: <path d="M5.5 3.5h4.5v17H5.5zM14 3.5h4.5v17H14z" />,
+};
+
+export function Icon({ name }: { name: IconName }) {
+  const filled = FILLED[name];
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill={filled ? 'currentColor' : 'none'}
+      stroke={filled ? 'none' : 'currentColor'}
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {filled ?? STROKED[name]}
+    </svg>
+  );
+}
