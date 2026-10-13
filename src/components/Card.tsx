@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Title } from '../data/types';
 import { useFocusable } from '../focus/useFocusable';
+import { titlePath } from '../nav';
 
 interface CardProps {
   title: Title;
@@ -41,7 +42,7 @@ export function Card({ title, variant, focusId, autoFocus, progress, anchor }: C
       className={`card card--${variant}`}
       aria-label={title.title}
       data-scroll-anchor={anchor}
-      onClick={() => navigate(`/title/${title.id}`)}
+      onClick={() => navigate(titlePath(title))}
     >
       <div className="card__art">
         {hasImage ? (
@@ -66,7 +67,8 @@ export function Card({ title, variant, focusId, autoFocus, progress, anchor }: C
       <div className="card__text">
         <div className="card__title">{title.title}</div>
         <div className="card__info">
-          {title.year} • {title.type === 'series' ? 'Série' : 'Filme'}
+          {title.year ? `${title.year} • ` : ''}
+          {title.type === 'series' ? 'Série' : 'Filme'}
         </div>
       </div>
     </div>

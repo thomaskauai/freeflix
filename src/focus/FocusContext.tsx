@@ -15,6 +15,9 @@ const pageMemory: Record<string, string> = {};
 
 const pageKey = () => window.location.hash || '#/';
 
+/** Id do último item focado nesta página, se houver. */
+export const rememberedFocus = (): string | undefined => pageMemory[pageKey()];
+
 export function forgetPage(hash: string) {
   delete pageMemory[hash];
 }
@@ -94,6 +97,14 @@ function move(dir: Direction) {
 function onKeyDown(e: KeyboardEvent) {
   const action: Action | undefined = actionFor(e);
   if (!action) return;
+
+  // Num campo de texto as teclas são do campo (letras, apagar, espaço, setas
+  // laterais). Só cima/baixo saem dele e Esc volta.
+  const target = e.target as HTMLElement | null;
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+    const leaves = action === 'up' || action === 'down' || e.keyCode === 27 || e.keyCode === 10009;
+    if (!leaves) return;
+  }
   document.documentElement.classList.remove('is-pointer');
   e.preventDefault();
   if (dispatchAction(action)) return;

@@ -1,8 +1,14 @@
-import { createHttpProvider } from './httpProvider';
+import { currentCatalog } from '../settings';
+import { createAddonProvider } from './addonProvider';
 import { localProvider } from './localProvider';
 import type { CatalogProvider } from './types';
 
-const apiBase = import.meta.env.VITE_API_BASE_URL as string | undefined;
+const option = currentCatalog();
 
-/** Trocar de fonte de catálogo = definir VITE_API_BASE_URL. */
-export const catalog: CatalogProvider = apiBase ? createHttpProvider(apiBase) : localProvider;
+/**
+ * Catálogo escolhido em Configurações. Trocar de catálogo recarrega o app,
+ * então basta resolver uma vez na partida.
+ */
+export const catalog: CatalogProvider = option.base
+  ? createAddonProvider(option.base, !!option.localized)
+  : localProvider;

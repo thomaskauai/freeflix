@@ -1,5 +1,9 @@
 import data from './catalog.json';
-import type { CatalogProvider, Row, RowStyle, Season, Title, TitleType, VideoSource } from './types';
+import type { CatalogProvider, RowRef, RowStyle, Season, Title, TitleType, VideoSource } from './types';
+
+interface Row extends RowRef {
+  items: Title[];
+}
 
 interface RawTitle {
   id: string;
@@ -45,6 +49,7 @@ const toTitle = (r: RawTitle): Title => ({
   poster: r.poster,
   backdrop: r.backdrop,
   isNew: r.isNew,
+  publicDomain: true,
   videos: r.videos,
   seasonCount: r.seasons ? r.seasons.length : 0,
   episodeCount: r.seasons
@@ -103,41 +108,52 @@ function rowsForType(type: TitleType, homeRows: Row[]): Row[] {
   return [{ id: `featured:${type}`, title: 'Em alta', style: 'tall', items: featured }, ...genreRows];
 }
 
+function rowsFor(filter?: 'movie' | 'series' | 'new'): Row[] {
+  const rows = allRows();
+  if (!filter) return rows;
+  if (filter === 'new') {
+    return [
+      {
+        id: 'new',
+        title: 'Chegaram agora',
+        style: 'tall',
+        // marcados como novidade primeiro; completa com os mais recentes do catálogo
+        items: titles
+          .slice()
+          .sort((x, y) => Number(!!y.isNew) - Number(!!x.isNew) || (y.year ?? 0) - (x.year ?? 0))
+          .slice(0, 8),
+      },
+      ...rows.filter((r) => r.id === 'popular'),
+    ];
+  }
+  return rowsForType(filter, rows);
+}
+
+// loadRow recebe só o descritor; os itens ficam guardados pelo id da fileira.
+const rowItems = new Map<string, Title[]>();
+
+/** Catálogo embutido: clássicos em domínio público, com vídeo do Wikimedia Commons. */
 export const localProvider: CatalogProvider = {
   async getFeatured() {
-    return byId.get(raw.featured) ?? titles[0];
+    return byId.get(raw.featured) ?? titles[0] ?? null;
   },
 
-  async getRows(filter) {
-    const rows = allRows();
-    if (!filter) return rows;
-    if (filter === 'new') {
-      return [
-        {
-          id: 'new',
-          title: 'Chegaram agora',
-          style: 'tall',
-          // marcados como novidade primeiro; completa com os mais recentes do catálogo
-          items: titles
-            .slice()
-            .sort((x, y) => Number(!!y.isNew) - Number(!!x.isNew) || y.year - x.year)
-            .slice(0, 8),
-        },
-        ...rows.filter((r) => r.id === 'popular'),
-      ];
-    }
-    return rowsForType(filter, rows);
+  async listRows(filter) {
+    return rowsFor(filter).map((row) => {
+      rowItems.set(row.id, row.items);
+      return { id: row.id, title: row.title, style: row.style };
+    });
   },
 
-  async getTitle(id) {
+  async loadRow(ref) {
+    return rowItems.get(ref.id) ?? [];
+  },
+
+  async getTitle(_type, id) {
     return byId.get(id) ?? null;
   },
 
-  async getTitles(ids) {
-    return pick(ids);
-  },
-
-  async getSeasons(id) {
+  async getSeasons(_type, id) {
     const r = byId.has(id) ? rawById.get(id) : undefined;
     if (!r || !r.seasons) return [];
     // Mesma regra dos títulos: sem embed, só os episódios que têm arquivo.
@@ -157,11 +173,9 @@ export const localProvider: CatalogProvider = {
       .filter((season) => season.episodes.length > 0);
   },
 
-  async getSimilar(id) {
-    const t = byId.get(id);
-    if (!t) return [];
+  async getSimilar(t) {
     return titles
-      .filter((o) => o.id !== id && o.genres.some((g) => t.genres.includes(g)))
+      .filter((o) => o.id !== t.id && o.genres.some((g) => t.genres.indexOf(g) >= 0))
       .sort((a, b) => Number(b.type === t.type) - Number(a.type === t.type))
       .slice(0, 12);
   },
@@ -170,7 +184,7 @@ export const localProvider: CatalogProvider = {
     const needle = fold(q.trim());
     if (!needle) return [];
     return titles.filter((t) =>
-      [t.title, t.originalTitle, ...t.genres].some((field) => fold(field).includes(needle)),
+      [t.title, t.originalTitle ?? '', ...t.genres].some((field) => fold(field).includes(needle)),
     );
   },
 };

@@ -50,7 +50,8 @@
   position: absolute;
   left: 0;
   top: 50%;
-  margin-top: calc(var(--sidebar-step) * -3);
+  /* 7 itens centrados na altura */
+  margin-top: calc(var(--sidebar-step) * -3.5);
 }
 
 .sidebar__item {
@@ -181,6 +182,12 @@
   opacity: 1;
 }
 
+/* imagem widescreen cobre a tela inteira */
+.backdrop__img--wide {
+  width: 1920px;
+  object-position: 50% 20%;
+}
+
 .backdrop__img--poster {
   width: 1920px;
   -webkit-filter: blur(48px) saturate(1.2);
@@ -268,6 +275,32 @@
   font-size: 80px;
 }
 
+/* Arte de título do catálogo: ocupa também o espaço da chamada, que esses títulos não têm. */
+.hero__title--logo {
+  height: 150px;
+  margin-bottom: 24px;
+}
+
+.hero__title--logo img,
+.details__title--logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: 0 100%;
+  -webkit-filter: drop-shadow(0 2px 18px rgba(0, 0, 0, 0.55));
+  filter: drop-shadow(0 2px 18px rgba(0, 0, 0, 0.55));
+}
+
+.hero__title--logo,
+.details__title--logo {
+  width: 620px;
+}
+
+.details__title--logo {
+  height: 170px;
+  max-height: none;
+}
+
 .hero__tagline {
   margin-top: 23px;
   font-size: 28px;
@@ -336,6 +369,13 @@
   background: rgba(255, 255, 255, 0.12);
 }
 
+.btn--pill svg {
+  width: 22px;
+  height: 22px;
+  margin-right: 10px;
+  margin-left: -4px;
+}
+
 .btn--pill.is-selected {
   background: rgba(255, 255, 255, 0.3);
 }
@@ -360,6 +400,11 @@
 
 .meta__year {
   color: var(--white);
+  font-weight: 600;
+}
+
+.meta__rating {
+  color: #f5c518;
   font-weight: 600;
 }
 
@@ -508,6 +553,18 @@
   color: rgba(255, 255, 255, 0.5);
 }
 
+/* fileira ainda buscando os itens */
+.card--skeleton .card__art {
+  background: var(--coal);
+  animation: skeleton 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton {
+  50% {
+    opacity: 0.45;
+  }
+}
+
 .card__progress {
   position: absolute;
   left: 14px;
@@ -608,6 +665,11 @@
   color: var(--smoke);
 }
 
+.empty__actions {
+  display: flex;
+  margin-top: 34px;
+}
+
 /* ---------- Detalhes ---------- */
 
 .details__top {
@@ -649,9 +711,15 @@
 
 .details__synopsis {
   width: 760px;
+  /* quatro linhas: o bloco de cima tem altura fixa e a sinopse longa invadia as fileiras */
+  max-height: 152px;
   margin-top: 20px;
   font-size: 25px;
   line-height: 38px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
 }
 
@@ -921,6 +989,72 @@
   z-index: 1;
 }
 
+/* legendas e fontes ficam à direita */
+.shell__top--right {
+  left: auto;
+  right: 112px;
+}
+
+.shell__top--right .shell__btn {
+  margin-right: 0;
+  margin-left: 59px;
+}
+
+.shell__menu {
+  position: absolute;
+  top: 196px;
+  right: 80px;
+  width: 620px;
+  max-height: 640px;
+  z-index: 2;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(20, 20, 20, 0.96);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 24px 70px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.shell__menu-title {
+  padding: 8px 16px 14px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--smoke);
+}
+
+.shell__option {
+  display: flex;
+  align-items: center;
+  min-height: 62px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 23px;
+  line-height: 30px;
+  color: rgba(255, 255, 255, 0.82);
+  transition: background-color var(--focus-ms) linear, color var(--focus-ms) linear;
+}
+
+.shell__option.is-current {
+  color: var(--white);
+  font-weight: 600;
+}
+
+.shell__option:focus {
+  background: var(--white);
+  color: var(--black);
+}
+
+.shell__option-mark {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin-right: 16px;
+}
+
+.shell__option-mark svg {
+  width: 26px;
+  height: 26px;
+}
+
 .shell__btn {
   position: relative;
   display: flex;
@@ -1039,8 +1173,8 @@
 
 .shell__toast {
   position: absolute;
-  top: 190px;
-  left: 112px;
+  top: 196px;
+  right: 112px;
   z-index: 1;
   padding: 14px 22px;
   border-radius: 8px;
@@ -1222,4 +1356,172 @@
   left: 0;
   right: 0;
   bottom: -16px;
+}
+
+/* ---------- Detalhes: temporadas e episódios ---------- */
+
+.row--pills .row__arrow {
+  top: calc(var(--row-title-size) + var(--row-title-gap) + 26px);
+}
+
+.episode__title {
+  flex: 1;
+  min-width: 0;
+  margin-right: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Player: procurando fonte e avisos ---------- */
+
+.player__message {
+  position: absolute;
+  top: 330px;
+  left: var(--content-left);
+  width: 900px;
+}
+
+.player__message-title {
+  font-size: 56px;
+  line-height: 62px;
+  font-weight: 700;
+}
+
+.player__message-text {
+  margin-top: 18px;
+  font-size: 27px;
+  line-height: 40px;
+  color: var(--smoke);
+}
+
+.player__message-actions {
+  display: flex;
+  margin-top: 38px;
+}
+
+/* ---------- Configurações ---------- */
+
+.settings__block {
+  width: 1180px;
+  margin: 0 0 54px var(--content-left);
+}
+
+.settings__title {
+  font-size: 34px;
+  line-height: 40px;
+  font-weight: 700;
+}
+
+.settings__note {
+  width: 900px;
+  margin-top: 10px;
+  font-size: 23px;
+  line-height: 34px;
+  color: var(--smoke);
+}
+
+.settings__options {
+  display: flex;
+  margin-top: 22px;
+}
+
+.settings__empty {
+  margin-top: 20px;
+  font-size: 23px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.settings__sources {
+  width: 720px;
+  margin-top: 18px;
+}
+
+.settings__source {
+  display: flex;
+  align-items: center;
+  height: 60px;
+  margin-bottom: 8px;
+  padding: 0 20px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.86);
+  transition: background-color var(--focus-ms) linear, color var(--focus-ms) linear;
+}
+
+.settings__source svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-right: 14px;
+}
+
+.settings__source-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 24px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings__source-error {
+  margin-left: 14px;
+  font-size: 19px;
+  font-weight: 400;
+  color: #ff8a8f;
+}
+
+.settings__source-action {
+  flex: none;
+  margin-left: 20px;
+  font-size: 21px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.settings__source:focus {
+  background: var(--white);
+  color: var(--black);
+}
+
+.settings__source:focus .settings__source-action {
+  color: var(--black);
+}
+
+.settings__source:focus .settings__source-error {
+  color: #b3141c;
+}
+
+.settings__input {
+  display: block;
+  width: 100%;
+  height: 72px;
+  margin-top: 22px;
+  padding: 0 24px;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--white);
+  font-family: var(--font);
+  font-size: 26px;
+  outline: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.settings__input:focus {
+  border-color: var(--white);
+}
+
+.settings__input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.settings__error {
+  margin-top: 14px;
+  font-size: 23px;
+  line-height: 32px;
+  color: #ff8a8f;
 }

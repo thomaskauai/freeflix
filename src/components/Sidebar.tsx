@@ -11,6 +11,7 @@ const ITEMS: { path: string; label: string; icon: IconName }[] = [
   { path: '/browse/series', label: 'Séries', icon: 'series' },
   { path: '/browse/movies', label: 'Filmes', icon: 'movies' },
   { path: '/list', label: 'Minha lista', icon: 'plus' },
+  { path: '/settings', label: 'Configurações', icon: 'settings' },
 ];
 
 function Item({

@@ -4,3 +4,7 @@ build
 .env.local
 .playwright-mcp
 *.wgt
+
+# cópia local de outro projeto, usada só como referência
+NuvioSource/
+.DS_Store

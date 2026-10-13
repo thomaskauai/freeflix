@@ -8,7 +8,7 @@ const ARROW_STEP = 4;
 
 interface RowProps {
   title: string;
-  variant: 'poster' | 'tall' | 'episode';
+  variant: 'poster' | 'tall' | 'episode' | 'pills';
   /** y de repouso quando focada; "top" mantém a página no topo */
   anchor?: number | 'top';
   /** já ficou acima da fileira em foco: some, em vez de sobrar uma tira no topo */

@@ -48,26 +48,33 @@ export default function Search() {
 
   useEffect(() => {
     let alive = true;
-    catalog.getRows().then((rows) => {
-      const row = rows.filter((r) => r.id === 'popular')[0] ?? rows[0];
-      if (alive && row) setPopular(row.items);
-    });
+    catalog
+      .listRows()
+      .then((rows) => {
+        const row = rows.filter((r) => r.id.indexOf('popular') >= 0)[0] ?? rows[0];
+        return row ? catalog.loadRow(row) : [];
+      })
+      .then(
+        (items) => alive && setPopular(items),
+        () => undefined,
+      );
     return () => {
       alive = false;
     };
   }, []);
 
   useEffect(() => {
-    if (!query.trim()) {
-      setResults(null);
-      return;
-    }
+    setResults(null);
+    if (!query.trim()) return;
     let alive = true;
     // Ao voltar de um título a busca refaz na hora, para o foco achar o card de origem.
     const delay = restored.current ? 0 : DEBOUNCE_MS;
     restored.current = false;
     const timer = window.setTimeout(() => {
-      catalog.search(query).then((found) => alive && setResults(found));
+      catalog.search(query).then(
+        (found) => alive && setResults(found),
+        () => alive && setResults([]),
+      );
     }, delay);
     return () => {
       alive = false;
@@ -93,8 +100,10 @@ export default function Search() {
 
   usePageFocus(ready);
 
-  const shown = results ?? popular;
   const searching = query.trim().length > 0;
+  // Enquanto a busca não volta, a grade fica vazia: populares sob o título de
+  // resultados passariam por resposta.
+  const shown = searching ? (results ?? []) : popular;
 
   return (
     <div className="page search" data-focus-main="">
@@ -123,7 +132,7 @@ export default function Search() {
 
       <ScrollArea className="search__results">
         <h2 className="search__heading">
-          {searching ? `Resultados para “${query.trim()}”` : 'Mais buscados'}
+          {!searching ? 'Mais buscados' : results ? `Resultados para “${query.trim()}”` : `Buscando “${query.trim()}”`}
         </h2>
         {searching && results && results.length === 0 ? (
           <div className="empty">
@@ -133,7 +142,7 @@ export default function Search() {
         ) : (
           <div className="grid">
             {shown.map((t) => (
-              <Card key={t.id} title={t} variant="poster" focusId={`search:${t.id}`} anchor={SEARCH_GRID_ANCHOR} />
+              <Card key={t.id} title={t} variant="poster" focusId={`search|${t.id}`} anchor={SEARCH_GRID_ANCHOR} />
             ))}
           </div>
         )}

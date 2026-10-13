@@ -17,20 +17,25 @@ export function KindTag({ type }: { type: TitleType }) {
   );
 }
 
-export function Meta({ title }: { title: Title }) {
-  const length =
-    title.type === 'series'
-      ? title.seasonCount > 1
-        ? `${title.seasonCount} temporadas`
-        : `${title.episodeCount} episódios`
-      : formatRuntime(title.runtime);
+function lengthOf(title: Title): string | null {
+  if (title.type === 'series') {
+    if (title.seasonCount && title.seasonCount > 1) return `${title.seasonCount} temporadas`;
+    if (title.episodeCount) return `${title.episodeCount} episódios`;
+    return null;
+  }
+  return title.runtime ? formatRuntime(title.runtime) : null;
+}
 
+/** Só o que o catálogo informou; nada aqui é inventado para preencher a linha. */
+export function Meta({ title }: { title: Title }) {
+  const length = lengthOf(title);
   return (
     <div className="meta">
-      <span className="meta__year">{title.year}</span>
-      <span>{length}</span>
-      <span>{title.genres.join(', ')}</span>
-      <span className="meta__badge">Domínio público</span>
+      {title.year && <span className="meta__year">{title.year}</span>}
+      {length && <span>{length}</span>}
+      {title.rating && <span className="meta__rating">IMDb {title.rating}</span>}
+      {title.genres.length > 0 && <span>{title.genres.slice(0, 3).join(', ')}</span>}
+      {title.publicDomain && <span className="meta__badge">Domínio público</span>}
     </div>
   );
 }

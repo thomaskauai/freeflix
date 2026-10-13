@@ -1,49 +1,65 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Hero } from '../components/Hero';
-import { Rows, type RowWithProgress } from '../components/Rows';
+import { PageError } from '../components/PageError';
+import { Rows, type RowSource } from '../components/Rows';
 import { ScrollArea } from '../components/ScrollArea';
 import { catalog } from '../data/provider';
-import { getAllProgress } from '../data/storage';
+import { getAllProgress, titleFromSnapshot } from '../data/storage';
 import type { Title } from '../data/types';
 import { focusElement } from '../focus/FocusContext';
 import { useKeyHandler } from '../focus/keys';
 import { usePageFocus } from '../focus/useFocusable';
+import { titlePath, watchPath } from '../nav';
 
-async function continueWatchingRow(): Promise<RowWithProgress | null> {
+function continueWatchingRow(): RowSource | null {
   const saved = getAllProgress();
   const ids = Object.keys(saved)
-    .filter((id) => saved[id].time > 0 && saved[id].time < saved[id].duration)
+    .filter((id) => saved[id].title && saved[id].time > 0 && saved[id].time < saved[id].duration)
     .sort((a, b) => saved[b].updatedAt - saved[a].updatedAt);
   if (!ids.length) return null;
 
-  const items = await catalog.getTitles(ids);
   const progress: Record<string, number> = {};
-  items.forEach((t) => (progress[t.id] = saved[t.id].time / saved[t.id].duration));
-  return { id: 'continue', title: 'Continuar assistindo', style: 'poster', items, progress };
+  ids.forEach((id) => (progress[id] = saved[id].time / saved[id].duration));
+  return {
+    id: 'continue',
+    title: 'Continuar assistindo',
+    style: 'poster',
+    items: ids.map((id) => titleFromSnapshot(saved[id].title)),
+    progress,
+  };
+}
+
+interface Loaded {
+  featured: Title | null;
+  rows: RowSource[];
 }
 
 export default function Home() {
   const navigate = useNavigate();
-  const [data, setData] = useState<{ featured: Title; rows: RowWithProgress[] } | null>(null);
+  const [data, setData] = useState<Loaded | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [rowsReady, setRowsReady] = useState(false);
   const [inRows, setInRows] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    Promise.all([catalog.getFeatured(), catalog.getRows(), continueWatchingRow()]).then(
-      ([featured, rows, resume]) => {
+    Promise.all([catalog.getFeatured(), catalog.listRows()]).then(
+      ([featured, refs]) => {
         if (!alive) return;
-        const all: RowWithProgress[] = rows.slice();
-        if (resume) all.splice(1, 0, resume);
-        setData({ featured, rows: all });
+        const rows: RowSource[] = refs.map((ref) => ({ ...ref, load: () => catalog.loadRow(ref) }));
+        const resume = continueWatchingRow();
+        if (resume) rows.splice(1, 0, resume);
+        setData({ featured, rows });
       },
+      () => alive && setFailed(true),
     );
     return () => {
       alive = false;
     };
   }, []);
 
-  usePageFocus(!!data);
+  usePageFocus((!!data && rowsReady) || failed);
 
   // Voltar com a página rolada retorna ao destaque; no destaque, o app trata (sair).
   useKeyHandler((action) => {
@@ -53,20 +69,28 @@ export default function Home() {
     return focusElement(document.querySelector<HTMLElement>('[data-focus-id="hero-play"]'));
   });
 
+  const featured = data ? data.featured : null;
+
   return (
     <div className="page" data-focus-main="">
+      {failed && <PageError />}
       {data && (
         <ScrollArea>
-          <Hero
-            away={inRows}
-            onFocus={() => setInRows(false)}
-            title={data.featured}
-            onPlay={() =>
-              navigate(data.featured.type === 'series' ? `/watch/${data.featured.id}/1/1` : `/watch/${data.featured.id}`)
-            }
-            onInfo={() => navigate(`/title/${data.featured.id}`)}
+          {featured && (
+            <Hero
+              away={inRows}
+              onFocus={() => setInRows(false)}
+              title={featured}
+              onPlay={() => navigate(featured.type === 'series' ? watchPath(featured, 1, 1) : watchPath(featured))}
+              onInfo={() => navigate(titlePath(featured))}
+            />
+          )}
+          <Rows
+            rows={data.rows}
+            autoFocusFirst={!featured}
+            onFocus={() => setInRows(true)}
+            onReady={() => setRowsReady(true)}
           />
-          <Rows rows={data.rows} onFocus={() => setInRows(true)} />
         </ScrollArea>
       )}
     </div>

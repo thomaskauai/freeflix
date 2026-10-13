@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useKeyHandler } from '../focus/keys';
+import { focusElement } from '../focus/FocusContext';
 import { useFocusable, useFocusMove } from '../focus/useFocusable';
 import { Icon, type IconName } from './Icon';
 
 const HIDE_AFTER_MS = 4000;
 const SEEK_SECONDS = 10;
 const SAVE_EVERY_MS = 5000;
+/** fonte que não começa a tocar nesse tempo é dada como ruim */
+const START_TIMEOUT_MS = 15000;
 
 export function formatClock(seconds: number) {
   const s = Math.max(0, Math.floor(seconds));
@@ -16,20 +19,32 @@ export function formatClock(seconds: number) {
   return h ? `${h}:${two(m)}:${two(s % 60)}` : `${m}:${two(s % 60)}`;
 }
 
+function SourceOption({ label, current, onPick }: { label: string; current: boolean; onPick: () => void }) {
+  const focus = useFocusable({ autoFocus: current });
+  return (
+    <div {...focus} className={`shell__option${current ? ' is-current' : ''}`} onClick={onPick}>
+      <span className="shell__option-mark">{current && <Icon name="check" />}</span>
+      {label}
+    </div>
+  );
+}
+
 function ShellButton({
   icon,
   label,
   showLabel,
   autoFocus,
+  id,
   onClick,
 }: {
   icon: IconName;
   label: string;
   showLabel?: boolean;
   autoFocus?: boolean;
+  id?: string;
   onClick: () => void;
 }) {
-  const focus = useFocusable({ autoFocus });
+  const focus = useFocusable({ autoFocus, id });
   return (
     <div {...focus} className="shell__btn" aria-label={label} onClick={onClick}>
       <Icon name={icon} />
@@ -44,26 +59,47 @@ interface PlayerShellProps {
   /**
    * video: controla o <video> recebido em `media`.
    * embed: os controles de reprodução são do embed; o shell só mostra título e Voltar.
-   * none: sem fonte de vídeo; roda um relógio próprio para os controles serem navegáveis.
    */
-  mode: 'video' | 'embed' | 'none';
+  mode: 'video' | 'embed';
   media: HTMLVideoElement | null;
-  /** segundos; no modo video vale a duração real do arquivo assim que ela chega */
+  /** segundos; vale até a duração real do arquivo chegar */
   duration: number;
   startAt: number;
+  /** fontes encontradas para este título, da melhor para a pior */
+  sources?: string[];
+  sourceIndex?: number;
+  onPickSource?: (index: number) => void;
+  /** a fonte não tocou; sem isso, o shell mostra o erro */
+  onFail?: () => void;
   onProgress: (time: number, duration: number) => void;
   onExit: () => void;
 }
 
-export function PlayerShell({ title, subtitle, mode, media, duration, startAt, onProgress, onExit }: PlayerShellProps) {
+export function PlayerShell({
+  title,
+  subtitle,
+  mode,
+  media,
+  duration,
+  startAt,
+  sources,
+  sourceIndex = 0,
+  onPickSource,
+  onFail,
+  onProgress,
+  onExit,
+}: PlayerShellProps) {
   const [time, setTime] = useState(startAt);
   const [length, setLength] = useState(duration);
-  // No modo video só vira true quando o <video> de fato começa a tocar.
-  const [playing, setPlaying] = useState(mode === 'none');
+  const [playing, setPlaying] = useState(false);
   const [buffering, setBuffering] = useState(mode === 'video');
   const [failed, setFailed] = useState(false);
   const [visible, setVisible] = useState(true);
-  const [toast, setToast] = useState(false);
+  const [toast, setToast] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menu = useRef<HTMLDivElement>(null);
+  const menuOpenRef = useRef(menuOpen);
+  menuOpenRef.current = menuOpen;
 
   const playButton = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<number>();
@@ -72,17 +108,21 @@ export function PlayerShell({ title, subtitle, mode, media, duration, startAt, o
   const timeRef = useRef(time);
   const lengthRef = useRef(length);
   const progressRef = useRef(onProgress);
+  const failRef = useRef(onFail);
   playingRef.current = playing;
   timeRef.current = time;
   lengthRef.current = length;
   progressRef.current = onProgress;
+  failRef.current = onFail;
 
-  // Qualquer tecla mostra os controles; eles somem sozinhos só durante a reprodução.
+  // Qualquer tecla ou movimento do mouse mostra os controles; eles somem
+  // sozinhos só durante a reprodução.
   const wake = useCallback(() => {
     setVisible(true);
     window.clearTimeout(hideTimer.current);
     hideTimer.current = window.setTimeout(() => {
-      if (playingRef.current) setVisible(false);
+      // com a lista de fontes aberta os controles ficam
+      if (playingRef.current && !menuOpenRef.current) setVisible(false);
     }, HIDE_AFTER_MS);
   }, []);
 
@@ -96,13 +136,26 @@ export function PlayerShell({ title, subtitle, mode, media, duration, startAt, o
     };
   }, [wake]);
 
-  // Modo video: o estado do shell espelha o do elemento <video>.
+  // O estado do shell espelha o do elemento <video>.
   useEffect(() => {
     if (mode !== 'video' || !media) return;
+    let started = false;
+
+    const fail = () => {
+      window.clearTimeout(startTimer);
+      if (failRef.current) failRef.current();
+      else {
+        setFailed(true);
+        setBuffering(false);
+        setPlaying(false);
+      }
+    };
+    // Fonte lenta ou morta não dá erro, só nunca começa: o relógio decide.
+    const startTimer = window.setTimeout(() => !started && fail(), START_TIMEOUT_MS);
 
     const onMeta = () => {
       if (isFinite(media.duration) && media.duration > 0) setLength(media.duration);
-      if (startAt > 0 && startAt < media.duration) media.currentTime = startAt;
+      if (startAt > 0 && startAt < media.duration && media.currentTime < 1) media.currentTime = startAt;
     };
     const onTime = () => setTime(media.currentTime);
     const onPlay = () => {
@@ -111,11 +164,10 @@ export function PlayerShell({ title, subtitle, mode, media, duration, startAt, o
     };
     const onPause = () => setPlaying(false);
     const onWaiting = () => setBuffering(true);
-    const onReady = () => setBuffering(false);
-    const onError = () => {
-      setFailed(true);
+    const onReady = () => {
+      started = true;
+      window.clearTimeout(startTimer);
       setBuffering(false);
-      setPlaying(false);
     };
 
     media.addEventListener('loadedmetadata', onMeta);
@@ -127,13 +179,14 @@ export function PlayerShell({ title, subtitle, mode, media, duration, startAt, o
     media.addEventListener('waiting', onWaiting);
     media.addEventListener('playing', onReady);
     media.addEventListener('canplay', onReady);
-    media.addEventListener('error', onError);
+    media.addEventListener('error', fail);
     if (media.readyState >= 1) onMeta();
-    // Se a TV recusar o autoplay, fica pausado com o botão de play em foco.
-    const started = media.play();
-    if (started && started.catch) started.catch(() => setBuffering(false));
+    // Se o aparelho recusar o autoplay, fica pausado com o botão de play em foco.
+    const autoplay = media.play();
+    if (autoplay && autoplay.catch) autoplay.catch(() => undefined);
 
     return () => {
+      window.clearTimeout(startTimer);
       media.removeEventListener('loadedmetadata', onMeta);
       media.removeEventListener('durationchange', onMeta);
       media.removeEventListener('timeupdate', onTime);
@@ -143,63 +196,54 @@ export function PlayerShell({ title, subtitle, mode, media, duration, startAt, o
       media.removeEventListener('waiting', onWaiting);
       media.removeEventListener('playing', onReady);
       media.removeEventListener('canplay', onReady);
-      media.removeEventListener('error', onError);
+      media.removeEventListener('error', fail);
     };
     // startAt só vale para a abertura deste vídeo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, media, wake]);
 
-  // Modo none: relógio próprio.
   useEffect(() => {
-    if (mode !== 'none' || !playing) return;
-    const tick = window.setInterval(() => setTime((t) => Math.min(lengthRef.current, t + 1)), 1000);
-    return () => window.clearInterval(tick);
-  }, [mode, playing]);
-
-  useEffect(() => {
-    if (mode === 'none' && time >= length) setPlaying(false);
-  }, [mode, time, length]);
-
-  useEffect(() => {
-    if (mode === 'embed') return;
+    if (mode !== 'video') return;
     const save = window.setInterval(() => progressRef.current(timeRef.current, lengthRef.current), SAVE_EVERY_MS);
     return () => {
       window.clearInterval(save);
-      progressRef.current(timeRef.current, lengthRef.current);
+      if (timeRef.current > 0) progressRef.current(timeRef.current, lengthRef.current);
     };
   }, [mode]);
 
   const seekTo = (target: number) => {
+    if (!media) return;
     const next = Math.min(lengthRef.current, Math.max(0, target));
-    if (mode === 'video' && media) media.currentTime = next;
+    media.currentTime = next;
     // já vale para o próximo toque: FF repetido soma, não parte do mesmo ponto
     timeRef.current = next;
     setTime(next);
   };
-  const seek = (delta: number) =>
-    seekTo((mode === 'video' && media ? media.currentTime : timeRef.current) + delta);
+  const seek = (delta: number) => seekTo((media ? media.currentTime : timeRef.current) + delta);
 
   const setPlayback = (play: boolean) => {
-    if (mode === 'video' && media) {
-      if (play) {
-        const started = media.play();
-        if (started && started.catch) started.catch(() => undefined);
-      } else {
-        media.pause();
-      }
+    if (!media) return;
+    if (play) {
+      const started = media.play();
+      if (started && started.catch) started.catch(() => undefined);
     } else {
-      if (play && timeRef.current >= lengthRef.current) setTime(0);
-      setPlaying(play);
+      media.pause();
     }
     wake();
   };
-  const toggle = () => setPlayback(mode === 'video' && media ? media.paused : !playingRef.current);
+  const toggle = () => media && setPlayback(media.paused);
 
   useKeyHandler((action) => {
     const wasVisible = visible;
     wake();
+    // Voltar fecha a lista de fontes antes de sair do player.
+    if (menuOpen) {
+      if (action === 'back') return closeMenu(), true;
+      if (action === 'up' || action === 'down' || action === 'ok') return false;
+      return true;
+    }
     if (action === 'back') return false;
-    if (mode !== 'embed') {
+    if (mode === 'video') {
       if (action === 'playpause') return toggle(), true;
       if (action === 'play') return setPlayback(true), true;
       if (action === 'pause' || action === 'stop') return setPlayback(false), true;
@@ -217,14 +261,37 @@ export function PlayerShell({ title, subtitle, mode, media, duration, startAt, o
     return false;
   });
 
-  const showToast = () => {
-    setToast(true);
+  const showToast = (message: string) => {
+    setToast(message);
     window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(false), 3500);
+    toastTimer.current = window.setTimeout(() => setToast(''), 4500);
   };
 
+  // Legendas: liga e desliga as faixas que o próprio vídeo traz.
+  const toggleSubtitles = () => {
+    const tracks = media ? Array.prototype.slice.call(media.textTracks) as TextTrack[] : [];
+    const usable = tracks.filter((t) => t.kind === 'subtitles' || t.kind === 'captions');
+    if (usable.length === 0) return showToast('Este vídeo não tem legendas.');
+    const on = usable.some((t) => t.mode === 'showing');
+    usable.forEach((t, i) => (t.mode = !on && i === 0 ? 'showing' : 'hidden'));
+    showToast(on ? 'Legendas desligadas.' : `Legendas ligadas${usable[0].label ? `: ${usable[0].label}` : '.'}`);
+  };
+
+  const closeMenu = () => {
+    setMenuOpen(false);
+    focusElement(document.querySelector<HTMLElement>('[data-focus-id="shell-sources"]'));
+  };
+
+  // A lista aberta vira a camada de foco: o controle só anda dentro dela.
+  useEffect(() => {
+    if (!menuOpen || !menu.current) return;
+    focusElement(menu.current.querySelector<HTMLElement>('[data-autofocus]'));
+  }, [menuOpen]);
+
+  const hasSources = !!sources && sources.length > 1 && !!onPickSource;
+
   const playFocus = useFocusable({ autoFocus: true });
-  const hasControls = mode !== 'embed';
+  const hasControls = mode === 'video';
 
   return (
     <div className={`shell${visible || failed ? '' : ' is-hidden'}`}>
@@ -232,20 +299,47 @@ export function PlayerShell({ title, subtitle, mode, media, duration, startAt, o
         <ShellButton icon="back" label="Voltar" autoFocus={!hasControls} onClick={onExit} />
         {hasControls && (
           <>
-            <ShellButton icon="options" label="Opções" showLabel onClick={showToast} />
             <ShellButton icon="restart" label="Reiniciar" onClick={() => seekTo(0)} />
           </>
         )}
       </div>
 
-      {mode === 'none' && <div className="shell__notice">Este título ainda não tem vídeo</div>}
-      {toast && <div className="shell__toast">Este vídeo não tem outras faixas de áudio nem legendas.</div>}
+      {hasControls && (
+        <div className="shell__top shell__top--right" data-focus-group="">
+          <ShellButton icon="options" label="Legendas" showLabel onClick={toggleSubtitles} />
+          {hasSources && (
+            <ShellButton
+              icon="swap"
+              label="Fontes"
+              showLabel
+              id="shell-sources"
+              onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))}
+            />
+          )}
+        </div>
+      )}
 
-      {mode === 'video' && buffering && !failed && <div className="shell__spinner" aria-label="Carregando" />}
+      {menuOpen && sources && onPickSource && (
+        <div ref={menu} className="shell__menu" data-focus-layer="">
+          <div className="shell__menu-title">Fontes deste título</div>
+          {sources.map((label, i) => (
+            <SourceOption
+              key={i}
+              label={label}
+              current={i === sourceIndex}
+              onPick={() => (i === sourceIndex ? closeMenu() : onPickSource(i))}
+            />
+          ))}
+        </div>
+      )}
+
+      {toast && <div className="shell__toast">{toast}</div>}
+
+      {hasControls && buffering && !failed && <div className="shell__spinner" aria-label="Carregando" />}
       {failed && (
         <div className="shell__error">
           <p className="shell__error-title">O vídeo não carregou</p>
-          <p>Confira a conexão da TV e abra o título de novo.</p>
+          <p>Confira a conexão e abra o título de novo.</p>
         </div>
       )}
 
