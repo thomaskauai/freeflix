@@ -65,6 +65,20 @@
   transition: color var(--focus-ms) linear;
 }
 
+/* Fechado, o item só ocupa a coluna do ícone: o rótulo invisível não pode
+   capturar o mouse por cima do conteúdo. Aberto, o item inteiro é clicável. */
+.sidebar__item {
+  width: 132px;
+  padding-right: 0;
+  overflow: hidden;
+}
+
+.sidebar.is-open .sidebar__item {
+  width: auto;
+  padding-right: 40px;
+  overflow: visible;
+}
+
 .sidebar__item svg {
   flex: none;
   width: var(--sidebar-icon);
