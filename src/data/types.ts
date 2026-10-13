@@ -29,6 +29,8 @@ export interface Title {
   /** código do idioma original (en, pt, ja…) */
   originalLanguage?: string;
   tmdbId?: number | null;
+  /** id IMDb (tt…), quando o id do catálogo não é ele */
+  imdbId?: string;
   isNew?: boolean;
   publicDomain?: boolean;
   /** arquivos de vídeo tocáveis direto; filme: o primeiro é o principal */

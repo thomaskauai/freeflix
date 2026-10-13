@@ -135,7 +135,8 @@
       "isNew": true,
       "poster": "media/metropolis-poster.jpg",
       "backdrop": "media/metropolis-backdrop.jpg",
-      "tmdbId": 19
+      "tmdbId": 19,
+      "imdbId": "tt0017136"
     },
     {
       "id": "nosferatu",
@@ -164,7 +165,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/0/02/Nosferatu_%281922%2C_English_titles_1947%29.webm?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=original",
           "duration": 5060
         }
-      ]
+      ],
+      "imdbId": "tt0013442"
     },
     {
       "id": "the-general",
@@ -189,7 +191,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/e/ee/The_General_%281926%29.webm/The_General_%281926%29.webm.480p.vp9.webm",
           "duration": 4552
         }
-      ]
+      ],
+      "imdbId": "tt0017925"
     },
     {
       "id": "night-of-the-living-dead",
@@ -219,7 +222,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/e/ee/Night_Of_The_Living_Dead_%281968%29_-_trailer.webm/Night_Of_The_Living_Dead_%281968%29_-_trailer.webm.480p.vp9.webm",
           "duration": 109
         }
-      ]
+      ],
+      "imdbId": "tt0063350"
     },
     {
       "id": "charade",
@@ -246,7 +250,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/e/ef/Charade_%28Stanley_Donen%2C_1963%29.webm?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=original",
           "duration": 6802
         }
-      ]
+      ],
+      "imdbId": "tt0056923"
     },
     {
       "id": "his-girl-friday",
@@ -276,7 +281,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/c/ca/His_Girl_Friday_%281940%29_by_Howard_Hawks%2C_Trailer.webm/His_Girl_Friday_%281940%29_by_Howard_Hawks%2C_Trailer.webm.480p.vp9.webm",
           "duration": 178
         }
-      ]
+      ],
+      "imdbId": "tt0032599"
     },
     {
       "id": "caligari",
@@ -300,7 +306,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/b/ba/Das_Cabinet_des_Dr._Caligari.webm/Das_Cabinet_des_Dr._Caligari.webm.480p.vp9.webm",
           "duration": 4523
         }
-      ]
+      ],
+      "imdbId": "tt0010323"
     },
     {
       "id": "sherlock-jr",
@@ -323,7 +330,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/9/95/Sherlock_Jr._%281924%29.webm/Sherlock_Jr._%281924%29.webm.480p.vp9.webm",
           "duration": 2646
         }
-      ]
+      ],
+      "imdbId": "tt0015324"
     },
     {
       "id": "the-kid",
@@ -347,7 +355,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/e/ea/The_Kid_%281921%29.webm/The_Kid_%281921%29.webm.480p.vp9.webm",
           "duration": 4196
         }
-      ]
+      ],
+      "imdbId": "tt0012349"
     },
     {
       "id": "potemkin",
@@ -371,7 +380,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/2/2d/Battleship_Potemkin_%281925%29.webm/Battleship_Potemkin_%281925%29.webm.480p.vp9.webm",
           "duration": 4244
         }
-      ]
+      ],
+      "imdbId": "tt0015648"
     },
     {
       "id": "trip-to-the-moon",
@@ -401,7 +411,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/f/f1/Excursion_To_The_Moon_%281908%29.webm?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=original",
           "duration": 408
         }
-      ]
+      ],
+      "imdbId": "tt0000417"
     },
     {
       "id": "gold-rush",
@@ -425,7 +436,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/d/d4/The_Gold_Rush.webm/The_Gold_Rush.webm.480p.vp9.webm",
           "duration": 5241
         }
-      ]
+      ],
+      "imdbId": "tt0015864"
     },
     {
       "id": "safety-last",
@@ -448,7 +460,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/e/ef/Safety_Last%21_%281923%29_by_Fred_C._Newmeyer.webm/Safety_Last%21_%281923%29_by_Fred_C._Newmeyer.webm.480p.vp9.webm",
           "duration": 4433
         }
-      ]
+      ],
+      "imdbId": "tt0014429"
     },
     {
       "id": "phantom-opera",
@@ -493,7 +506,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/6/6b/The_Phantom_of_the_Opera_%281925%29_Color_Ballet.webm/The_Phantom_of_the_Opera_%281925%29_Color_Ballet.webm.480p.vp9.webm",
           "duration": 232
         }
-      ]
+      ],
+      "imdbId": "tt0016220"
     },
     {
       "id": "doa",
@@ -510,7 +524,8 @@
       "tagline": "Ele veio denunciar o próprio assassinato",
       "synopsis": "Envenenado com uma substância sem antídoto, um contador tem poucas horas para descobrir quem o matou e por quê.",
       "tmdbId": 18995,
-      "poster": "media/doa-poster.jpg"
+      "poster": "media/doa-poster.jpg",
+      "imdbId": "tt0042369"
     },
     {
       "id": "detour",
@@ -540,7 +555,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c8/Detour_%281945%29_by_Edgar_G._Ulmer%2C_trailer.webm/Detour_%281945%29_by_Edgar_G._Ulmer%2C_trailer.webm.480p.vp9.webm",
           "duration": 93
         }
-      ]
+      ],
+      "imdbId": "tt0037638"
     },
     {
       "id": "the-stranger",
@@ -565,7 +581,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/b/bd/The_Stranger_%28Orson_Welles%2C_1946%29.webm/The_Stranger_%28Orson_Welles%2C_1946%29.webm.480p.vp9.webm",
           "duration": 5642
         }
-      ]
+      ],
+      "imdbId": "tt0038991"
     },
     {
       "id": "scarlet-street",
@@ -590,7 +607,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/9/9b/Scarlet_Street_%281945%29_by_Fritz_Lang.webm/Scarlet_Street_%281945%29_by_Fritz_Lang.webm.480p.vp9.webm",
           "duration": 6143
         }
-      ]
+      ],
+      "imdbId": "tt0038057"
     },
     {
       "id": "haunted-hill",
@@ -606,7 +624,8 @@
       "tagline": "Dez mil dólares para quem sobreviver à noite",
       "synopsis": "Um milionário oferece dinheiro a cinco convidados que aceitarem passar a noite trancados numa mansão com fama de assombrada.",
       "tmdbId": 15856,
-      "poster": "media/haunted-hill-poster.jpg"
+      "poster": "media/haunted-hill-poster.jpg",
+      "imdbId": "tt0051744"
     },
     {
       "id": "last-man-on-earth",
@@ -629,7 +648,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/9/9d/The_Last_Man_on_Earth_%281964%29_by_Ubaldo_Ragona_and_Sidney_Salkow.webm?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=original",
           "duration": 5223
         }
-      ]
+      ],
+      "imdbId": "tt0058700"
     },
     {
       "id": "plan-9",
@@ -653,7 +673,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/e/e8/Plan_9_from_Outer_Space_%281959_film%29.webm/Plan_9_from_Outer_Space_%281959_film%29.webm.480p.vp9.webm",
           "duration": 4697
         }
-      ]
+      ],
+      "imdbId": "tt0052077"
     },
     {
       "id": "carnival-of-souls",
@@ -676,7 +697,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/6/69/Carnival_of_Souls_%281962%29_by_Herk_Harvey.webm/Carnival_of_Souls_%281962%29_by_Herk_Harvey.webm.480p.vp9.webm",
           "duration": 4663
         }
-      ]
+      ],
+      "imdbId": "tt0055830"
     },
     {
       "id": "little-shop",
@@ -701,7 +723,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/2/20/The_Little_Shop_of_Horrors_%281960%29_by_Roger_Corman.webm/The_Little_Shop_of_Horrors_%281960%29_by_Roger_Corman.webm.480p.vp9.webm",
           "duration": 4309
         }
-      ]
+      ],
+      "imdbId": "tt0054033"
     },
     {
       "id": "jekyll-hyde",
@@ -724,7 +747,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/8/88/Dr._Jekyll_and_Mr._Hyde_%281920%29_by_John_S._Robertson.webm/Dr._Jekyll_and_Mr._Hyde_%281920%29_by_John_S._Robertson.webm.480p.vp9.webm",
           "duration": 4774
         }
-      ]
+      ],
+      "imdbId": "tt0011130"
     },
     {
       "id": "lost-world",
@@ -748,7 +772,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/2/2e/The_Lost_World_%281925%29.webm/The_Lost_World_%281925%29.webm.480p.vp9.webm",
           "duration": 6150
         }
-      ]
+      ],
+      "imdbId": "tt0016039"
     },
     {
       "id": "steamboat-bill",
@@ -772,7 +797,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/9/92/Steamboat_Bill_Jr._%281928%29_by_Charles_Riesner.webm/Steamboat_Bill_Jr._%281928%29_by_Charles_Riesner.webm.480p.vp9.webm",
           "duration": 4206
         }
-      ]
+      ],
+      "imdbId": "tt0019421"
     },
     {
       "id": "thief-of-bagdad",
@@ -796,7 +822,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/5/5b/The_Thief_of_Bagdad_%281924%29.webm/The_Thief_of_Bagdad_%281924%29.webm.480p.vp9.webm",
           "duration": 8763
         }
-      ]
+      ],
+      "imdbId": "tt0015400"
     },
     {
       "id": "wings",
@@ -821,7 +848,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c3/Wings_%281927%29.webm/Wings_%281927%29.webm.480p.vp9.webm",
           "duration": 8318
         }
-      ]
+      ],
+      "imdbId": "tt0018578"
     },
     {
       "id": "my-man-godfrey",
@@ -838,7 +866,8 @@
       "tagline": "O mordomo sabe mais do que parece",
       "synopsis": "Uma herdeira excêntrica contrata como mordomo um homem que encontrou num lixão, sem imaginar quem ele era antes.",
       "tmdbId": 13562,
-      "poster": "media/my-man-godfrey-poster.jpg"
+      "poster": "media/my-man-godfrey-poster.jpg",
+      "imdbId": "tt0028010"
     },
     {
       "id": "hitch-hiker",
@@ -862,7 +891,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/f/fa/The_Hitch-Hiker.webm/The_Hitch-Hiker.webm.480p.vp9.webm",
           "duration": 4258
         }
-      ]
+      ],
+      "imdbId": "tt0045877"
     },
     {
       "id": "kansas-city-confidential",
@@ -884,7 +914,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/6/68/Kansas_City_Confidential_%281952%29.webm/Kansas_City_Confidential_%281952%29.webm.480p.vp9.webm",
           "duration": 5950
         }
-      ]
+      ],
+      "imdbId": "tt0044789"
     },
     {
       "id": "too-late-for-tears",
@@ -908,7 +939,8 @@
           "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/f/fb/Too_Late_for_Tears_%281949%29_by_Byron_Haskin.webm/Too_Late_for_Tears_%281949%29_by_Byron_Haskin.webm.480p.vp9.webm",
           "duration": 6070
         }
-      ]
+      ],
+      "imdbId": "tt0041968"
     },
     {
       "id": "les-vampires",
@@ -991,7 +1023,8 @@
           "duration": 3273,
           "episode": 10
         }
-      ]
+      ],
+      "imdbId": "tt0006206"
     },
     {
       "id": "flash-gordon",
@@ -1013,7 +1046,8 @@
       "isNew": true,
       "tmdbId": 68064,
       "poster": "media/flash-gordon-poster.jpg",
-      "backdrop": "media/flash-gordon-backdrop.jpg"
+      "backdrop": "media/flash-gordon-backdrop.jpg",
+      "imdbId": "tt0032475"
     },
     {
       "id": "sherlock-holmes-1954",
@@ -1032,7 +1066,8 @@
       "seasons": [
         39
       ],
-      "tmdbId": 6560
+      "tmdbId": 6560,
+      "imdbId": "tt0046642"
     },
     {
       "id": "phantom-empire",
@@ -1053,7 +1088,8 @@
       ],
       "tmdbId": 184892,
       "backdropFile": null,
-      "posterFile": null
+      "posterFile": null,
+      "imdbId": "tt0026867"
     },
     {
       "id": "one-step-beyond",
@@ -1074,7 +1110,8 @@
         39,
         35
       ],
-      "tmdbId": 10377
+      "tmdbId": 10377,
+      "imdbId": "tt0052442"
     },
     {
       "id": "dick-tracy",
@@ -1095,7 +1132,8 @@
       ],
       "tmdbId": 138336,
       "backdropFile": null,
-      "posterFile": null
+      "posterFile": null,
+      "imdbId": "tt0028785"
     },
     {
       "id": "radar-men",
@@ -1114,7 +1152,8 @@
         12
       ],
       "tmdbId": 44608,
-      "poster": "media/radar-men-poster.jpg"
+      "poster": "media/radar-men-poster.jpg",
+      "imdbId": "tt0045064"
     },
     {
       "id": "undersea-kingdom",
@@ -1134,7 +1173,8 @@
         12
       ],
       "tmdbId": 90918,
-      "poster": "media/undersea-kingdom-poster.jpg"
+      "poster": "media/undersea-kingdom-poster.jpg",
+      "imdbId": "tt0028444"
     },
     {
       "id": "perils-of-pauline",
@@ -1161,7 +1201,8 @@
           "duration": 1776,
           "episode": 1
         }
-      ]
+      ],
+      "imdbId": "tt0004465"
     },
     {
       "id": "fantomas",

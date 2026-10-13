@@ -1525,3 +1525,13 @@
   line-height: 32px;
   color: #ff8a8f;
 }
+
+/* ---------- Legendas ---------- */
+
+.player__video::cue {
+  font-family: var(--font);
+  font-size: 44px;
+  line-height: 1.3;
+  color: var(--white);
+  background: rgba(0, 0, 0, 0.6);
+}

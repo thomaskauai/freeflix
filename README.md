@@ -89,7 +89,18 @@ Limites:
   só devolve `infoHash` gera o aviso "Só há fontes de torrent".
 - Resolução, idioma e seeds são lidos do texto livre de cada addon (`src/streams/parse.ts`).
   É heurística.
-- Sem legendas.
+
+## Legendas
+
+O botão Legendas do player oferece Português (Brasil), English e Español, quando existem
+para o título. Vêm do addon OpenSubtitles v3 (`src/streams/subtitles.ts`), buscadas pelo
+id IMDb; o `.srt` é convertido para WebVTT no aparelho. O idioma escolhido vale para os
+próximos vídeos, até ser desligado.
+
+No catálogo de clássicos o id IMDb vem de `npm run fetch-imdb` (Wikidata).
+
+Limite: a legenda é a primeira que o addon oferece no idioma. Se o vídeo for de outra
+edição do filme, pode sair fora de sincronia; não há ajuste de atraso.
 
 Para testar sem depender de terceiros:
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AddonStream } from '../data/addonClient';
 import { parseStream } from './parse';
+import { srtToVtt } from './subtitles';
 import { describeStream, hasOriginalAudio, rankStreams, resolutionCap, type RankContext } from './rank';
 
 const stream = (name: string, title: string, extra: Partial<AddonStream> = {}): AddonStream => ({
@@ -154,5 +155,14 @@ describe('describeStream', () => {
     expect(label('Filme Dublado')).toBe('1080p, português, Fonte');
     expect(label('Filme 🇧🇷 Dual Áudio')).toBe('1080p, dual: português, Fonte');
     expect(label('Filme MULTI')).toBe('1080p, mais de um áudio, Fonte');
+  });
+});
+
+describe('srtToVtt', () => {
+  it('converte o .srt para WebVTT', () => {
+    const srt = '\uFEFF1\r\n00:00:01,000 --> 00:00:07,190\r\nA General\r\n\r\n2\r\n00:00:51,620 --> 00:00:59,800\r\nLinha um\r\nLinha dois\r\n';
+    expect(srtToVtt(srt)).toBe(
+      'WEBVTT\n\n1\n00:00:01.000 --> 00:00:07.190\nA General\n\n2\n00:00:51.620 --> 00:00:59.800\nLinha um\nLinha dois\n',
+    );
   });
 });

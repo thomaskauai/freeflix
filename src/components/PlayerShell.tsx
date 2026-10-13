@@ -2,6 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useKeyHandler } from '../focus/keys';
 import { focusElement } from '../focus/FocusContext';
 import { useFocusable, useFocusMove } from '../focus/useFocusable';
+import {
+  findSubtitles,
+  loadSubtitle,
+  rememberedSubtitle,
+  rememberSubtitle,
+  type SubtitleLanguage,
+  type SubtitleOption,
+} from '../streams/subtitles';
 import { Icon, type IconName } from './Icon';
 
 const HIDE_AFTER_MS = 4000;
@@ -9,6 +17,8 @@ const SEEK_SECONDS = 10;
 const SAVE_EVERY_MS = 5000;
 /** fonte que não começa a tocar nesse tempo é dada como ruim */
 const START_TIMEOUT_MS = 15000;
+/** altura das legendas, em % da tela a partir do topo */
+const SUBTITLE_LINE = 82;
 
 export function formatClock(seconds: number) {
   const s = Math.max(0, Math.floor(seconds));
@@ -66,6 +76,8 @@ interface PlayerShellProps {
   duration: number;
   startAt: number;
   /** fontes encontradas para este título, da melhor para a pior */
+  /** onde buscar legendas: tipo e id IMDb (com :temporada:episódio em séries) */
+  subtitlesFor?: { type: string; videoId: string };
   sources?: string[];
   sourceIndex?: number;
   onPickSource?: (index: number) => void;
@@ -82,6 +94,7 @@ export function PlayerShell({
   media,
   duration,
   startAt,
+  subtitlesFor,
   sources,
   sourceIndex = 0,
   onPickSource,
@@ -98,8 +111,13 @@ export function PlayerShell({
   const [toast, setToast] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
-  const menuOpenRef = useRef(menuOpen);
-  menuOpenRef.current = menuOpen;
+  const [subsOpen, setSubsOpen] = useState(false);
+  /** null enquanto procura; lista vazia quando não há */
+  const [subtitles, setSubtitles] = useState<SubtitleOption[] | null>(null);
+  const [subtitleLang, setSubtitleLang] = useState<SubtitleLanguage | null>(null);
+  const [subtitleBusy, setSubtitleBusy] = useState(false);
+  const menuOpenRef = useRef(false);
+  menuOpenRef.current = menuOpen || subsOpen;
 
   const playButton = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<number>();
@@ -237,7 +255,7 @@ export function PlayerShell({
     const wasVisible = visible;
     wake();
     // Voltar fecha a lista de fontes antes de sair do player.
-    if (menuOpen) {
+    if (menuOpen || subsOpen) {
       if (action === 'back') return closeMenu(), true;
       if (action === 'up' || action === 'down' || action === 'ok') return false;
       return true;
@@ -267,26 +285,98 @@ export function PlayerShell({
     toastTimer.current = window.setTimeout(() => setToast(''), 4500);
   };
 
-  // Legendas: liga e desliga as faixas que o próprio vídeo traz.
-  const toggleSubtitles = () => {
-    const tracks = media ? Array.prototype.slice.call(media.textTracks) as TextTrack[] : [];
-    const usable = tracks.filter((t) => t.kind === 'subtitles' || t.kind === 'captions');
-    if (usable.length === 0) return showToast('Este vídeo não tem legendas.');
-    const on = usable.some((t) => t.mode === 'showing');
-    usable.forEach((t, i) => (t.mode = !on && i === 0 ? 'showing' : 'hidden'));
-    showToast(on ? 'Legendas desligadas.' : `Legendas ligadas${usable[0].label ? `: ${usable[0].label}` : '.'}`);
+  // Tira a legenda em uso: a faixa que este shell pôs no <video> e o arquivo dela.
+  const clearSubtitle = () => {
+    if (!media) return;
+    Array.prototype.slice.call(media.querySelectorAll('track[data-freeflix]')).forEach((t: HTMLTrackElement) => {
+      if (t.src.indexOf('blob:') === 0) URL.revokeObjectURL(t.src);
+      media.removeChild(t);
+    });
+  };
+
+  const applySubtitle = (option: SubtitleOption | null, announce: boolean) => {
+    if (!media) return;
+    clearSubtitle();
+    setSubtitleLang(option ? option.language : null);
+    if (!option) {
+      if (announce) showToast('Legendas desligadas.');
+      return;
+    }
+    setSubtitleBusy(true);
+    loadSubtitle(option.url).then(
+      (src) => {
+        const track = document.createElement('track');
+        track.kind = 'subtitles';
+        track.label = option.label;
+        track.srclang = option.language;
+        track.src = src;
+        track.setAttribute('data-freeflix', '');
+        media.appendChild(track);
+        // o navegador só mostra a faixa recém-criada se mandarmos
+        track.track.mode = 'showing';
+        // Por padrão a fala encosta na borda de baixo e corta; sobe para uma
+        // faixa segura, acima da barra de progresso.
+        track.addEventListener('load', () => {
+          const cues = track.track.cues;
+          for (let i = 0; cues && i < cues.length; i++) {
+            const cue = cues[i] as VTTCue;
+            cue.snapToLines = false;
+            cue.line = SUBTITLE_LINE;
+          }
+        });
+        setSubtitleBusy(false);
+        if (announce) showToast(`Legendas: ${option.label}`);
+      },
+      () => {
+        setSubtitleLang(null);
+        setSubtitleBusy(false);
+        showToast('A legenda não carregou. Tente outro idioma.');
+      },
+    );
+  };
+
+  // Procura as legendas do título assim que há vídeo e religa o idioma usado da última vez.
+  useEffect(() => {
+    if (mode !== 'video' || !media || !subtitlesFor) return;
+    let alive = true;
+    findSubtitles(subtitlesFor.type, subtitlesFor.videoId).then(
+      (found) => {
+        if (!alive) return;
+        setSubtitles(found);
+        const wanted = rememberedSubtitle();
+        const match = found.filter((o) => o.language === wanted)[0];
+        if (match) applySubtitle(match, false);
+      },
+      () => alive && setSubtitles([]),
+    );
+    return () => {
+      alive = false;
+      clearSubtitle();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, media, subtitlesFor && subtitlesFor.videoId]);
+
+  const pickSubtitle = (option: SubtitleOption | null) => {
+    rememberSubtitle(option ? option.language : null);
+    applySubtitle(option, true);
+    closeMenu();
   };
 
   const closeMenu = () => {
+    const opener = subsOpen ? 'shell-subtitles' : 'shell-sources';
     setMenuOpen(false);
-    focusElement(document.querySelector<HTMLElement>('[data-focus-id="shell-sources"]'));
+    setSubsOpen(false);
+    focusElement(document.querySelector<HTMLElement>(`[data-focus-id="${opener}"]`));
   };
 
   // A lista aberta vira a camada de foco: o controle só anda dentro dela.
   useEffect(() => {
-    if (!menuOpen || !menu.current) return;
-    focusElement(menu.current.querySelector<HTMLElement>('[data-autofocus]'));
-  }, [menuOpen]);
+    if (!(menuOpen || subsOpen) || !menu.current) return;
+    focusElement(
+      menu.current.querySelector<HTMLElement>('[data-autofocus]') ||
+        menu.current.querySelector<HTMLElement>('[data-focusable]'),
+    );
+  }, [menuOpen, subsOpen, subtitles]);
 
   const hasSources = !!sources && sources.length > 1 && !!onPickSource;
 
@@ -306,14 +396,28 @@ export function PlayerShell({
 
       {hasControls && (
         <div className="shell__top shell__top--right" data-focus-group="">
-          <ShellButton icon="options" label="Legendas" showLabel onClick={toggleSubtitles} />
+          <ShellButton
+            icon="options"
+            label="Legendas"
+            showLabel
+            id="shell-subtitles"
+            onClick={() => {
+              if (subsOpen) return closeMenu();
+              setMenuOpen(false);
+              setSubsOpen(true);
+            }}
+          />
           {hasSources && (
             <ShellButton
               icon="swap"
               label="Fontes"
               showLabel
               id="shell-sources"
-              onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))}
+              onClick={() => {
+                if (menuOpen) return closeMenu();
+                setSubsOpen(false);
+                setMenuOpen(true);
+              }}
             />
           )}
         </div>
@@ -328,6 +432,31 @@ export function PlayerShell({
               label={label}
               current={i === sourceIndex}
               onPick={() => (i === sourceIndex ? closeMenu() : onPickSource(i))}
+            />
+          ))}
+        </div>
+      )}
+
+      {subsOpen && (
+        <div ref={menu} className="shell__menu" data-focus-layer="">
+          <div className="shell__menu-title">
+            {!subtitlesFor
+              ? 'Este título não tem legendas disponíveis'
+              : subtitles === null
+                ? 'Procurando legendas'
+                : subtitles.length === 0
+                  ? 'Nenhuma legenda encontrada para este título'
+                  : subtitleBusy
+                    ? 'Carregando legenda'
+                    : 'Legendas'}
+          </div>
+          <SourceOption label="Desligadas" current={subtitleLang === null} onPick={() => pickSubtitle(null)} />
+          {(subtitles ?? []).map((option) => (
+            <SourceOption
+              key={option.language}
+              label={option.label}
+              current={subtitleLang === option.language}
+              onPick={() => pickSubtitle(option)}
             />
           ))}
         </div>

@@ -9,6 +9,7 @@ interface RawTitle {
   id: string;
   type: TitleType;
   tmdbId?: number | null;
+  imdbId?: string;
   title: string;
   originalTitle: string;
   year: number;
@@ -39,6 +40,7 @@ const toTitle = (r: RawTitle): Title => ({
   id: r.id,
   type: r.type,
   tmdbId: r.tmdbId ?? null,
+  imdbId: r.imdbId,
   title: r.title,
   originalTitle: r.originalTitle,
   year: r.year,

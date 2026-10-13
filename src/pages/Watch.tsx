@@ -167,6 +167,9 @@ export default function Watch() {
   const sameEpisode = !!saved && saved.season === season && saved.episode === episode;
   const startAt = saved && sameEpisode && saved.time < saved.duration - RESUME_MARGIN_S ? saved.time : 0;
   const duration = saved && sameEpisode ? saved.duration : (title.runtime ?? 0) * 60;
+  // Legendas são buscadas pelo id IMDb; títulos sem ele ficam sem.
+  const imdbId = title.imdbId ?? (/^tt\d+$/.test(title.id) ? title.id : undefined);
+  const subtitleId = imdbId ? (season != null && episode != null ? `${imdbId}:${season}:${episode}` : imdbId) : undefined;
   const hasNext = plan.index + 1 < plan.candidates.length;
   // A lista mostra uma linha por opção distinta. Espelhos da mesma opção não
   // aparecem: são a reserva que o player usa sozinho se o primeiro falhar.
@@ -185,6 +188,7 @@ export default function Watch() {
         media={media}
         duration={duration}
         startAt={startAt}
+        subtitlesFor={subtitleId ? { type: title.type, videoId: subtitleId } : undefined}
         sources={options}
         sourceIndex={options.indexOf(candidate.label)}
         onPickSource={(option) =>
