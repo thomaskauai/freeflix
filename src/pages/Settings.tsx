@@ -83,8 +83,7 @@ export default function Settings() {
       .reduce((done, s) => done.then(() => installSource(s.url).then(() => undefined, () => undefined)), Promise.resolve())
       .then(() => {
         saveSettings({ catalog });
-        // O catálogo é resolvido na partida do app: recarrega no Início já com o novo.
-        window.location.hash = '#/';
+        // O catálogo é resolvido na partida do app: recarrega, na mesma tela, já com o novo.
         window.location.reload();
       });
   };
@@ -140,12 +139,12 @@ export default function Settings() {
             o app.
           </p>
           <div className="settings__options">
-            {CATALOGS.map((c, i) => (
+            {CATALOGS.map((c) => (
               <Button
                 key={c.id}
                 variant="pill"
                 id={`catalog:${c.id}`}
-                autoFocus={i === 0}
+                autoFocus={c.id === settings.catalog}
                 icon={c.id === settings.catalog ? 'check' : undefined}
                 selected={c.id === settings.catalog}
                 onClick={() => chooseCatalog(c.id)}
