@@ -15,6 +15,8 @@ export interface RowSource {
   load?: () => Promise<Title[]>;
   /** id do título -> 0..1 */
   progress?: Record<string, number>;
+  /** cards mostram a nota IMDb */
+  showRating?: boolean;
 }
 
 /** quantas fileiras além da focada ficam carregadas */
@@ -72,6 +74,7 @@ function LazyRow({ source, wanted, anchor, passed, autoFocusFirst, onActivate, o
               focusId={`${source.id}${SEP}${title.id}`}
               autoFocus={autoFocusFirst && i === 0}
               progress={source.progress ? source.progress[title.id] : undefined}
+              showRating={source.showRating}
             />
           ))
         : Array.from({ length: SKELETONS }, (_, i) => (

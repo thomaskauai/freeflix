@@ -35,60 +35,35 @@ npm run build && npm run preview
 
 ## Catálogo
 
-O catálogo é escolhido em **Configurações** (último item do menu):
-
-| Opção | De onde vem |
-|---|---|
-| Clássicos (Domínio Público) — padrão na primeira abertura | `src/data/catalog.json`, embutido, com vídeo do Wikimedia Commons |
-| Freeflix (Conteúdo completo) | addon de catálogo `catalog.nuvio.tv`; em pt-BR se o idioma do aparelho for português, senão em inglês |
-
-A escolha fica guardada no aparelho. O addon fala o protocolo do Stremio (`/catalog`,
-`/meta`); os endereços ficam em `src/settings.ts`. Trocar de catálogo recarrega o app.
-Minha lista e progresso são guardados por catálogo.
-
-O catálogo embutido se mantém com:
-
-```bash
-npm run fetch-media    # pôsteres e fotogramas do Commons
-npm run fetch-video    # arquivos de vídeo do Commons
-```
+Os títulos vêm do addon de catálogo `catalog.nuvio.tv`, em pt-BR se o idioma do aparelho
+for português, senão em inglês. O addon fala o protocolo do Stremio (`/catalog`, `/meta`);
+os endereços ficam em `src/settings.ts`.
 
 ## Fontes de vídeo
 
 Catálogo mostra os títulos; quem traz o vídeo é uma **fonte**: um addon com recurso
-`stream`, instalado em Configurações → Adicionar fonte, pelo link do `manifest.json`.
-Por ora o link é digitado ou colado no computador.
+`stream`. A lista de fontes padrão é lida a cada abertura do app de `VITE_SOURCES_URL`
+(padrão: `src/sources.json` no GitHub, pelo raw.githubusercontent.com, que exige o
+repositório público). Mudar o arquivo no GitHub muda as fontes de todas as TVs sem gerar
+outro `.wgt`: as novas entram sozinhas e as que saíram da lista saem da TV. Sem rede, vale a
+última lista baixada; na primeira abertura sem rede, a cópia de `src/sources.json` embutida
+no app. A ordem do arquivo é a ordem de preferência. Em Configurações dá para remover,
+reinstalar e adicionar outras pelo link do `manifest.json`. Uma fonte padrão removida não
+volta sozinha.
 
-Para oferecer fontes com um clique, liste-as em `src/sources.json`:
+Em séries, a fonte que tocou (addon, resolução e áudio) fica guardada por série: o próximo
+episódio, ou um escolhido na lista, pergunta primeiro só a esse addon e começa pela mesma
+opção; as outras fontes entram como reserva se ela falhar.
 
-```json
-[{ "name": "Nome da fonte", "url": "https://exemplo.com/manifest.json" }]
-```
+## Home
 
-Cada item aparece em Configurações → Fontes de vídeo com um botão Adicionar; depois de
-instalada, passa a ter Remover (e volta à lista de disponíveis se for removida). O arquivo
-sai vazio: nenhuma fonte vem embutida. Mudou o arquivo, refaça o build.
-
-Ao dar play não há tela de escolha. O Freeflix consulta todas as fontes instaladas e
-escolhe uma, nesta ordem de critérios (`src/streams/rank.ts`):
-
-1. **Cabe na rede.** Um teste simples mede a banda (guardado por 30 min): abaixo de
-   5 Mbps, até 480p; abaixo de 10, até 720p; senão 1080p. Se a fonte informa o tamanho,
-   o bitrate estimado precisa caber em 80% da banda.
-2. **Idioma do áudio** definido em Configurações; sem ele, o original; depois inglês.
-3. **Resolução**, com 1080p como alvo (4K só se for o que há).
-4. **Compatibilidade** de codec e contêiner com o aparelho.
-5. **Seeds**, como desempate.
-
-Se a fonte escolhida falha ou não começa em 15 s, o player passa sozinho para a próxima
-(até 4). No player, "Fonte" diz o que está tocando e "Outra fonte" força a troca.
-
-Limites:
-
-- **Torrent não toca.** Só fontes com `url` HTTP direta (MP4, MKV, WebM, HLS). Addon que
-  só devolve `infoHash` gera o aviso "Só há fontes de torrent".
-- Resolução, idioma e seeds são lidos do texto livre de cada addon (`src/streams/parse.ts`).
-  É heurística.
+- **Destaques** (topo, 4): dois filmes e duas séries das listas "em alta", sorteados com peso
+  60% pela posição em alta e 40% pela nota IMDb (sem fotograma, sinopse ou com nota abaixo
+  de 6,5 ficam de fora). Os pontos ao lado dos botões passam entre eles.
+- **Fileiras**: Filmes em alta e Séries em alta no topo, depois Notas altas no IMDb (7,5+,
+  alternando filme e série), depois as demais listas do catálogo em ordem sorteada. Listas
+  sem ordem de data abrem numa das 3 primeiras páginas, embaralhadas. O sorteio muda a cada
+  abertura do app e fica igual enquanto ele está aberto.
 
 ## Legendas
 
@@ -96,8 +71,6 @@ O botão Legendas do player oferece Português (Brasil), English e Español, qua
 para o título. Vêm do addon OpenSubtitles v3 (`src/streams/subtitles.ts`), buscadas pelo
 id IMDb; o `.srt` é convertido para WebVTT no aparelho. O idioma escolhido vale para os
 próximos vídeos, até ser desligado.
-
-No catálogo de clássicos o id IMDb vem de `npm run fetch-imdb` (Wikidata).
 
 Limite: a legenda é a primeira que o addon oferece no idioma. Se o vídeo for de outra
 edição do filme, pode sair fora de sincronia; não há ajuste de atraso.
@@ -109,8 +82,8 @@ npm run mock-addon     # http://localhost:7077/manifest.json (e /torrent/manifes
 npm test               # testes do parser e do ranking
 ```
 
-Há ainda um modo embed opcional: com `VITE_EMBED_BASE_URL` definida, títulos do catálogo
-embutido abrem um iframe em `{base}/embed/{tmdbId}[/{temporada}/{episodio}]`.
+Há ainda um modo embed opcional: com `VITE_EMBED_BASE_URL` definida, títulos com id TMDB
+abrem um iframe em `{base}/embed/{tmdbId}[/{temporada}/{episodio}]`.
 
 ## Estrutura
 
@@ -118,9 +91,9 @@ embutido abrem um iframe em `{base}/embed/{tmdbId}[/{temporada}/{episodio}]`.
 reference/        screenshots de referência e SPEC.md com as medidas
 src/styles/       tokens.css (toda a geometria), base.css, components.css
 src/focus/        engine de foco: keys.ts, spatial.ts, FocusContext.tsx
-src/data/         tipos, cliente de addon, providers de catálogo, estado local
+src/data/         tipos, cliente de addon, provider do catálogo, estado local
 src/streams/      fontes instaladas, parser, ranking, teste de rede
-src/settings.ts   catálogo e idioma escolhidos
+src/settings.ts   endereço do catálogo e idioma escolhido
 src/platform/     acesso a window.tizen, com guarda
 src/components/   Stage, Sidebar, Hero, Row, Card, PlayerShell, VideoPlayer…
 src/pages/        Home, Browse, Details, Search, MyList, Watch, Settings, AddSource
@@ -129,14 +102,31 @@ config.xml        manifest Tizen, para a Fase 2
 
 ## Fase 2: TV
 
-Pendente:
+`npm run build:tizen` gera o app da TV em `tizen-build/app/` e dois pacotes assinados
+(fora do git), iguais a não ser pelo ícone, que a TV lê na instalação:
 
-1. Instalar a Tizen CLI (extensão Tizen do VS Code ou Tizen Studio) e criar um
-   perfil de certificado Samsung.
-2. Trocar `XXXXXXXXXX` em `config.xml` pelo package id do certificado.
-3. `npm run build`, copiar `dist/` e `config.xml` para uma pasta e empacotar com
-   `tizen package -t wgt -s <perfil>`.
-4. TV em Developer Mode, `sdb connect <ip>`, `tizen install`.
+- `tizen-build/Freeflix-tv-nova.wgt`: ícone quadrado (`tizen/icon-quadrado.png`), para
+  telas iniciais mais recentes;
+- `tizen-build/Freeflix-tv-antiga.wgt`: ícone 16:9 (`tizen/icon-retangular.png`), para as
+  antigas: a barra delas mostra o ícone na proporção do arquivo, e os blocos dos outros
+  apps são 16:9 (o ícone de 1920×1080 da loja da Samsung).
+
+Instala pelo [TizenBrew Installer](https://github.com/reisxd/TizenBrew).
+
+- O bundle é um script clássico só, sem módulos ES: o `.wgt` abre por `file://`, e lá o
+  WebView bloqueia `<script type="module">`.
+- A assinatura é a mesma do próprio TizenBrew para TVs antigas: certificado de autor
+  Tizen, sem conta Samsung, mais o distribuidor público do SDK Tizen, via
+  [tizen.js](https://github.com/reisxd/tizen.js). Em TVs Tizen 7+ o TizenBrew Installer
+  reassina por cima.
+- Atualizar o app já instalado: suba a versão (`npm version patch` ou `minor`) e rode
+  `npm run build:tizen`. A TV só trata o `.wgt` como atualização se o package id
+  (`config.xml`) e o certificado de autor forem os mesmos e a versão for maior que a
+  instalada. A versão do `package.json` é copiada para o `config.xml` no build e aparece
+  no fim de Configurações.
+- O certificado de autor é criado no primeiro build em `tizen-cert/` (fora do git, tem
+  chave privada). Para atualizar o app já instalado na TV, o `.wgt` precisa do mesmo
+  certificado; perdido o arquivo, é desinstalar e instalar de novo.
 
 Pontos a conferir na TV: os códigos das teclas de mídia (o app loga os reais no
 console ao iniciar) e o carregamento do bundle por `file://` no WebView do modelo.

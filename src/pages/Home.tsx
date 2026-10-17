@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Hero } from '../components/Hero';
+import { Loading } from '../components/Loading';
 import { PageError } from '../components/PageError';
 import { Rows, type RowSource } from '../components/Rows';
 import { ScrollArea } from '../components/ScrollArea';
+import { resumeEpisode } from '../data/episodes';
 import { catalog } from '../data/provider';
-import { getAllProgress, titleFromSnapshot } from '../data/storage';
+import { getAllProgress, isFinished, titleFromSnapshot } from '../data/storage';
 import type { Title } from '../data/types';
 import { focusElement } from '../focus/FocusContext';
 import { useKeyHandler } from '../focus/keys';
@@ -14,13 +16,19 @@ import { titlePath, watchPath } from '../nav';
 
 function continueWatchingRow(): RowSource | null {
   const saved = getAllProgress();
+  // Filme visto até o fim sai da fileira; série fica, porque os detalhes levam ao próximo episódio.
   const ids = Object.keys(saved)
-    .filter((id) => saved[id].title && saved[id].time > 0 && saved[id].time < saved[id].duration)
+    .filter(
+      (id) =>
+        saved[id].title &&
+        saved[id].time > 0 &&
+        (saved[id].title.type === 'series' || !isFinished(saved[id])),
+    )
     .sort((a, b) => saved[b].updatedAt - saved[a].updatedAt);
   if (!ids.length) return null;
 
   const progress: Record<string, number> = {};
-  ids.forEach((id) => (progress[id] = saved[id].time / saved[id].duration));
+  ids.forEach((id) => (progress[id] = saved[id].duration ? Math.min(1, saved[id].time / saved[id].duration) : 0));
   return {
     id: 'continue',
     title: 'Continuar assistindo',
@@ -31,7 +39,7 @@ function continueWatchingRow(): RowSource | null {
 }
 
 interface Loaded {
-  featured: Title | null;
+  featured: Title[];
   rows: RowSource[];
 }
 
@@ -69,25 +77,32 @@ export default function Home() {
     return focusElement(document.querySelector<HTMLElement>('[data-focus-id="hero-play"]'));
   });
 
-  const featured = data ? data.featured : null;
+  const featured = data ? data.featured : [];
+  // série começa de onde o espectador parou (sem a lista de episódios ainda, no episódio guardado)
+  const play = (t: Title) => {
+    if (t.type !== 'series') return navigate(watchPath(t));
+    const next = resumeEpisode(t.id, []);
+    navigate(watchPath(t, next.season, next.episode));
+  };
 
   return (
     <div className="page" data-focus-main="">
       {failed && <PageError />}
+      {!data && !failed && <Loading />}
       {data && (
         <ScrollArea>
-          {featured && (
+          {featured.length > 0 && (
             <Hero
               away={inRows}
               onFocus={() => setInRows(false)}
-              title={featured}
-              onPlay={() => navigate(featured.type === 'series' ? watchPath(featured, 1, 1) : watchPath(featured))}
-              onInfo={() => navigate(titlePath(featured))}
+              titles={featured}
+              onPlay={play}
+              onInfo={(t) => navigate(titlePath(t))}
             />
           )}
           <Rows
             rows={data.rows}
-            autoFocusFirst={!featured}
+            autoFocusFirst={featured.length === 0}
             onFocus={() => setInRows(true)}
             onReady={() => setRowsReady(true)}
           />

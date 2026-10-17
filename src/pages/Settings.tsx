@@ -1,25 +1,23 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { ScrollArea } from '../components/ScrollArea';
 import { Icon, type IconName } from '../components/Icon';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
-import { AUDIO_LANGUAGES, CATALOGS, getSettings, saveSettings, type AudioLanguage, type CatalogId } from '../settings';
+import { AUDIO_LANGUAGES, getSettings, saveSettings, type AudioLanguage } from '../settings';
 import { lastSpeed, measureSpeed, type SpeedReading } from '../streams/network';
 import { resolutionCap } from '../streams/rank';
 import {
   INSTALL_ERRORS,
+  installDefaultSources,
   installSource,
   isInstalled,
-  LISTED_SOURCES,
+  listedSources,
   listSources,
   removeSource,
   SourceError,
   type ListedSource,
 } from '../streams/sources';
-
-/** quantas fontes da lista entram sozinhas ao ativar o catálogo completo */
-const AUTO_SOURCES = 2;
 
 function qualityFor(mbps: number) {
   const cap = resolutionCap(mbps);
@@ -64,29 +62,19 @@ export default function Settings() {
   const [sources, setSources] = useState(listSources);
   const [speed, setSpeed] = useState<SpeedReading | null>(lastSpeed);
   const [testing, setTesting] = useState(false);
-  const [switching, setSwitching] = useState<CatalogId | ''>('');
   const [adding, setAdding] = useState('');
   const [addError, setAddError] = useState<{ url: string; message: string } | null>(null);
 
   usePageFocus(true);
 
-  const chooseCatalog = (catalog: CatalogId) => {
-    if (catalog === settings.catalog || switching) return;
-    setSwitching(catalog);
-    // O catálogo completo depende de fontes: ao ativá-lo, as primeiras da lista
-    // (src/sources.json) já entram junto. Falha em uma delas não impede a troca.
-    const wanted =
-      catalog === 'freeflix'
-        ? LISTED_SOURCES.slice(0, AUTO_SOURCES).filter((s) => !isInstalled(s, listSources()))
-        : [];
-    wanted
-      .reduce((done, s) => done.then(() => installSource(s.url).then(() => undefined, () => undefined)), Promise.resolve())
-      .then(() => {
-        saveSettings({ catalog });
-        // O catálogo é resolvido na partida do app: recarrega, na mesma tela, já com o novo.
-        window.location.reload();
-      });
-  };
+  // Na primeira abertura as fontes padrão podem chegar com a tela já aberta.
+  useEffect(() => {
+    let alive = true;
+    installDefaultSources().then(() => alive && setSources(listSources()));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const chooseAudio = (audio: AudioLanguage) => setSettings(saveSettings({ audio }));
 
@@ -115,7 +103,7 @@ export default function Settings() {
     );
   };
 
-  const available = LISTED_SOURCES.filter((s) => !isInstalled(s, sources));
+  const available = listedSources().filter((s) => !isInstalled(s, sources));
 
   const test = () => {
     setTesting(true);
@@ -133,66 +121,38 @@ export default function Settings() {
         </div>
 
         <section className="settings__block" data-scroll-anchor="top">
-          <h2 className="settings__title">Catálogo</h2>
-          <p className="settings__note">
-            De onde vêm os títulos, pôsteres e sinopses. O catálogo completo segue o idioma do aparelho. Trocar reinicia
-            o app.
-          </p>
-          <div className="settings__options">
-            {CATALOGS.map((c) => (
-              <Button
-                key={c.id}
-                variant="pill"
-                id={`catalog:${c.id}`}
-                autoFocus={c.id === settings.catalog}
-                icon={c.id === settings.catalog ? 'check' : undefined}
-                selected={c.id === settings.catalog}
-                onClick={() => chooseCatalog(c.id)}
-              >
-                {switching === c.id ? 'Ativando…' : c.label}
-              </Button>
+          <h2 className="settings__title">Fontes de vídeo</h2>
+          <p className="settings__note">Addons que fornecem o vídeo dos títulos.</p>
+          {sources.length === 0 && <p className="settings__empty">Nenhuma fonte instalada.</p>}
+          <div className="settings__sources">
+            {sources.map((s) => (
+              <SourceRow
+                key={s.base}
+                id={`remove:${s.base}`}
+                name={s.name}
+                icon="check"
+                action="Remover"
+                onSelect={() => remove(s.base)}
+              />
+            ))}
+            {available.map((s) => (
+              <SourceRow
+                key={s.url}
+                id={`add:${s.url}`}
+                name={s.name}
+                icon="plus"
+                action={adding === s.url ? 'Adicionando…' : 'Adicionar'}
+                error={addError && addError.url === s.url ? addError.message : undefined}
+                onSelect={() => add(s)}
+              />
             ))}
           </div>
+          <div className="settings__options">
+            <Button variant="pill" icon="plus" id="add-source" onClick={() => navigate('/settings/add-source')}>
+              Adicionar por link
+            </Button>
+          </div>
         </section>
-
-        {/* Os clássicos já trazem o próprio vídeo; fontes só servem ao catálogo completo. */}
-        {settings.catalog === 'freeflix' && (
-          <section className="settings__block" data-scroll-anchor="200">
-            <h2 className="settings__title">Fontes de vídeo</h2>
-            <p className="settings__note">
-              Addons que fornecem o vídeo dos títulos.
-            </p>
-            {sources.length === 0 && <p className="settings__empty">Nenhuma fonte instalada.</p>}
-            <div className="settings__sources">
-              {sources.map((s) => (
-                <SourceRow
-                  key={s.base}
-                  id={`remove:${s.base}`}
-                  name={s.name}
-                  icon="check"
-                  action="Remover"
-                  onSelect={() => remove(s.base)}
-                />
-              ))}
-              {available.map((s) => (
-                <SourceRow
-                  key={s.url}
-                  id={`add:${s.url}`}
-                  name={s.name}
-                  icon="plus"
-                  action={adding === s.url ? 'Adicionando…' : 'Adicionar'}
-                  error={addError && addError.url === s.url ? addError.message : undefined}
-                  onSelect={() => add(s)}
-                />
-              ))}
-            </div>
-            <div className="settings__options">
-              <Button variant="pill" icon="plus" id="add-source" onClick={() => navigate('/settings/add-source')}>
-                Adicionar por link
-              </Button>
-            </div>
-          </section>
-        )}
 
         <section className="settings__block" data-scroll-anchor="200">
           <h2 className="settings__title">Idioma preferido</h2>
@@ -231,6 +191,8 @@ export default function Settings() {
             </Button>
           </div>
         </section>
+
+        <p className="settings__version">Freeflix {__APP_VERSION__}</p>
       </ScrollArea>
     </div>
   );

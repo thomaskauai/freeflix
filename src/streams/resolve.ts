@@ -3,14 +3,23 @@ import type { Title } from '../data/types';
 import { getSettings } from '../settings';
 import { getSpeed } from './network';
 import { parseStream, type ParsedStream } from './parse';
-import { describeStream, hasOriginalAudio, rankStreams, type RankContext } from './rank';
-import { listSources, type SourceAddon } from './sources';
+import { describeStream, hasOriginalAudio, rankStreams, type RankContext, type SourceProfile } from './rank';
+import { installDefaultSources, listSources, sourcePriority, type SourceAddon } from './sources';
 
 export interface Candidate {
   url: string;
   hls: boolean;
   /** resumo da fonte para o espectador; espelhos do mesmo arquivo têm o mesmo */
   label: string;
+  /** de onde veio e que áudio tem: o próximo episódio procura igual */
+  profile: SourceProfile;
+}
+
+export interface ResolveOptions {
+  /** fonte escolhida antes neste título: vem primeiro */
+  prefer?: SourceProfile;
+  /** pergunta só a este addon (endereço base) */
+  only?: string;
 }
 
 export type NoSourceReason =
@@ -53,9 +62,18 @@ function deviceCanPlay(what: 'hevc' | 'av1' | 'mkv'): boolean {
  * Pergunta a todos os addons instalados pelas fontes de um título (ou
  * episódio) e devolve as melhores, já em ordem, sem o espectador escolher.
  */
-export async function resolvePlayback(title: Title, season?: number, episode?: number): Promise<Resolution> {
+export async function resolvePlayback(
+  title: Title,
+  season?: number,
+  episode?: number,
+  options: ResolveOptions = {},
+): Promise<Resolution> {
   const videoId = season != null && episode != null ? `${title.id}:${season}:${episode}` : title.id;
-  const addons = listSources().filter((a) => accepts(a, title.type, title.id));
+  // na primeira abertura, as fontes padrão podem ainda estar entrando
+  await installDefaultSources();
+  const addons = listSources().filter(
+    (a) => accepts(a, title.type, title.id) && (!options.only || a.base === options.only),
+  );
   if (listSources().length === 0) return { reason: 'no-addons' };
   if (addons.length === 0) return { reason: 'not-found' };
 
@@ -66,7 +84,8 @@ export async function resolvePlayback(title: Title, season?: number, episode?: n
         fetchStreams(addon.base, title.type, videoId).then(
           (streams) => {
             answered++;
-            return streams.map((s) => parseStream(s, addon.name));
+            const priority = sourcePriority(addon, listSources());
+            return streams.map((s) => ({ ...parseStream(s, addon.name), priority, base: addon.base }));
           },
           () => [] as ParsedStream[],
         ),
@@ -83,16 +102,21 @@ export async function resolvePlayback(title: Title, season?: number, episode?: n
     originalLanguage: title.originalLanguage,
     runtime: title.runtime,
     canPlay: deviceCanPlay,
+    prefer: options.prefer,
   };
   const ranked = rankStreams(all, context);
   if (ranked.length === 0) {
     return { reason: all.some((s) => s.unplayable === 'torrent') ? 'torrent-only' : 'not-found' };
   }
-  const toCandidate = (s: ParsedStream): Candidate => ({
-    url: s.url as string,
-    hls: s.container === 'hls',
-    label: describeStream(s),
-  });
+  const toCandidate = (s: ParsedStream): Candidate => {
+    const label = describeStream(s);
+    return {
+      url: s.url as string,
+      hls: s.container === 'hls',
+      label,
+      profile: { base: s.base ?? '', label, languages: s.languages, multiAudio: s.multiAudio },
+    };
+  };
 
   const kept: ParsedStream[] = [];
   const mirrors: Record<string, number> = {};

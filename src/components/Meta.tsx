@@ -35,7 +35,6 @@ export function Meta({ title }: { title: Title }) {
       {length && <span>{length}</span>}
       {title.rating && <span className="meta__rating">IMDb {title.rating}</span>}
       {title.genres.length > 0 && <span>{title.genres.slice(0, 3).join(', ')}</span>}
-      {title.publicDomain && <span className="meta__badge">Domínio público</span>}
     </div>
   );
 }

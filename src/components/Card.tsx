@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { catalog } from '../data/provider';
 import type { Title } from '../data/types';
 import { useFocusable } from '../focus/useFocusable';
 import { titlePath } from '../nav';
@@ -13,7 +14,12 @@ interface CardProps {
   progress?: number;
   /** y de repouso em grades; fileiras ancoram pela própria Row */
   anchor?: number;
+  /** nota IMDb no lugar do ano */
+  showRating?: boolean;
 }
+
+/** foco parado por este tempo num cartão adianta a busca dos detalhes */
+const PREFETCH_AFTER_MS = 400;
 
 // Matiz estável por título, para as cartelas sem pôster não ficarem iguais.
 function hueOf(id: string) {
@@ -29,12 +35,23 @@ export function fallbackArt(id: string) {
 }
 
 /** Cartaz arredondado com título e uma linha de informação embaixo. */
-export function Card({ title, variant, focusId, autoFocus, progress, anchor }: CardProps) {
+export function Card({ title, variant, focusId, autoFocus, progress, anchor, showRating }: CardProps) {
   const navigate = useNavigate();
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const focus = useFocusable({ id: focusId, autoFocus });
   const hasImage = !!title.poster && !failed;
+
+  // Foco parado no cartão: os detalhes deste título já começam a ser buscados,
+  // porque o servidor do catálogo leva segundos. Passando direto, nada é pedido.
+  const prefetch = useRef(0);
+  useEffect(() => () => window.clearTimeout(prefetch.current), []);
+  const onFocus = () => {
+    window.clearTimeout(prefetch.current);
+    prefetch.current = window.setTimeout(() => {
+      catalog.getTitle(title.type, title.id).catch(() => undefined);
+    }, PREFETCH_AFTER_MS);
+  };
 
   return (
     <div
@@ -42,6 +59,8 @@ export function Card({ title, variant, focusId, autoFocus, progress, anchor }: C
       className={`card card--${variant}`}
       aria-label={title.title}
       data-scroll-anchor={anchor}
+      onFocus={onFocus}
+      onBlur={() => window.clearTimeout(prefetch.current)}
       onClick={() => navigate(titlePath(title))}
     >
       <div className="card__art">
@@ -50,6 +69,7 @@ export function Card({ title, variant, focusId, autoFocus, progress, anchor }: C
             className={`card__img${loaded ? ' is-loaded' : ''}`}
             src={title.poster}
             alt=""
+            decoding="async"
             onLoad={() => setLoaded(true)}
             onError={() => setFailed(true)}
           />
@@ -67,7 +87,13 @@ export function Card({ title, variant, focusId, autoFocus, progress, anchor }: C
       <div className="card__text">
         <div className="card__title">{title.title}</div>
         <div className="card__info">
-          {title.year ? `${title.year} • ` : ''}
+          {showRating && title.rating ? (
+            <span className="card__rating">IMDb {title.rating} • </span>
+          ) : title.year ? (
+            `${title.year} • `
+          ) : (
+            ''
+          )}
           {title.type === 'series' ? 'Série' : 'Filme'}
         </div>
       </div>

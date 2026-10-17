@@ -1,6 +1,19 @@
 import type { AudioLanguage } from '../settings';
 import type { ParsedStream } from './parse';
 
+/**
+ * A fonte que tocou num episódio, para o próximo começar igual: mesmo addon,
+ * mesma opção (resolução e áudio) e, na falta dela, o mesmo áudio.
+ */
+export interface SourceProfile {
+  /** endereço base do addon */
+  base: string;
+  /** describeStream da fonte */
+  label: string;
+  languages: string[];
+  multiAudio: boolean;
+}
+
 export interface RankContext {
   /** banda medida, em Mbps */
   mbps: number;
@@ -11,6 +24,8 @@ export interface RankContext {
   runtime?: number;
   /** o aparelho declara suporte? (injetável para teste) */
   canPlay: (what: 'hevc' | 'av1' | 'mkv') => boolean;
+  /** fonte escolhida no episódio anterior: vale mais que qualquer outro critério */
+  prefer?: SourceProfile;
 }
 
 /** fração da banda medida que um vídeo pode ocupar sem engasgar */
@@ -66,6 +81,18 @@ function languageTier(s: ParsedStream, ctx: RankContext): number {
   return 1;
 }
 
+const sameAudio = (s: ParsedStream, p: SourceProfile) =>
+  s.multiAudio === p.multiAudio && s.languages.slice().sort().join() === p.languages.slice().sort().join();
+
+/** Quanto a fonte lembra a escolhida antes: mesma opção do mesmo addon, mesmo áudio no mesmo addon, mesmo áudio. */
+function preferenceTier(s: ParsedStream, p?: SourceProfile): number {
+  if (!p) return 0;
+  const sameAddon = !!s.base && s.base === p.base;
+  if (sameAddon && describeStream(s) === p.label) return 3;
+  if (sameAddon && sameAudio(s, p)) return 2;
+  return sameAudio(s, p) ? 1 : 0;
+}
+
 /** 1080p é o alvo; acima dele só quando é o que há. */
 function resolutionTier(resolution: number): number {
   if (resolution === 1080) return 6;
@@ -88,19 +115,22 @@ function compatTier(s: ParsedStream, ctx: RankContext): number {
 
 /**
  * Ordena as fontes tocáveis, da melhor para a pior. A ordem dos critérios é a
- * do pedido: caber na rede, idioma, resolução, compatibilidade e, por fim,
- * seeds como desempate.
+ * do pedido: a escolhida no episódio anterior (se houver), caber na rede,
+ * idioma, a fonte (ordem da lista padrão), resolução e compatibilidade; empate
+ * total mantém a ordem de chegada. Assim, no idioma preferido, a fonte 1 ganha
+ * da 2; a 2 só entra quando a 1 não tem o idioma.
  */
 export function rankStreams(streams: ParsedStream[], ctx: RankContext): ParsedStream[] {
   const key = (s: ParsedStream) => {
     const fits = fitsNetwork(s, ctx);
     return [
+      preferenceTier(s, ctx.prefer),
       fits ? 1 : 0,
       languageTier(s, ctx),
+      -(s.priority ?? 0),
       // fora do que a rede aguenta, quanto menor a resolução, menos engasga
       fits ? resolutionTier(s.resolution) : -s.resolution,
       compatTier(s, ctx),
-      s.seeds,
     ];
   };
   return streams

@@ -1,7 +1,6 @@
 export type IconName =
   | 'search'
   | 'home'
-  | 'new'
   | 'series'
   | 'movies'
   | 'plus'
@@ -15,7 +14,9 @@ export type IconName =
   | 'prev'
   | 'next'
   | 'settings'
-  | 'swap';
+  | 'swap'
+  | 'forward'
+  | 'rewind';
 
 const STROKED: Partial<Record<IconName, JSX.Element>> = {
   search: (
@@ -25,12 +26,6 @@ const STROKED: Partial<Record<IconName, JSX.Element>> = {
     </>
   ),
   home: <path d="M3 11.2 12 3.5l9 7.7M5.5 9.5V20h4.8v-5.8h3.4V20h4.8V9.5" />,
-  new: (
-    <>
-      <rect x="3.5" y="5" width="17" height="15.5" rx="1.5" />
-      <path d="M3.5 10h17M8 3v4M16 3v4M7.5 14h2M11 14h2M14.5 14h2M7.5 17h2M11 17h2" />
-    </>
-  ),
   series: (
     <>
       <rect x="2.5" y="4.5" width="19" height="12.5" rx="1.5" />
@@ -74,6 +69,8 @@ const STROKED: Partial<Record<IconName, JSX.Element>> = {
 const FILLED: Partial<Record<IconName, JSX.Element>> = {
   play: <path d="M6 3.5v17l15-8.5z" />,
   pause: <path d="M5.5 3.5h4.5v17H5.5zM14 3.5h4.5v17H14z" />,
+  forward: <path d="M2 5v14l9.5-7zM12.5 5v14L22 12z" />,
+  rewind: <path d="M22 5v14l-9.5-7zM11.5 5v14L2 12z" />,
 };
 
 export function Icon({ name }: { name: IconName }) {

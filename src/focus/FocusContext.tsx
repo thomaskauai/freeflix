@@ -23,6 +23,11 @@ export function forgetPage(hash: string) {
   delete pageMemory[hash];
 }
 
+/** Define onde o foco cai ao voltar para a página `hash` (ex.: o episódio que estava tocando). */
+export function rememberFocusFor(hash: string, id: string) {
+  pageMemory[hash] = id;
+}
+
 function layerRoot(): HTMLElement {
   const layers = document.querySelectorAll<HTMLElement>('[data-focus-layer]');
   return layers.length ? layers[layers.length - 1] : document.body;

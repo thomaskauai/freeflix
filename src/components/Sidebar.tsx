@@ -8,7 +8,6 @@ import { useStage } from './Stage';
 const ITEMS: { path: string; label: string; icon: IconName }[] = [
   { path: '/search', label: 'Buscar', icon: 'search' },
   { path: '/', label: 'Início', icon: 'home' },
-  { path: '/browse/new', label: 'Novidades', icon: 'new' },
   { path: '/browse/series', label: 'Séries', icon: 'series' },
   { path: '/browse/movies', label: 'Filmes', icon: 'movies' },
   { path: '/list', label: 'Minha lista', icon: 'plus' },

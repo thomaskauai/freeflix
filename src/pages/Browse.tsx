@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
+import { Loading } from '../components/Loading';
 import { PageError } from '../components/PageError';
 import { Rows, type RowSource } from '../components/Rows';
 import { ScrollArea } from '../components/ScrollArea';
@@ -10,7 +11,6 @@ import { usePageFocus } from '../focus/useFocusable';
 const SECTIONS: Record<string, { filter: RowFilter; heading: string }> = {
   series: { filter: 'series', heading: 'Séries' },
   movies: { filter: 'movie', heading: 'Filmes' },
-  new: { filter: 'new', heading: 'Novidades' },
 };
 
 export default function Browse() {
@@ -42,6 +42,7 @@ export default function Browse() {
   return (
     <div className="page" data-focus-main="">
       {failed && <PageError />}
+      {!rows && !failed && <Loading />}
       {rows && (
         <ScrollArea key={kind}>
           <div className="page-head">

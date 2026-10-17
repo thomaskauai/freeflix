@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Card } from '../components/Card';
 import { Icon } from '../components/Icon';
+import { Loading } from '../components/Loading';
 import { ScrollArea } from '../components/ScrollArea';
 import { catalog } from '../data/provider';
 import type { Title } from '../data/types';
@@ -10,6 +11,8 @@ import { SEARCH_GRID_ANCHOR } from '../styles/tokens';
 const LETTERS = 'abcdefghijklmnopqrstuvwxyz0123456789'.split('');
 const DEBOUNCE_MS = 300;
 const MAX_QUERY = 30;
+/** com menos letras que isso a busca não roda: os resultados seriam quase aleatórios */
+const MIN_QUERY = 3;
 
 // A busca sobrevive à ida e volta de um título.
 let lastQuery = '';
@@ -39,7 +42,7 @@ export default function Search() {
   const [query, setQuery] = useState(lastQuery);
   const [results, setResults] = useState<Title[] | null>(null);
   const [popular, setPopular] = useState<Title[]>([]);
-  const restored = useRef(lastQuery.trim().length > 0);
+  const restored = useRef(lastQuery.trim().length >= MIN_QUERY);
   const [ready, setReady] = useState(!restored.current);
 
   useEffect(() => {
@@ -65,7 +68,7 @@ export default function Search() {
 
   useEffect(() => {
     setResults(null);
-    if (!query.trim()) return;
+    if (query.trim().length < MIN_QUERY) return;
     let alive = true;
     // Ao voltar de um título a busca refaz na hora, para o foco achar o card de origem.
     const delay = restored.current ? 0 : DEBOUNCE_MS;
@@ -100,7 +103,7 @@ export default function Search() {
 
   usePageFocus(ready);
 
-  const searching = query.trim().length > 0;
+  const searching = query.trim().length >= MIN_QUERY;
   // Enquanto a busca não volta, a grade fica vazia: populares sob o título de
   // resultados passariam por resposta.
   const shown = searching ? (results ?? []) : popular;
@@ -134,7 +137,11 @@ export default function Search() {
         <h2 className="search__heading">
           {!searching ? 'Mais buscados' : results ? `Resultados para “${query.trim()}”` : `Buscando “${query.trim()}”`}
         </h2>
-        {searching && results && results.length === 0 ? (
+        {searching && !results ? (
+          <div className="search__loading">
+            <Loading label="Buscando" />
+          </div>
+        ) : searching && results && results.length === 0 ? (
           <div className="empty">
             <p className="empty__title">Nenhum título com “{query.trim()}”</p>
             <p className="empty__text">Tente o título original ou um gênero, como terror ou comédia.</p>

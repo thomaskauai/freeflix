@@ -50,8 +50,8 @@
   position: absolute;
   left: 0;
   top: 50%;
-  /* 7 itens centrados na altura */
-  margin-top: calc(var(--sidebar-step) * -3.5);
+  /* 6 itens centrados na altura */
+  margin-top: calc(var(--sidebar-step) * -3);
 }
 
 .sidebar__item {
@@ -164,7 +164,7 @@
   background: var(--black);
 }
 
-/* Fotogramas clássicos são 4:3: a imagem encosta à direita em altura cheia
+/* Fotogramas 4:3: a imagem encosta à direita em altura cheia
    e a sombra à esquerda a funde no preto onde fica o texto. */
 .backdrop__img {
   position: absolute;
@@ -188,11 +188,18 @@
   object-position: 50% 20%;
 }
 
-.backdrop__img--poster {
-  width: 100%;
-  -webkit-filter: blur(48px) saturate(1.2);
-  filter: blur(48px) saturate(1.2);
-  transform: scale(1.2);
+/* Desfoque barato: a imagem é desfocada num quarto do tamanho e ampliada 4×.
+   Dá o mesmo blur de 48 px em tela cheia com 1/16 dos pixels filtrados, o que
+   pesa na GPU das TVs. */
+.backdrop .backdrop__img.backdrop__img--poster {
+  top: 37.5%;
+  left: 37.5%;
+  right: auto;
+  width: 25%;
+  height: 25%;
+  -webkit-filter: blur(12px) saturate(1.2);
+  filter: blur(12px) saturate(1.2);
+  transform: scale(4.8);
 }
 
 .backdrop__img--poster.is-loaded {
@@ -241,6 +248,59 @@
 
 .hero.is-away .backdrop {
   opacity: 0;
+}
+
+/* Um fundo por destaque: o novo aparece por cima do anterior, sem passar pelo preto. */
+.hero__slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+
+.hero__slide.is-current {
+  animation: loading-in 600ms linear both;
+}
+
+/* texto do destaque trocado entra de leve */
+.hero__info {
+  animation: loading-in 450ms linear both;
+}
+
+/* um ponto por destaque, depois dos botões */
+.hero__pager {
+  display: flex;
+  align-items: center;
+  margin-left: 30px;
+}
+
+.hero__dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: var(--btn-h);
+}
+
+.hero__dot::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.4);
+  transition: width var(--focus-ms) var(--ease), background-color var(--focus-ms) linear,
+    box-shadow var(--focus-ms) linear;
+}
+
+.hero__dot.is-current::before {
+  width: 38px;
+  background: var(--white);
+}
+
+/* ponto em foco: anel em volta, bem visível de longe */
+.hero__dot:focus::before {
+  background: var(--white);
+  box-shadow: 0 0 0 4px var(--black), 0 0 0 8px var(--white);
 }
 
 .hero__body {
@@ -408,18 +468,12 @@
   font-weight: 600;
 }
 
-.meta__rating {
+.meta__rating,
+.card__rating {
   color: #f5c518;
   font-weight: 600;
 }
 
-.meta__badge {
-  padding: 0 10px;
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  border-radius: 6px;
-  font-size: 18px;
-  line-height: 26px;
-}
 
 /* ---------- Fileiras ---------- */
 
@@ -735,6 +789,12 @@
   margin-top: 34px;
 }
 
+/* espaço dos episódios enquanto os detalhes completos não chegam */
+.details__pending {
+  position: relative;
+  height: 300px;
+}
+
 .seasons {
   display: flex;
   margin: 0 0 26px var(--content-left);
@@ -787,6 +847,51 @@
 
 .episode:focus .episode__thumb::after {
   opacity: 1;
+}
+
+/* já visto neste aparelho: selo e imagem mais apagada */
+.episode.is-watched .episode__thumb img {
+  opacity: 0.38;
+}
+
+.episode__watched {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  padding: 5px 12px 5px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.75);
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.episode__watched svg {
+  width: 20px;
+  height: 20px;
+  margin-right: 6px;
+  color: var(--red);
+  stroke-width: 2.6;
+}
+
+/* quanto já foi visto, na borda de baixo da imagem */
+.episode__progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.episode__progress i {
+  display: block;
+  height: 100%;
+  background: var(--red);
 }
 
 .episode__info {
@@ -913,6 +1018,11 @@
   margin-right: 18px;
 }
 
+.search__loading {
+  position: relative;
+  height: 420px;
+}
+
 .search__results .empty {
   margin: 120px 0 0;
 }
@@ -938,9 +1048,42 @@
   border: 0;
 }
 
+.player__media {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* sem fundo próprio: até a primeira imagem, o fundo esmaecido aparece por trás */
 .player__video {
-  background: var(--black);
   object-fit: contain;
+}
+
+/* Fundo do título esmaecido enquanto o vídeo carrega: continua o da página de
+   detalhes, sem sumir e voltar. */
+.player__veil {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.player__veil .backdrop {
+  opacity: 0.35;
+  /* entra bem escuro e clareia até o esmaecido final */
+  animation: veil-in 3000ms ease-in-out both;
+}
+
+@keyframes veil-in {
+  from {
+    opacity: 0.18;
+  }
+  to {
+    opacity: 0.35;
+  }
 }
 
 /* Prévia sem vídeo: o fotograma cobre a tela; sem fotograma, o cartaz vai ao centro. */
@@ -1133,6 +1276,19 @@
   z-index: 1;
 }
 
+/* episódio carregando: a imagem dele acima do título */
+.shell__thumb {
+  display: block;
+  width: 384px;
+  height: 216px;
+  margin-bottom: 26px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--coal);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  animation: loading-in 300ms linear both;
+}
+
 .shell__title {
   font-size: 56px;
 }
@@ -1168,6 +1324,8 @@
   line-height: 28px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.8);
+  transition: color var(--focus-ms) linear;
 }
 
 .shell__time--elapsed {
@@ -1187,13 +1345,211 @@
   /* arrastar a barra percorre o vídeo; não é gesto do navegador */
   touch-action: none;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.3);
 }
 
+/* sem foco, tons claros; o vermelho é só da linha do tempo selecionada */
 .shell__bar i {
   display: block;
   height: 100%;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.9);
+  transition: background-color var(--focus-ms) linear;
+}
+
+/* posição atual: só aparece com a linha do tempo em foco ou durante a passada */
+.shell__knob {
+  position: absolute;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border-radius: 50%;
   background: var(--red);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: scale(0.3);
+  transition: opacity var(--focus-ms) linear, transform var(--focus-ms) var(--ease);
+}
+
+/* Linha do tempo em foco: a barra fica vermelha e um pouco mais alta, o marcador aparece e o play acende. */
+.shell__bar {
+  transition: top var(--focus-ms) var(--ease), height var(--focus-ms) var(--ease);
+}
+
+.shell__bottom:focus .shell__bar,
+.shell.is-seeking .shell__bar {
+  top: 29px;
+  height: 6px;
+  border-radius: 3px;
+}
+
+.shell__bottom:focus .shell__bar i,
+.shell.is-seeking .shell__bar i {
+  background: var(--red);
+}
+
+.shell__bottom:focus .shell__knob,
+.shell.is-seeking .shell__knob {
+  opacity: 1;
+  transform: none;
+}
+
+.shell__bottom:focus .shell__play {
+  color: var(--white);
+  transform: scale(1.3);
+}
+
+.shell__bottom:focus .shell__time {
+  color: var(--white);
+}
+
+/* destino da passada, acima do marcador */
+.shell__bubble {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  padding: 6px 16px;
+  border-radius: 8px;
+  background: rgba(20, 20, 20, 0.94);
+  font-size: 26px;
+  line-height: 34px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transform: translate3d(-50%, 0, 0);
+}
+
+/* quanto a passada já andou, no meio da tela */
+.shell__seek {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 220px;
+  height: 220px;
+  margin: -110px 0 0 -110px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  font-size: 34px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  animation: loading-in 120ms linear both;
+}
+
+.shell__seek svg {
+  width: 72px;
+  height: 72px;
+  margin-bottom: 10px;
+}
+
+/* ---------- Próximo episódio ---------- */
+
+.upnext {
+  position: absolute;
+  right: 112px;
+  bottom: 176px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  width: 660px;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(20, 20, 20, 0.88);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 20px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  animation: upnext-in 450ms var(--ease) both;
+  transition: box-shadow var(--focus-ms) linear, transform var(--focus-ms) var(--ease);
+}
+
+/* em foco: só um contorno fino e claro, sem moldura grossa */
+.upnext:focus {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55), 0 20px 60px rgba(0, 0, 0, 0.5);
+  transform: scale(1.02);
+}
+
+@keyframes upnext-in {
+  from {
+    opacity: 0;
+    transform: translate3d(40px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.upnext__thumb {
+  position: relative;
+  flex: none;
+  width: 256px;
+  height: 144px;
+  border-radius: 8px;
+  background: var(--coal);
+  overflow: hidden;
+}
+
+.upnext__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.upnext__thumb svg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  opacity: 0.9;
+  -webkit-filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.7));
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.7));
+}
+
+.upnext__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-left: 24px;
+}
+
+.upnext__count {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--smoke);
+}
+
+.upnext__label {
+  margin-top: 12px;
+  font-size: 22px;
+  color: var(--smoke);
+}
+
+.upnext__title {
+  margin-top: 4px;
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* a contagem de 10 s enchendo a borda de baixo */
+.upnext__timer {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.7);
+  transition: width 300ms linear;
 }
 
 .shell__toast {
@@ -1224,6 +1580,29 @@
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* carregamento de página (Loading.tsx): mesmo desenho do spinner do player */
+.loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 84px;
+  height: 84px;
+  margin: -42px 0 0 -42px;
+  border: 6px solid rgba(255, 255, 255, 0.22);
+  border-top-color: var(--white);
+  border-radius: 50%;
+  animation: spin 900ms linear infinite, loading-in 200ms linear 300ms both;
+}
+
+@keyframes loading-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
@@ -1460,6 +1839,12 @@
 
 .settings__options .btn {
   margin-top: 12px;
+}
+
+.settings__version {
+  margin: 0 var(--content-left) 80px;
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .settings__empty {
@@ -1707,6 +2092,16 @@
   bottom: 46px;
 }
 
+.is-short .shell__thumb {
+  width: 256px;
+  height: 144px;
+  margin-bottom: 16px;
+}
+
+.is-short .upnext {
+  bottom: 128px;
+}
+
 .is-short .player__message {
   top: 150px;
 }
@@ -1852,6 +2247,11 @@
 .is-compact .empty__actions .btn,
 .is-compact .player__message-actions .btn {
   margin-bottom: 12px;
+}
+
+/* os pontos descem para a linha de baixo, alinhados ao texto */
+.is-compact .hero__pager {
+  margin: 0 0 12px -19px;
 }
 
 .is-compact .details__top {
@@ -2022,6 +2422,24 @@
 
 .is-compact .shell__time--total {
   right: 28px;
+}
+
+.is-compact .shell__thumb {
+  width: 288px;
+  height: 162px;
+}
+
+.is-compact .upnext {
+  top: 150px;
+  left: 28px;
+  right: 28px;
+  bottom: auto;
+  width: auto;
+}
+
+.is-compact .upnext__thumb {
+  width: 208px;
+  height: 117px;
 }
 
 .is-compact .shell__error {

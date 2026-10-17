@@ -1,13 +1,5 @@
 export type TitleType = 'movie' | 'series';
 
-export interface VideoSource {
-  url: string;
-  /** segundos */
-  duration: number;
-  /** capítulo, em seriados */
-  episode?: number;
-}
-
 export interface Title {
   /** no catálogo por addon é o id IMDb (tt…) ou tmdb:… */
   id: string;
@@ -32,9 +24,6 @@ export interface Title {
   /** id IMDb (tt…), quando o id do catálogo não é ele */
   imdbId?: string;
   isNew?: boolean;
-  publicDomain?: boolean;
-  /** arquivos de vídeo tocáveis direto; filme: o primeiro é o principal */
-  videos?: VideoSource[];
   seasonCount?: number;
   episodeCount?: number;
 }
@@ -62,16 +51,31 @@ export interface RowRef {
   /** só no catálogo por addon */
   type?: TitleType;
   catalogId?: string;
+  /** página da lista (itens pulados), sorteada para a Home não ficar sempre igual */
+  skip?: number;
+  /** embaralhar os itens (listas sem ordem de "o mais em alta primeiro") */
+  shuffle?: boolean;
+  /** fileira montada pelo app, não uma lista do addon */
+  kind?: 'top-rated';
+  /** cards mostram a nota IMDb */
+  showRating?: boolean;
 }
 
-export type RowFilter = 'movie' | 'series' | 'new';
+export type RowFilter = 'movie' | 'series';
 
 export interface CatalogProvider {
-  getFeatured(): Promise<Title | null>;
+  /** destaques do topo da Home, na ordem em que aparecem */
+  getFeatured(): Promise<Title[]>;
   /** Fileiras de uma seção, sem os itens: carregar todas de uma vez pesa na TV. */
   listRows(filter?: RowFilter): Promise<RowRef[]>;
   loadRow(ref: RowRef): Promise<Title[]>;
   getTitle(type: TitleType, id: string): Promise<Title | null>;
+  /**
+   * O que já se sabe do título pelas listas (fileiras, busca, semelhantes), sem
+   * ir ao servidor: dá para abrir os detalhes antes de getTitle responder.
+   * Faltam duração, idioma e episódios.
+   */
+  peekTitle(type: TitleType, id: string): Title | null;
   getSeasons(type: TitleType, id: string): Promise<Season[]>;
   getSimilar(title: Title): Promise<Title[]>;
   search(q: string): Promise<Title[]>;

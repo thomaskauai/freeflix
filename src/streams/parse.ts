@@ -9,12 +9,15 @@ export type Unplayable = 'torrent' | 'external' | 'headers';
 
 export interface ParsedStream {
   addon: string;
+  /** posição da fonte na ordem de preferência (lista padrão); menor vem antes */
+  priority?: number;
+  /** endereço base do addon que trouxe a fonte */
+  base?: string;
   url?: string;
   /** por que este app não consegue tocar a fonte; ausente se toca */
   unplayable?: Unplayable;
   /** altura em pixels; 0 se o texto não diz */
   resolution: number;
-  seeds: number;
   /** 0 se desconhecido */
   sizeBytes: number;
   /** códigos de idioma citados no texto (pt, en, es…) */
@@ -66,14 +69,6 @@ const LANGUAGE_WORDS: [RegExp, string][] = [
 
 const UNITS: Record<string, number> = { kb: 1e3, mb: 1e6, gb: 1e9, tb: 1e12, kib: 1024, mib: 1024 ** 2, gib: 1024 ** 3 };
 
-function firstNumber(text: string, patterns: RegExp[]): number {
-  for (const pattern of patterns) {
-    const m = text.match(pattern);
-    if (m) return Number(m[1].replace(/[.,](?=\d{3}\b)/g, ''));
-  }
-  return 0;
-}
-
 function sizeOf(text: string, hinted?: number): number {
   if (hinted && hinted > 0) return hinted;
   const m = text.match(/(?:💾\s*)?(\d+(?:[.,]\d+)?)\s*(kib|mib|gib|kb|mb|gb|tb)\b/i);
@@ -122,7 +117,6 @@ export function parseStream(stream: AddonStream, addon: string): ParsedStream {
     url: stream.url,
     unplayable,
     resolution,
-    seeds: firstNumber(text, [/👤\s*(\d[\d.,]*)/, /\bseed(?:er)?s?\b\s*[:=]?\s*(\d[\d.,]*)/i, /\bS:\s*(\d[\d.,]*)/]),
     sizeBytes: sizeOf(text, hints.videoSize),
     languages,
     // "Dual Áudio", "Multi", "Multi-Lang". "Multi-Sub" é sobre legendas, não áudio.

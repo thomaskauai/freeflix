@@ -4,6 +4,10 @@ build
 .env.local
 .playwright-mcp
 *.wgt
+# app da TV gerado por npm run build:tizen
+tizen-build/
+# certificado de autor da TV: chave privada, nunca no git
+tizen-cert/
 
 # cópia local de outro projeto, usada só como referência
 NuvioSource/

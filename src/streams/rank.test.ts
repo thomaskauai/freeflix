@@ -27,7 +27,7 @@ const rank = (streams: AddonStream[], context: RankContext) =>
   );
 
 describe('parseStream', () => {
-  it('lê resolução, seeds, tamanho, codec e contêiner do texto', () => {
+  it('lê resolução, tamanho, codec e contêiner do texto', () => {
     const p = parseStream(
       stream('Fonte\n1080p', 'Filme.2020.1080p.WEB-DL.x265.mkv\n👤 312 💾 2.1 GB', {
         behaviorHints: { filename: 'Filme.2020.1080p.WEB-DL.x265.mkv' },
@@ -35,7 +35,6 @@ describe('parseStream', () => {
       'Teste',
     );
     expect(p.resolution).toBe(1080);
-    expect(p.seeds).toBe(312);
     expect(p.sizeBytes).toBe(2.1e9);
     expect(p.codec).toBe('hevc');
     expect(p.container).toBe('mkv');
@@ -77,6 +76,41 @@ describe('rankStreams', () => {
     expect(ranked[0].resolution).toBe(720);
   });
 
+  it('no mesmo idioma, a fonte que vem antes em sources.json ganha, mesmo com resolução menor', () => {
+    const from = (s: AddonStream, priority: number) => ({ ...parseStream(s, `Fonte ${priority + 1}`), priority });
+    const ranked = rankStreams(
+      [
+        from(stream('1080p', 'Filme Dublado'), 1),
+        from(stream('720p', 'Filme Dublado'), 0),
+        from(stream('1080p', 'Filme'), 0),
+      ],
+      ctx({ audio: 'pt' }),
+    );
+    expect(ranked.map((s) => [s.addon, s.resolution])).toEqual([
+      ['Fonte 1', 720],
+      ['Fonte 2', 1080],
+      ['Fonte 1', 1080],
+    ]);
+  });
+
+  it('em série, a fonte escolhida no episódio anterior vem antes do idioma das configurações', () => {
+    const from = (s: AddonStream, base: string) => ({ ...parseStream(s, base), base });
+    const original = from(stream('1080p', 'Episodio'), 'b');
+    const ranked = rankStreams(
+      [from(stream('1080p', 'Episodio Dublado'), 'a'), from(stream('720p', 'Episodio'), 'a'), original],
+      ctx({
+        audio: 'pt',
+        prefer: { base: 'b', label: describeStream(original), languages: [], multiAudio: false },
+      }),
+    );
+    // mesma opção do mesmo addon; depois o mesmo áudio (original) em outro; o dublado por último
+    expect(ranked.map((s) => [s.base, s.resolution, s.languages.join()])).toEqual([
+      ['b', 1080, ''],
+      ['a', 720, ''],
+      ['a', 1080, 'pt'],
+    ]);
+  });
+
   it('prefere 1080p, inclusive a 4K, quando a rede aguenta', () => {
     const ranked = rank([stream('720p', 'a'), stream('2160p', 'b'), stream('1080p', 'c')], ctx({ mbps: 100 }));
     expect(ranked.map((s) => s.resolution)).toEqual([1080, 720, 2160]);
@@ -116,9 +150,11 @@ describe('rankStreams', () => {
     expect(ranked.map((s) => s.languages[0])).toEqual(['ja', 'en', 'es']);
   });
 
-  it('seeds desempatam fontes equivalentes', () => {
-    const ranked = rank([stream('1080p', 'a 👤 12'), stream('1080p', 'b 👤 480'), stream('1080p', 'c 👤 95')], ctx());
-    expect(ranked.map((s) => s.seeds)).toEqual([480, 95, 12]);
+  it('fontes equivalentes mantêm a ordem de chegada', () => {
+    const ranked = rank([stream('1080p', 'a'), stream('1080p', 'b'), stream('1080p', 'c')], ctx());
+    expect(ranked.map((s) => s.url)).toEqual(
+      ['a', 'b', 'c'].map((t) => `https://cdn.example/${encodeURIComponent('1080p' + t)}.mp4`),
+    );
   });
 
   it('codec que o aparelho não toca perde para um que toca, com a mesma resolução', () => {
@@ -160,7 +196,8 @@ describe('describeStream', () => {
 
 describe('srtToVtt', () => {
   it('converte o .srt para WebVTT', () => {
-    const srt = '\uFEFF1\r\n00:00:01,000 --> 00:00:07,190\r\nA General\r\n\r\n2\r\n00:00:51,620 --> 00:00:59,800\r\nLinha um\r\nLinha dois\r\n';
+    const srt =
+      '\uFEFF1\r\n00:00:01,000 --> 00:00:07,190\r\nA General\r\n\r\n2\r\n00:00:51,620 --> 00:00:59,800\r\nLinha um\r\nLinha dois\r\n';
     expect(srtToVtt(srt)).toBe(
       'WEBVTT\n\n1\n00:00:01.000 --> 00:00:07.190\nA General\n\n2\n00:00:51.620 --> 00:00:59.800\nLinha um\nLinha dois\n',
     );

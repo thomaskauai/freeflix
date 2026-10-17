@@ -1,26 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Backdrop } from '../components/Backdrop';
 import { Button } from '../components/Button';
+import { Icon } from '../components/Icon';
 import { PlayerShell } from '../components/PlayerShell';
-import { EmbedPlayer, embedUrlFor, VideoPlayer } from '../components/VideoPlayer';
-import { catalog } from '../data/provider';
-import { getProgress, saveProgress } from '../data/storage';
-import type { Title, TitleType } from '../data/types';
-import { usePageFocus } from '../focus/useFocusable';
-import { useGoBack } from '../nav';
-import { resolvePlayback, type Candidate, type NoSourceReason } from '../streams/resolve';
+import { EmbedPlayer, VideoPlayer } from '../components/VideoPlayer';
+import { findEpisode, followingEpisode } from '../data/episodes';
+import { catalog, previewTitle } from '../data/provider';
+import { rememberSource, saveProgress } from '../data/storage';
+import type { Season, Title, TitleType } from '../data/types';
+import { rememberFocusFor } from '../focus/FocusContext';
+import { useFocusable, usePageFocus } from '../focus/useFocusable';
+import { titlePath, useGoBack, watchPath } from '../nav';
+import {
+  firstWorking,
+  markFailed,
+  mergeCandidates,
+  parkVideo,
+  planFor,
+  resumePoint,
+  type Plan,
+} from '../streams/playback';
+import type { NoSourceReason } from '../streams/resolve';
 
-/** Perto do fim, a próxima sessão recomeça do início. */
-const RESUME_MARGIN_S = 30;
-
-type Plan =
-  | { status: 'searching' }
-  | { status: 'embed'; url: string }
-  | { status: 'play'; candidates: Candidate[]; index: number }
-  | { status: 'none'; reason: NoSourceReason | 'all-failed' | 'no-file' };
-
-const MESSAGES: Record<NoSourceReason | 'all-failed' | 'no-file', { title: string; text: string; settings?: boolean }> = {
+const MESSAGES: Record<NoSourceReason | 'all-failed', { title: string; text: string; settings?: boolean }> = {
   'no-addons': {
     title: 'Nenhuma fonte de vídeo instalada',
     text: 'O catálogo mostra os títulos; quem traz o vídeo é uma fonte. Adicione uma em Configurações.',
@@ -43,33 +46,42 @@ const MESSAGES: Record<NoSourceReason | 'all-failed' | 'no-file', { title: strin
     title: 'Nenhuma fonte tocou',
     text: 'As melhores fontes encontradas falharam ao carregar. Tente de novo em alguns minutos.',
   },
-  'no-file': {
-    title: 'Este episódio não tem vídeo',
-    text: 'O catálogo de clássicos só tem alguns capítulos deste seriado.',
-  },
 };
 
-/** De onde sai o vídeo: embed configurado, arquivo do catálogo embutido, ou as fontes instaladas. */
-async function planFor(title: Title, season?: number, episode?: number): Promise<Plan> {
-  const embed = embedUrlFor(title.tmdbId, season, episode);
-  if (embed) return { status: 'embed', url: embed };
+/** perto do fim do episódio, as fontes do próximo já são procuradas */
+const WARM_NEXT_S = 120;
 
-  if (title.videos) {
-    const file =
-      title.type === 'series'
-        ? title.videos.filter((v) => (season ?? 1) === 1 && v.episode === (episode ?? 1))[0]
-        : title.videos[0];
-    if (!file) return { status: 'none', reason: 'no-file' };
-    return {
-      status: 'play',
-      index: 0,
-      candidates: [{ url: file.url, hls: false, label: 'Wikimedia Commons, domínio público' }],
-    };
-  }
-
-  const found = await resolvePlayback(title, season, episode);
-  if ('reason' in found) return { status: 'none', reason: found.reason };
-  return { status: 'play', candidates: found.candidates, index: 0 };
+/**
+ * Enquanto a fonte é procurada: a mesma cara do player carregando, com o
+ * título (e a imagem do episódio) embaixo e só o Voltar.
+ */
+function Waiting({
+  title,
+  subtitle,
+  thumb,
+  onExit,
+}: {
+  title: string;
+  subtitle?: string;
+  thumb?: string;
+  onExit: () => void;
+}) {
+  const back = useFocusable({ autoFocus: true });
+  return (
+    <div className="shell">
+      <div className="shell__top" data-focus-group="">
+        <div {...back} className="shell__btn" aria-label="Voltar" onClick={onExit}>
+          <Icon name="back" />
+        </div>
+      </div>
+      <div className="shell__spinner" aria-label="Carregando" />
+      <div className={`shell__heading${thumb ? ' has-thumb' : ''}`}>
+        {thumb && <img className="shell__thumb" src={thumb} alt="" decoding="async" />}
+        <div className="shell__title display">{title}</div>
+        {subtitle && <div className="shell__subtitle">{subtitle}</div>}
+      </div>
+    </div>
+  );
 }
 
 export default function Watch() {
@@ -81,15 +93,25 @@ export default function Watch() {
   const navigate = useNavigate();
   const goBack = useGoBack();
   const [title, setTitle] = useState<Title | null>(null);
-  const [plan, setPlan] = useState<Plan>({ status: 'searching' });
-  const [media, setMedia] = useState<HTMLVideoElement | null>(null);
+  const [seasons, setSeasons] = useState<{ id: string; list: Season[] } | null>(null);
+  /** null enquanto procura a fonte */
+  const [plan, setPlan] = useState<Plan | null>(null);
+  /**
+   * <video> em uso, com a chave de quem o criou: trocando de episódio ou de
+   * fonte, o shell novo não pode pegar o anterior (que fica guardado, vivo).
+   */
+  const [mediaOf, setMediaOf] = useState<{ key: string; el: HTMLVideoElement } | null>(null);
+  /** o vídeo já mostrou imagem: o fundo esmaecido da espera sai */
+  const [started, setStarted] = useState(false);
+  const warmed = useRef('');
 
   const key = `${type}/${id}/${season}/${episode}`;
+  const isEpisode = season != null && episode != null;
 
   useEffect(() => {
     let alive = true;
     setTitle(null);
-    setPlan({ status: 'searching' });
+    setPlan(null);
     catalog.getTitle(type, id).then(
       (t) => {
         if (!alive) return;
@@ -98,10 +120,8 @@ export default function Watch() {
           return;
         }
         setTitle(t);
-        planFor(t, season, episode).then(
-          (next) => alive && setPlan(next),
-          () => alive && setPlan({ status: 'none', reason: 'unreachable' }),
-        );
+        // Se a página de detalhes já procurou (e até pré-carregou), isto volta na hora.
+        planFor(t, season, episode).then((next) => alive && setPlan(firstWorking(next, t, season, episode)));
       },
       () => alive && navigate('/', { replace: true }),
     );
@@ -110,39 +130,117 @@ export default function Watch() {
     };
   }, [key, type, id, season, episode, navigate]);
 
-  // O foco muda de dono a cada estado: Voltar enquanto procura, play quando toca.
-  const playingIndex = plan.status === 'play' ? plan.index : -1;
-  usePageFocus(!!title, `${key}:${plan.status}:${playingIndex}`);
+  // Episódios: nome e imagem do que está tocando e qual vem depois.
+  useEffect(() => {
+    if (type !== 'series') return;
+    let alive = true;
+    catalog.getSeasons(type, id).then(
+      (list) => alive && setSeasons({ id, list }),
+      () => undefined,
+    );
+    return () => {
+      alive = false;
+    };
+  }, [type, id]);
 
-  if (!title) return <div className="page player" data-focus-main="" />;
+  // Voltando para os detalhes da série, o foco cai no episódio que estava tocando.
+  const here = useRef({ id, type, season, episode });
+  here.current = { id, type, season, episode };
+  useEffect(
+    () => () => {
+      const { id: was, type: kind, season: s, episode: e } = here.current;
+      if (s != null && e != null) rememberFocusFor(`#${titlePath({ type: kind, id: was })}`, `episode:${s}:${e}`);
+    },
+    [],
+  );
 
-  if (plan.status === 'searching' || plan.status === 'none') {
-    const message = plan.status === 'none' ? MESSAGES[plan.reason] : null;
+  // Com uma fonte escolhida antes, o plano sai só com o addon dela; as outras chegam depois, como reserva.
+  useEffect(() => {
+    if (!plan || plan.status !== 'play' || !plan.more) return;
+    let alive = true;
+    const more = plan.more;
+    more.then((list) => {
+      if (!alive) return;
+      setPlan((p) =>
+        p && p.status === 'play' && p.more === more
+          ? { ...p, candidates: mergeCandidates(p.candidates, list), more: undefined }
+          : p,
+      );
+    });
+    return () => {
+      alive = false;
+    };
+  }, [plan]);
+
+  const playingIndex = plan && plan.status === 'play' ? plan.index : -1;
+  const videoKey = `video:${key}:${playingIndex}`;
+  const media = mediaOf && mediaOf.key === videoKey ? mediaOf.el : null;
+
+  useEffect(() => {
+    setStarted(false);
+    if (!media) return;
+    const show = () => setStarted(true);
+    media.addEventListener('playing', show);
+    return () => media.removeEventListener('playing', show);
+  }, [media]);
+
+  // O foco muda de dono a cada estado: Voltar enquanto procura, linha do tempo quando toca.
+  usePageFocus(!!title, `${key}:${plan ? plan.status : 'searching'}:${playingIndex}`);
+
+  const list = seasons && seasons.id === id ? seasons.list : [];
+  const current = isEpisode ? findEpisode(list, season, episode) : undefined;
+  const following = isEpisode ? followingEpisode(list, season, episode) : null;
+  const subtitle = isEpisode
+    ? `Temporada ${season}, episódio ${episode}${current && current.title ? ` · ${current.title}` : ''}`
+    : undefined;
+  const thumb = current ? current.thumbnail : undefined;
+
+  // Até a imagem chegar, o fundo do título aparece esmaecido atrás do
+  // carregamento. Antes dos detalhes completos chegarem, vale o que a lista já
+  // sabia do título: o fundo não fica preto nem por um instante.
+  const known = title ?? previewTitle(type, id);
+  const veil = known && !started && (!plan || plan.status === 'play') && (
+    <div className="player__veil">
+      <Backdrop title={known} shade={false} />
+    </div>
+  );
+
+  if (!title || !plan) {
+    return (
+      <div className="page player" data-focus-main="">
+        {veil}
+        <Waiting
+          title={title ? title.title : known ? known.title : ''}
+          subtitle={subtitle}
+          thumb={thumb}
+          onExit={goBack}
+        />
+      </div>
+    );
+  }
+
+  if (plan.status === 'none') {
+    const message = MESSAGES[plan.reason];
     return (
       <div className="page player" data-focus-main="">
         <Backdrop title={title} />
         <div className="player__message">
-          <p className="player__message-title">{message ? message.title : 'Procurando a melhor fonte'}</p>
-          <p className="player__message-text">
-            {message ? message.text : 'Medindo a rede e comparando as fontes instaladas.'}
-          </p>
+          <p className="player__message-title">{message.title}</p>
+          <p className="player__message-text">{message.text}</p>
           <div className="player__message-actions">
             <Button icon="back" id="watch-back" autoFocus onClick={goBack}>
               Voltar
             </Button>
-            {message && message.settings && (
+            {message.settings && (
               <Button id="watch-settings" onClick={() => navigate('/settings')}>
                 Abrir Configurações
               </Button>
             )}
           </div>
         </div>
-        {!message && <div className="shell__spinner" aria-label="Procurando" />}
       </div>
     );
   }
-
-  const subtitle = season != null && episode != null ? `Temporada ${season}, episódio ${episode}` : undefined;
 
   if (plan.status === 'embed') {
     return (
@@ -163,27 +261,63 @@ export default function Watch() {
   }
 
   const candidate = plan.candidates[plan.index];
-  const saved = getProgress(id);
-  const sameEpisode = !!saved && saved.season === season && saved.episode === episode;
-  const startAt = saved && sameEpisode && saved.time < saved.duration - RESUME_MARGIN_S ? saved.time : 0;
-  const duration = saved && sameEpisode ? saved.duration : (title.runtime ?? 0) * 60;
+  const { startAt, duration } = resumePoint(title, season, episode);
   // Legendas são buscadas pelo id IMDb; títulos sem ele ficam sem.
   const imdbId = title.imdbId ?? (/^tt\d+$/.test(title.id) ? title.id : undefined);
-  const subtitleId = imdbId ? (season != null && episode != null ? `${imdbId}:${season}:${episode}` : imdbId) : undefined;
+  const subtitleId = imdbId ? (isEpisode ? `${imdbId}:${season}:${episode}` : imdbId) : undefined;
   const hasNext = plan.index + 1 < plan.candidates.length;
   // A lista mostra uma linha por opção distinta. Espelhos da mesma opção não
   // aparecem: são a reserva que o player usa sozinho se o primeiro falhar.
   const options = plan.candidates.map((c) => c.label).filter((label, i, all) => all.indexOf(label) === i);
-  const next = () =>
-    setPlan(hasNext ? { ...plan, index: plan.index + 1 } : { status: 'none', reason: 'all-failed' });
+  // Fonte ruim fica marcada: a próxima abertura deste título já começa pela
+  // seguinte. Acabou a lista e as outras fontes ainda vão chegar: espera por elas.
+  const next = () => {
+    markFailed(candidate.url);
+    if (hasNext) {
+      setPlan({ ...plan, index: plan.index + 1 });
+    } else if (plan.more) {
+      const more = plan.more;
+      more.then((list) =>
+        setPlan((p) => {
+          if (!p || p.status !== 'play') return p;
+          const merged = mergeCandidates(p.candidates, list);
+          return merged.length > p.index + 1
+            ? { ...p, candidates: merged, index: p.index + 1, more: undefined }
+            : { status: 'none', reason: 'all-failed' };
+        }),
+      );
+    } else {
+      setPlan({ status: 'none', reason: 'all-failed' });
+    }
+  };
+
+  const upNext = following
+    ? {
+        label: `Temporada ${following.season}, episódio ${following.episode.number}`,
+        title: following.episode.title,
+        thumb: following.episode.thumbnail ?? title.backdrop,
+      }
+    : undefined;
+  // O próximo episódio entra no lugar deste: Voltar continua levando aos detalhes.
+  const playNext = following
+    ? () => navigate(watchPath(title, following.season, following.episode.number), { replace: true })
+    : undefined;
 
   return (
     <div className="page player" data-focus-main="">
-      <VideoPlayer key={`video:${key}:${plan.index}`} url={candidate.url} hls={candidate.hls} onMedia={setMedia} />
+      {veil}
+      <VideoPlayer
+        key={videoKey}
+        url={candidate.url}
+        hls={candidate.hls}
+        onMedia={(el) => setMediaOf((m) => (el ? { key: videoKey, el } : m && m.key === videoKey ? null : m))}
+        onRelease={(video, detach) => parkVideo(title, season, episode, candidate.url, video, detach)}
+      />
       <PlayerShell
         key={`shell:${key}:${plan.index}`}
         title={title.title}
         subtitle={subtitle}
+        thumb={thumb}
         mode="video"
         media={media}
         duration={duration}
@@ -195,8 +329,19 @@ export default function Watch() {
           setPlan({ ...plan, index: plan.candidates.map((c) => c.label).indexOf(options[option]) })
         }
         // fonte ruim: passa para a próxima sem perguntar
-        onFail={plan.candidates.length > 1 ? next : undefined}
-        onProgress={(time, length) => saveProgress(title, { season, episode, time, duration: length })}
+        onFail={plan.candidates.length > 1 || plan.more ? next : undefined}
+        // a fonte que tocou vale para os outros episódios: mesmo addon, mesmo áudio
+        onStart={isEpisode ? () => rememberSource(title.id, candidate.profile) : undefined}
+        onProgress={(time, length) => {
+          saveProgress(title, { season, episode, time, duration: length });
+          // perto do fim, as fontes do próximo episódio já vão sendo procuradas
+          if (following && length > 0 && length - time < WARM_NEXT_S && warmed.current !== key) {
+            warmed.current = key;
+            planFor(title, following.season, following.episode.number);
+          }
+        }}
+        upNext={upNext}
+        onNext={playNext}
         onExit={goBack}
       />
     </div>

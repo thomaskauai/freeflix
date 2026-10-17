@@ -30,6 +30,14 @@ export function Backdrop({ title, shade = true }: BackdropProps) {
     .filter(Boolean)
     .join(' ');
 
+  const showImage = (img: HTMLImageElement) => {
+    setWide(img.naturalWidth / img.naturalHeight >= WIDE_RATIO);
+    setLoaded(true);
+  };
+  // Imagem que já veio da tela anterior está em cache: aparece já no primeiro
+  // quadro, sem o fade de carregamento (que faria o fundo piscar ao dar play).
+  const cached = (img: HTMLImageElement | null) => !!img && img.complete && img.naturalWidth > 0;
+
   return (
     <div className="backdrop">
       {src && (
@@ -38,10 +46,11 @@ export function Backdrop({ title, shade = true }: BackdropProps) {
           className={classes}
           src={src}
           alt=""
-          onLoad={(e) => {
-            setWide(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight >= WIDE_RATIO);
-            setLoaded(true);
+          decoding="async"
+          ref={(img) => {
+            if (img && !loaded && cached(img)) showImage(img);
           }}
+          onLoad={(e) => showImage(e.currentTarget)}
         />
       )}
       {shade && <div className="backdrop__shade" />}
@@ -50,6 +59,10 @@ export function Backdrop({ title, shade = true }: BackdropProps) {
           className={`backdrop__poster${posterLoaded ? ' is-loaded' : ''}`}
           src={title.poster}
           alt=""
+          decoding="async"
+          ref={(img) => {
+            if (img && !posterLoaded && cached(img)) setPosterLoaded(true);
+          }}
           onLoad={() => setPosterLoaded(true)}
         />
       )}

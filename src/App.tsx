@@ -15,6 +15,7 @@ import Search from './pages/Search';
 import Settings from './pages/Settings';
 import Watch from './pages/Watch';
 import { exitApp, registerMediaKeys } from './platform/tizen';
+import { installDefaultSources } from './streams/sources';
 
 /** telas abertas a partir de outra: Voltar retorna a ela, não ao Início */
 const NESTED = ['/title/', '/watch/', '/settings/'];
@@ -28,6 +29,7 @@ export default function App() {
 
   useEffect(() => {
     registerMediaKeys();
+    installDefaultSources();
   }, []);
 
   // Voltar: título e player retornam uma tela, seções vão ao Início, o Início sai do app.

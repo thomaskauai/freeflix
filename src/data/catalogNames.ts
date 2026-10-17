@@ -28,4 +28,3 @@ export const CATALOG_NAMES_PT: Record<string, string> = {
 /** Listas que só fazem sentido com um filtro escolhido (ano, idioma): ficam fora das fileiras. */
 export const PARAMETERIZED_CATALOGS = ['movies-by-year', 'series-by-year', 'movies-by-language', 'series-by-language'];
 
-export const NEW_CATALOGS = ['new-and-upcoming-movies', 'new-and-returning-series', 'airing-today-series'];
