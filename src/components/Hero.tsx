@@ -18,13 +18,30 @@ interface HeroProps {
 /** os fundos dos outros destaques começam a baixar depois que a Home assentou */
 const PRELOAD_AFTER_MS = 2500;
 
-/** Nome da obra: a arte de título do catálogo quando existe, senão texto. */
+/**
+ * Nome da obra: a arte de título do catálogo quando existe, senão texto.
+ *
+ * A arte aparece uma vez, já decodificada, numa camada própria. Na TV, com
+ * decodificação assíncrona, ela sumia e voltava quando o fundo terminava de
+ * carregar e redesenhava a tela por baixo.
+ */
 export function TitleArt({ title, className }: { title: Title; className: string }) {
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState('');
   if (title.logo && !failed) {
+    const logo = title.logo;
     return (
       <div className={`${className} ${className}--logo`}>
-        <img src={title.logo} alt={title.title} decoding="async" onError={() => setFailed(true)} />
+        <img
+          className={loaded === logo ? 'is-loaded' : undefined}
+          src={logo}
+          alt={title.title}
+          ref={(img) => {
+            if (img && loaded !== logo && img.complete && img.naturalWidth > 0) setLoaded(logo);
+          }}
+          onLoad={() => setLoaded(logo)}
+          onError={() => setFailed(true)}
+        />
       </div>
     );
   }

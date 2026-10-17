@@ -8,6 +8,7 @@ import { EmbedPlayer, VideoPlayer } from '../components/VideoPlayer';
 import { findEpisode, followingEpisode } from '../data/episodes';
 import { catalog, previewTitle } from '../data/provider';
 import { rememberSource, saveProgress } from '../data/storage';
+import { syncProgress, syncStarted } from '../data/sync';
 import type { Season, Title, TitleType } from '../data/types';
 import { rememberFocusFor } from '../focus/FocusContext';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
@@ -176,12 +177,26 @@ export default function Watch() {
   const videoKey = `video:${key}:${playingIndex}`;
   const media = mediaOf && mediaOf.key === videoKey ? mediaOf.el : null;
 
+  // O fundo da espera sai assim que o vídeo mostra imagem. Na TV o evento
+  // "playing" pode chegar bem depois das primeiras imagens (ou nem chegar, no
+  // vídeo pré-carregado); o tempo andando já basta. Sem isso o fundo ficava
+  // aparecendo nas faixas pretas de filmes mais largos que a tela.
   useEffect(() => {
     setStarted(false);
     if (!media) return;
+    let last = media.currentTime;
     const show = () => setStarted(true);
+    // pulo para onde o espectador parou também muda o tempo; só conta o vídeo andando
+    const moved = () => {
+      if (!media.paused && !media.seeking && media.currentTime > last + 0.05 && media.currentTime - last < 2) show();
+      last = media.currentTime;
+    };
     media.addEventListener('playing', show);
-    return () => media.removeEventListener('playing', show);
+    media.addEventListener('timeupdate', moved);
+    return () => {
+      media.removeEventListener('playing', show);
+      media.removeEventListener('timeupdate', moved);
+    };
   }, [media]);
 
   // O foco muda de dono a cada estado: Voltar enquanto procura, linha do tempo quando toca.
@@ -331,9 +346,13 @@ export default function Watch() {
         // fonte ruim: passa para a próxima sem perguntar
         onFail={plan.candidates.length > 1 || plan.more ? next : undefined}
         // a fonte que tocou vale para os outros episódios: mesmo addon, mesmo áudio
-        onStart={isEpisode ? () => rememberSource(title.id, candidate.profile) : undefined}
-        onProgress={(time, length) => {
-          saveProgress(title, { season, episode, time, duration: length });
+        onStart={() => {
+          if (isEpisode) rememberSource(title.id, candidate.profile);
+          syncStarted(title, season, episode);
+        }}
+        onProgress={(time, length, moment) => {
+          saveProgress(title, { season, episode, time, duration: length }, thumb);
+          syncProgress(title, season, episode, moment);
           // perto do fim, as fontes do próximo episódio já vão sendo procuradas
           if (following && length > 0 && length - time < WARM_NEXT_S && warmed.current !== key) {
             warmed.current = key;

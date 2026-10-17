@@ -1,40 +1,92 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Hero } from '../components/Hero';
 import { Loading } from '../components/Loading';
 import { PageError } from '../components/PageError';
 import { Rows, type RowSource } from '../components/Rows';
 import { ScrollArea } from '../components/ScrollArea';
-import { resumeEpisode } from '../data/episodes';
+import { findEpisode, followingEpisode, resumeEpisode } from '../data/episodes';
 import { catalog } from '../data/provider';
-import { getAllProgress, isFinished, titleFromSnapshot } from '../data/storage';
+import { getAllProgress, isFinished, rememberStill, titleFromSnapshot, type Progress } from '../data/storage';
+import { useSyncVersion } from '../data/sync';
 import type { Title } from '../data/types';
-import { focusElement } from '../focus/FocusContext';
+import { focusElement, rememberFocusFor } from '../focus/FocusContext';
 import { useKeyHandler } from '../focus/keys';
 import { usePageFocus } from '../focus/useFocusable';
 import { titlePath, watchPath } from '../nav';
 
-function continueWatchingRow(): RowSource | null {
+/** Episódio que o card de uma série mostra, depois de consultar a lista de episódios. */
+interface EpisodeCard {
+  season: number;
+  episode: number;
+  /** imagem do episódio */
+  image?: string;
+  /** o guardado foi visto até o fim: este é o seguinte */
+  next: boolean;
+}
+
+/** "T3:E8 · Faltam 12 min" (série) ou "Faltam 40 min" (filme). */
+function remainingInfo(p: Progress): string {
+  const left = Math.max(1, Math.round((p.duration - p.time) / 60));
+  const when = isFinished(p) ? 'Assistido' : p.duration ? `Faltam ${left} min` : 'Continuar';
+  return p.season != null && p.episode != null ? `T${p.season}:E${p.episode} · ${when}` : when;
+}
+
+/**
+ * Continuar assistindo: primeira fileira da Home, em cartões horizontais com a
+ * imagem do episódio onde o espectador parou (ou o fotograma do título). Série
+ * com o episódio já terminado mostra o seguinte; sem seguinte, sai da fileira.
+ * Série abre nos detalhes com o foco já na temporada e no episódio.
+ */
+function continueWatchingRow(
+  version: number,
+  cards: Record<string, EpisodeCard | 'done'>,
+  open: (title: Title, season?: number, episode?: number) => void,
+): RowSource | null {
   const saved = getAllProgress();
-  // Filme visto até o fim sai da fileira; série fica, porque os detalhes levam ao próximo episódio.
+  // Filme visto até o fim sai da fileira; série, só quando não há próximo episódio.
   const ids = Object.keys(saved)
     .filter(
       (id) =>
         saved[id].title &&
         saved[id].time > 0 &&
+        cards[id] !== 'done' &&
         (saved[id].title.type === 'series' || !isFinished(saved[id])),
     )
     .sort((a, b) => saved[b].updatedAt - saved[a].updatedAt);
   if (!ids.length) return null;
 
   const progress: Record<string, number> = {};
-  ids.forEach((id) => (progress[id] = saved[id].duration ? Math.min(1, saved[id].time / saved[id].duration) : 0));
+  const images: Record<string, string | undefined> = {};
+  const infos: Record<string, string> = {};
+  ids.forEach((id) => {
+    const p = saved[id];
+    const card = cards[id];
+    const fallback = p.title.backdrop ?? p.title.poster;
+    if (card && card !== 'done' && card.next) {
+      images[id] = card.image ?? fallback;
+      infos[id] = `T${card.season}:E${card.episode} · Próximo episódio`;
+      return;
+    }
+    progress[id] = p.duration ? Math.min(1, p.time / p.duration) : 0;
+    images[id] = (card && card !== 'done' ? card.image : undefined) ?? p.title.still ?? fallback;
+    infos[id] = remainingInfo(p);
+  });
   return {
-    id: 'continue',
+    // muda quando chegam dados de outra TV ou sai uma série terminada: a fileira se refaz
+    id: `continue-${version}-${ids.length}`,
     title: 'Continuar assistindo',
-    style: 'poster',
+    style: 'wide',
     items: ids.map((id) => titleFromSnapshot(saved[id].title)),
     progress,
+    images,
+    infos,
+    onSelect: (title) => {
+      const card = cards[title.id];
+      const p = saved[title.id];
+      if (card && card !== 'done') open(title, card.season, card.episode);
+      else open(title, p.season, p.episode);
+    },
   };
 }
 
@@ -49,16 +101,61 @@ export default function Home() {
   const [failed, setFailed] = useState(false);
   const [rowsReady, setRowsReady] = useState(false);
   const [inRows, setInRows] = useState(false);
+  const version = useSyncVersion();
+
+  const [cards, setCards] = useState<Record<string, EpisodeCard | 'done'>>({});
+
+  // Série: o foco dos detalhes já cai no episódio onde o espectador parou (ou no seguinte).
+  const openContinue = (title: Title, season?: number, episode?: number) => {
+    if (title.type === 'series' && season != null && episode != null) {
+      rememberFocusFor(`#${titlePath(title)}`, `episode:${season}:${episode}`);
+    }
+    navigate(titlePath(title));
+  };
+
+  // Séries de Continuar assistindo: a lista de episódios diz a imagem do
+  // episódio e, se ele já terminou, qual vem depois.
+  useEffect(() => {
+    if (!data) return;
+    let alive = true;
+    const saved = getAllProgress();
+    Object.keys(saved)
+      .filter((id) => saved[id].title && saved[id].title.type === 'series' && saved[id].season != null)
+      .forEach((id) => {
+        const p = saved[id];
+        const season = p.season as number;
+        const episode = p.episode as number;
+        catalog.getSeasons('series', id).then(
+          (seasons) => {
+            if (!alive || !seasons.length) return;
+            let card: EpisodeCard | 'done';
+            if (isFinished(p)) {
+              const after = followingEpisode(seasons, season, episode);
+              card = after
+                ? { season: after.season, episode: after.episode.number, image: after.episode.thumbnail, next: true }
+                : 'done';
+            } else {
+              const current = findEpisode(seasons, season, episode);
+              card = { season, episode, image: current && current.thumbnail, next: false };
+              // guarda para a próxima abertura já mostrar a imagem certa
+              if (current && current.thumbnail) rememberStill(id, season, episode, current.thumbnail);
+            }
+            setCards((c) => ({ ...c, [id]: card }));
+          },
+          () => undefined,
+        );
+      });
+    return () => {
+      alive = false;
+    };
+  }, [data, version]);
 
   useEffect(() => {
     let alive = true;
     Promise.all([catalog.getFeatured(), catalog.listRows()]).then(
       ([featured, refs]) => {
         if (!alive) return;
-        const rows: RowSource[] = refs.map((ref) => ({ ...ref, load: () => catalog.loadRow(ref) }));
-        const resume = continueWatchingRow();
-        if (resume) rows.splice(1, 0, resume);
-        setData({ featured, rows });
+        setData({ featured, rows: refs.map((ref) => ({ ...ref, load: () => catalog.loadRow(ref) })) });
       },
       () => alive && setFailed(true),
     );
@@ -66,6 +163,15 @@ export default function Home() {
       alive = false;
     };
   }, []);
+
+  // Continuar assistindo vem antes de tudo; refeito quando chegam dados de outra TV.
+  const rows = useMemo(() => {
+    if (!data) return [];
+    const resume = continueWatchingRow(version, cards, openContinue);
+    return resume ? [resume, ...data.rows] : data.rows;
+    // openContinue só usa navigate, estável
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, version, cards]);
 
   usePageFocus((!!data && rowsReady) || failed);
 
@@ -101,7 +207,7 @@ export default function Home() {
             />
           )}
           <Rows
-            rows={data.rows}
+            rows={rows}
             autoFocusFirst={featured.length === 0}
             onFocus={() => setInRows(true)}
             onReady={() => setRowsReady(true)}

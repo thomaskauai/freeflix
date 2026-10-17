@@ -20,7 +20,7 @@ O app desenha em px de TV (palco de 1920×1080 na proporção 16:9) e ocupa a ja
 | Selecionar | Enter | OK |
 | Voltar | Esc ou Backspace | Back |
 | Reproduzir / pausar | Espaço | Play/Pause |
-| Avançar / voltar 10 s | → / ← no botão de play | FF / RW |
+| Avançar / voltar (segurar acelera: 10 s até 2 min por toque) | → / ← na linha do tempo | FF / RW |
 
 Na busca, no computador, também dá para digitar direto.
 
@@ -60,10 +60,38 @@ opção; as outras fontes entram como reserva se ela falhar.
 - **Destaques** (topo, 4): dois filmes e duas séries das listas "em alta", sorteados com peso
   60% pela posição em alta e 40% pela nota IMDb (sem fotograma, sinopse ou com nota abaixo
   de 6,5 ficam de fora). Os pontos ao lado dos botões passam entre eles.
-- **Fileiras**: Filmes em alta e Séries em alta no topo, depois Notas altas no IMDb (7,5+,
+- **Continuar assistindo** (primeira fileira): cartões horizontais com a imagem do episódio
+  onde o espectador parou. Episódio terminado vira o seguinte ("Próximo episódio"); série sem
+  próximo episódio e filme terminado saem. Série abre nos detalhes com o foco no episódio.
+- **Fileiras**: Filmes em alta e Séries em alta, depois Notas altas no IMDb (7,5+,
   alternando filme e série), depois as demais listas do catálogo em ordem sorteada. Listas
   sem ordem de data abrem numa das 3 primeiras páginas, embaralhadas. O sorteio muda a cada
   abertura do app e fica igual enquanto ele está aberto.
+
+## Sincronizar histórico entre TVs
+
+Sem conta nem e-mail: um **código da casa** de 8 números. Em Configurações, "Sincronizar
+histórico entre TVs" cria um código (o servidor sorteia um que ainda não existe) ou vincula
+esta TV a um que já existe ("Já tenho um código": teclado numérico na tela, setas e OK, ou os
+números do controle). Nada aparece na primeira abertura do app.
+
+- O servidor é a fonte da verdade; o aparelho guarda cache e uma fila de envio.
+- Posição vai ao servidor no máximo a cada 10 s, e na hora ao pausar e ao sair do player.
+  Posição igual à última enviada não gera requisição (vídeo pausado).
+- Começar um conteúdo registra no histórico; terminar marca como visto.
+- Ao abrir o app (e ao voltar a ele depois de 30 s), busca da casa e junta com o do
+  aparelho: em cada conteúdo vale o registro mais recente. O que está mais novo no aparelho
+  sobe, então uma TV que ficou sem rede alcança as outras. Vincular junta o que a TV já tinha.
+- Visto até o fim aparece só nos detalhes ("Assistido" no filme e nos episódios).
+- 5 códigos errados seguidos travam o aparelho por 10 min (pela rede, 20). Código errado
+  conta em qualquer rota, não só ao vincular. Criar códigos: 20 por hora por rede.
+
+Backend: funções da Vercel em `api/` (`house.ts` cria e vincula; `sync.ts` lê e grava),
+Postgres Neon ligado ao projeto pela Vercel (`DATABASE_URL`). As tabelas `houses`,
+`progress`, `history` e `code_attempts` são criadas na primeira chamada. O app da TV chama
+`https://freefliix.vercel.app/api`; no navegador, o mesmo endereço do site
+(`VITE_API_BASE` troca). Para rodar local com as funções: `vercel env pull .env.local` e
+`vercel dev`.
 
 ## Legendas
 
@@ -96,7 +124,8 @@ src/streams/      fontes instaladas, parser, ranking, teste de rede
 src/settings.ts   endereço do catálogo e idioma escolhido
 src/platform/     acesso a window.tizen, com guarda
 src/components/   Stage, Sidebar, Hero, Row, Card, PlayerShell, VideoPlayer…
-src/pages/        Home, Browse, Details, Search, MyList, Watch, Settings, AddSource
+src/pages/        Home, Browse, Details, Search, MyList, Watch, Settings, AddSource, LinkHouse
+api/              funções da Vercel: código da casa e sincronização (Postgres Neon)
 config.xml        manifest Tizen, para a Fase 2
 ```
 

@@ -7,7 +7,7 @@ import { titlePath } from '../nav';
 
 interface CardProps {
   title: Title;
-  variant: 'poster' | 'tall';
+  variant: 'poster' | 'tall' | 'wide';
   focusId: string;
   autoFocus?: boolean;
   /** 0..1, mostra a barra de "continuar assistindo" */
@@ -16,6 +16,12 @@ interface CardProps {
   anchor?: number;
   /** nota IMDb no lugar do ano */
   showRating?: boolean;
+  /** imagem no lugar do cartaz (no cartão horizontal, a do episódio ou o fotograma) */
+  image?: string;
+  /** linha de informação no lugar de ano e tipo */
+  info?: string;
+  /** escolher o card; sem isso, abre os detalhes */
+  onSelect?: () => void;
 }
 
 /** foco parado por este tempo num cartão adianta a busca dos detalhes */
@@ -35,12 +41,24 @@ export function fallbackArt(id: string) {
 }
 
 /** Cartaz arredondado com título e uma linha de informação embaixo. */
-export function Card({ title, variant, focusId, autoFocus, progress, anchor, showRating }: CardProps) {
+export function Card({
+  title,
+  variant,
+  focusId,
+  autoFocus,
+  progress,
+  anchor,
+  showRating,
+  image,
+  info,
+  onSelect,
+}: CardProps) {
   const navigate = useNavigate();
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const focus = useFocusable({ id: focusId, autoFocus });
-  const hasImage = !!title.poster && !failed;
+  const picture = image ?? (variant === 'wide' ? (title.backdrop ?? title.poster) : title.poster);
+  const hasImage = !!picture && !failed;
 
   // Foco parado no cartão: os detalhes deste título já começam a ser buscados,
   // porque o servidor do catálogo leva segundos. Passando direto, nada é pedido.
@@ -61,13 +79,13 @@ export function Card({ title, variant, focusId, autoFocus, progress, anchor, sho
       data-scroll-anchor={anchor}
       onFocus={onFocus}
       onBlur={() => window.clearTimeout(prefetch.current)}
-      onClick={() => navigate(titlePath(title))}
+      onClick={onSelect ?? (() => navigate(titlePath(title)))}
     >
       <div className="card__art">
         {hasImage ? (
           <img
             className={`card__img${loaded ? ' is-loaded' : ''}`}
-            src={title.poster}
+            src={picture}
             alt=""
             decoding="async"
             onLoad={() => setLoaded(true)}
@@ -87,14 +105,18 @@ export function Card({ title, variant, focusId, autoFocus, progress, anchor, sho
       <div className="card__text">
         <div className="card__title">{title.title}</div>
         <div className="card__info">
-          {showRating && title.rating ? (
-            <span className="card__rating">IMDb {title.rating} • </span>
-          ) : title.year ? (
-            `${title.year} • `
-          ) : (
-            ''
+          {info ?? (
+            <>
+              {showRating && title.rating ? (
+                <span className="card__rating">IMDb {title.rating} • </span>
+              ) : title.year ? (
+                `${title.year} • `
+              ) : (
+                ''
+              )}
+              {title.type === 'series' ? 'Série' : 'Filme'}
+            </>
           )}
-          {title.type === 'series' ? 'Série' : 'Filme'}
         </div>
       </div>
     </div>

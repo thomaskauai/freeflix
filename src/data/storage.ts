@@ -12,6 +12,8 @@ export interface TitleSnapshot {
   backdrop?: string;
   logo?: string;
   year?: number;
+  /** imagem do episódio onde o espectador parou (cartão horizontal de Continuar assistindo) */
+  still?: string;
 }
 
 export interface Progress {
@@ -22,12 +24,14 @@ export interface Progress {
   time: number;
   duration: number;
   updatedAt: number;
+  /** visto até o fim (marcado aqui ou em outra TV da casa) */
+  finished?: boolean;
 }
 
 // Prefixo de quando havia mais de um catálogo: mantido para não perder lista e progresso já guardados.
 const key = (name: string) => `freeflix.freeflix.${name}`;
 
-function read<T>(name: string, fallback: T): T {
+export function read<T>(name: string, fallback: T): T {
   try {
     const value = window.localStorage.getItem(key(name));
     return value ? (JSON.parse(value) as T) : fallback;
@@ -36,7 +40,7 @@ function read<T>(name: string, fallback: T): T {
   }
 }
 
-function write(name: string, value: unknown) {
+export function write(name: string, value: unknown) {
   try {
     window.localStorage.setItem(key(name), JSON.stringify(value));
   } catch {
@@ -60,6 +64,18 @@ export const titleFromSnapshot = (s: TitleSnapshot): Title => ({ ...s, genres: [
 export interface EpisodeProgress {
   time: number;
   duration: number;
+  updatedAt?: number;
+  /** visto até o fim (marcado aqui ou em outra TV da casa) */
+  finished?: boolean;
+}
+
+/** Algo que começou a ser visto: "id" (filme) ou "id:temporada:episódio". */
+export interface Watched {
+  titleId: string;
+  season?: number;
+  episode?: number;
+  watchedAt: number;
+  finished: boolean;
 }
 
 /** Créditos não contam: faltando isso, o vídeo já foi visto. */
@@ -67,10 +83,14 @@ const FINISH_MARGIN_S = 30;
 const FINISH_MARGIN = 0.05;
 
 /** Visto até o fim (ou até os créditos)? */
-export const isFinished = (p: { time: number; duration: number }) =>
-  p.duration > 0 && p.time >= p.duration - Math.max(FINISH_MARGIN_S, p.duration * FINISH_MARGIN);
+export const isFinished = (p: { time: number; duration: number; finished?: boolean }) =>
+  !!p.finished || (p.duration > 0 && p.time >= p.duration - Math.max(FINISH_MARGIN_S, p.duration * FINISH_MARGIN));
 
-const episodeKey = (season: number, episode: number) => `${season}:${episode}`;
+export const episodeKey = (season: number, episode: number) => `${season}:${episode}`;
+
+/** Id do que foi assistido: o do título (filme) ou com temporada e episódio. */
+export const contentIdOf = (titleId: string, season?: number, episode?: number) =>
+  season != null && episode != null ? `${titleId}:${season}:${episode}` : titleId;
 
 export function getAllProgress(): Record<string, Progress> {
   return read<Record<string, Progress>>('progress', {});
@@ -80,22 +100,70 @@ export function getProgress(id: string): Progress | undefined {
   return getAllProgress()[id];
 }
 
-export function saveProgress(title: Title, p: Omit<Progress, 'updatedAt' | 'title'>) {
+/** Grava onde o vídeo está. `still` é a imagem do episódio, para o cartão de Continuar assistindo. */
+export function saveProgress(title: Title, p: Omit<Progress, 'updatedAt' | 'title'>, still?: string) {
+  const now = Date.now();
   const all = getAllProgress();
-  all[title.id] = { ...p, title: snapshotOf(title), updatedAt: Date.now() };
+  const finished = isFinished(p);
+  // a imagem do episódio chega depois da lista de episódios; até lá vale a já guardada dele
+  const before = all[title.id];
+  const sameEpisode = !!before && before.season === p.season && before.episode === p.episode;
+  const image = still ?? (sameEpisode ? before.title.still : undefined);
+  all[title.id] = { ...p, finished, title: { ...snapshotOf(title), still: image }, updatedAt: now };
   write('progress', all);
   if (p.season != null && p.episode != null) {
-    const episodes = read<Record<string, Record<string, EpisodeProgress>>>('episodes', {});
+    const episodes = getAllEpisodeProgress();
     const mine = episodes[title.id] ?? {};
-    mine[episodeKey(p.season, p.episode)] = { time: Math.round(p.time), duration: Math.round(p.duration) };
+    mine[episodeKey(p.season, p.episode)] = {
+      time: Math.round(p.time),
+      duration: Math.round(p.duration),
+      updatedAt: now,
+      finished,
+    };
     episodes[title.id] = mine;
     write('episodes', episodes);
   }
 }
 
+/** Imagem do episódio guardado em Continuar assistindo, sem mexer no horário (não sincroniza de novo). */
+export function rememberStill(titleId: string, season: number, episode: number, still: string) {
+  const all = getAllProgress();
+  const p = all[titleId];
+  if (!p || p.season !== season || p.episode !== episode || p.title.still === still) return;
+  all[titleId] = { ...p, title: { ...p.title, still } };
+  write('progress', all);
+}
+
+export const getAllEpisodeProgress = () => read<Record<string, Record<string, EpisodeProgress>>>('episodes', {});
+
 /** Progresso de cada episódio da série já aberto neste aparelho: "temporada:episódio" -> progresso. */
 export function getEpisodeProgress(id: string): Record<string, EpisodeProgress> {
-  return read<Record<string, Record<string, EpisodeProgress>>>('episodes', {})[id] ?? {};
+  return getAllEpisodeProgress()[id] ?? {};
+}
+
+/** Tudo que já começou a ser visto, por contentIdOf. */
+export const getHistory = () => read<Record<string, Watched>>('history', {});
+
+/** Começou (ou terminou) de ver: entra no histórico. Devolve a entrada se mudou. */
+export function recordWatched(
+  titleId: string,
+  season: number | undefined,
+  episode: number | undefined,
+  finished: boolean,
+) {
+  const all = getHistory();
+  const id = contentIdOf(titleId, season, episode);
+  const before = all[id];
+  if (before && (before.finished || !finished) && Date.now() - before.watchedAt < 60 * 1000) return null;
+  all[id] = { titleId, season, episode, watchedAt: Date.now(), finished: finished || (!!before && before.finished) };
+  write('history', all);
+  return { id, entry: all[id] };
+}
+
+/** Visto até o fim, por este ou outro aparelho da casa? */
+export function wasFinished(titleId: string, season?: number, episode?: number): boolean {
+  const entry = getHistory()[contentIdOf(titleId, season, episode)];
+  return !!entry && entry.finished;
 }
 
 export const episodeProgressOf = (all: Record<string, EpisodeProgress>, season: number, episode: number) =>

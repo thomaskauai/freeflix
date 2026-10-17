@@ -23,7 +23,7 @@ const SEEK_COMMIT_MS = 650;
 /** o aviso de quanto avançou fica mais um pouco depois do pulo */
 const SEEK_FEEDBACK_MS = 1300;
 /** o cartão do próximo episódio aparece nesse tanto antes do fim */
-const UPNEXT_S = 10;
+const UPNEXT_S = 20;
 const SAVE_EVERY_MS = 5000;
 /** fonte que não começa a tocar nesse tempo é dada como ruim */
 const START_TIMEOUT_MS = 15000;
@@ -102,7 +102,8 @@ interface PlayerShellProps {
   onPickSource?: (index: number) => void;
   /** a fonte não tocou; sem isso, o shell mostra o erro */
   onFail?: () => void;
-  onProgress: (time: number, duration: number) => void;
+  /** onde o vídeo está: a cada poucos segundos (tick), ao pausar e ao sair do player */
+  onProgress: (time: number, duration: number, moment: 'tick' | 'pause' | 'exit') => void;
   onExit: () => void;
   /** imagem do episódio, ao lado do título enquanto o vídeo carrega */
   thumb?: string;
@@ -232,12 +233,23 @@ export function PlayerShell({
       if (isFinite(media.duration) && media.duration > 0) setLength(media.duration);
       if (startAt > 0 && startAt < media.duration && media.currentTime < 1) media.currentTime = startAt;
     };
-    const onTime = () => setTime(media.currentTime);
+    // Na TV o tempo andando é o sinal mais confiável de que o vídeo começou
+    // (o pulo para onde o espectador parou também muda o tempo, e não conta).
+    let last = media.currentTime;
+    const onTime = () => {
+      setTime(media.currentTime);
+      const step = media.currentTime - last;
+      if (!started && !media.paused && !media.seeking && step > 0.05 && step < 2) onReady();
+      last = media.currentTime;
+    };
     const onPlay = () => {
       setPlaying(true);
       wake();
     };
-    const onPause = () => setPlaying(false);
+    const onPause = () => {
+      setPlaying(false);
+      if (media.currentTime > 0 && !media.ended) progressRef.current(media.currentTime, lengthRef.current, 'pause');
+    };
     const onEnded = () => {
       setPlaying(false);
       goNext();
@@ -285,10 +297,13 @@ export function PlayerShell({
 
   useEffect(() => {
     if (mode !== 'video') return;
-    const save = window.setInterval(() => progressRef.current(timeRef.current, lengthRef.current), SAVE_EVERY_MS);
+    const save = window.setInterval(
+      () => progressRef.current(timeRef.current, lengthRef.current, 'tick'),
+      SAVE_EVERY_MS,
+    );
     return () => {
       window.clearInterval(save);
-      if (timeRef.current > 0) progressRef.current(timeRef.current, lengthRef.current);
+      if (timeRef.current > 0) progressRef.current(timeRef.current, lengthRef.current, 'exit');
     };
   }, [mode]);
 

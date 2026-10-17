@@ -41,7 +41,8 @@ export interface Season {
   episodes: Episode[];
 }
 
-export type RowStyle = 'poster' | 'tall';
+/** wide: cartão horizontal (16:9), usado em Continuar assistindo */
+export type RowStyle = 'poster' | 'tall' | 'wide';
 
 /** Descritor de uma fileira; os itens vêm depois, por loadRow. */
 export interface RowRef {

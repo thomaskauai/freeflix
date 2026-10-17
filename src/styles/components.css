@@ -350,6 +350,17 @@
   object-position: 0 100%;
   -webkit-filter: drop-shadow(0 2px 18px rgba(0, 0, 0, 0.55));
   filter: drop-shadow(0 2px 18px rgba(0, 0, 0, 0.55));
+  opacity: 0;
+  transition: opacity 250ms linear;
+  /* camada própria: o fade do fundo por baixo não obriga a redesenhar a arte */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: opacity;
+}
+
+.hero__title--logo img.is-loaded,
+.details__title--logo img.is-loaded {
+  opacity: 1;
 }
 
 .hero__title--logo,
@@ -532,6 +543,33 @@
 
 .card--tall {
   width: var(--tall-w);
+}
+
+.card--wide {
+  width: var(--wide-w);
+}
+
+.card--wide .card__art {
+  height: var(--wide-h);
+}
+
+/* no cartão horizontal o fotograma enquadra pelo centro */
+.card--wide .card__img {
+  object-position: 50% 50%;
+}
+
+.card--wide .card__title {
+  font-size: 26px;
+  line-height: 32px;
+}
+
+/* barra de progresso na borda de baixo da imagem */
+.card--wide .card__progress {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 6px;
+  border-radius: 0 0 var(--card-radius) var(--card-radius);
 }
 
 .card__art {
@@ -854,28 +892,36 @@
   opacity: 0.38;
 }
 
+.watched-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 11px 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.16);
+  font-size: 16px;
+  line-height: 21px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.watched-tag svg {
+  width: 17px;
+  height: 17px;
+  margin-right: 6px;
+  stroke-width: 2.4;
+}
+
 .episode__watched {
   position: absolute;
   top: 12px;
   right: 12px;
-  display: flex;
-  align-items: center;
-  padding: 5px 12px 5px 8px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.75);
-  font-size: 16px;
-  line-height: 20px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
-.episode__watched svg {
-  width: 20px;
-  height: 20px;
-  margin-right: 6px;
-  color: var(--red);
-  stroke-width: 2.6;
+.details__watched {
+  margin-top: 16px;
 }
 
 /* quanto já foi visto, na borda de baixo da imagem */
@@ -1542,7 +1588,7 @@
   text-overflow: ellipsis;
 }
 
-/* a contagem de 10 s enchendo a borda de baixo */
+/* a contagem até o próximo episódio enchendo a borda de baixo */
 .upnext__timer {
   position: absolute;
   left: 0;
@@ -1747,6 +1793,10 @@
   top: calc(var(--row-title-size) + var(--row-title-gap) + var(--poster-h) / 2);
 }
 
+.row--wide .row__arrow {
+  top: calc(var(--row-title-size) + var(--row-title-gap) + var(--wide-h) / 2);
+}
+
 .row--tall .row__arrow {
   top: calc(var(--row-title-size) + var(--row-title-gap) + var(--tall-h) / 2);
 }
@@ -1940,6 +1990,135 @@
   color: rgba(255, 255, 255, 0.35);
 }
 
+/* ---------- Código da casa ---------- */
+
+.house__code {
+  margin-top: 6px;
+  font-size: 72px;
+  line-height: 80px;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings__warning {
+  margin-top: 8px;
+  font-size: 23px;
+  line-height: 32px;
+  font-weight: 600;
+  color: #f5c518;
+}
+
+.house__slots {
+  display: flex;
+  margin-top: 30px;
+}
+
+.house__slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 70px;
+  height: 88px;
+  margin-right: 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.12);
+  font-size: 46px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* onde entra o próximo número */
+.house__slot.is-next {
+  box-shadow: inset 0 0 0 3px var(--white);
+}
+
+/* espaço no meio: 1234 5678 */
+.house__slot.is-split {
+  margin-right: 34px;
+}
+
+.house__status {
+  min-height: 32px;
+  margin-top: 16px;
+  font-size: 23px;
+  line-height: 32px;
+  color: var(--smoke);
+}
+
+.house__status.is-error {
+  color: #ff8a8f;
+}
+
+/* teclado numérico grande, para o controle remoto */
+.pad {
+  margin-top: 14px;
+}
+
+.pad__row {
+  display: flex;
+}
+
+.pad__key {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 128px;
+  height: 92px;
+  margin: 0 12px 12px 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 42px;
+  font-weight: 600;
+  transition: background-color var(--focus-ms) linear, color var(--focus-ms) linear,
+    transform var(--focus-ms) var(--ease);
+}
+
+.pad__key svg {
+  width: 40px;
+  height: 40px;
+}
+
+.pad__key:focus {
+  background: var(--white);
+  color: var(--black);
+  transform: scale(1.06);
+}
+
+.pad__key.is-disabled {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.pad__key.is-disabled:focus {
+  background: rgba(255, 255, 255, 0.5);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.is-compact .house__slot {
+  width: calc((var(--stage-w) - 56px - 7 * 8px - 16px) / 8);
+  height: 64px;
+  margin-right: 8px;
+  font-size: 32px;
+}
+
+.is-compact .house__slot.is-split {
+  margin-right: 24px;
+}
+
+.is-compact .house__code {
+  font-size: 52px;
+  line-height: 60px;
+}
+
+.is-compact .pad__key {
+  width: calc((var(--stage-w) - 56px - 24px) / 3);
+  height: 76px;
+}
+
+.is-compact .pad__key:nth-child(3n) {
+  margin-right: 0;
+}
+
 .settings__error {
   margin-top: 14px;
   font-size: 23px;
@@ -2124,6 +2303,8 @@
   --tall-h: calc(var(--stage-w) * 0.6);
   --episode-w: calc(var(--stage-w) * 0.62);
   --episode-h: calc(var(--stage-w) * 0.356);
+  --wide-w: calc(var(--stage-w) * 0.78);
+  --wide-h: calc(var(--stage-w) * 0.439);
 }
 
 /* a barra de navegação ocupa o pé da tela; as páginas terminam acima dela */

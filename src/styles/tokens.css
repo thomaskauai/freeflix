@@ -54,6 +54,9 @@
   /* destaque: mesmo cartaz 2:3, maior. O 357×704 da referência ficava alto demais */
   --tall-w: 300px;
   --tall-h: 450px;
+  /* cartão horizontal de Continuar assistindo, em 16:9 */
+  --wide-w: 520px;
+  --wide-h: 293px;
   --episode-w: 392px;
   --episode-h: 225px;
 

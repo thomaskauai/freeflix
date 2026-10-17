@@ -12,3 +12,6 @@ tizen-cert/
 # cópia local de outro projeto, usada só como referência
 NuvioSource/
 .DS_Store
+.vercel
+.env*
+!.env.example

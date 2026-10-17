@@ -17,6 +17,12 @@ export interface RowSource {
   progress?: Record<string, number>;
   /** cards mostram a nota IMDb */
   showRating?: boolean;
+  /** imagem própria de cada card (id do título -> url), no lugar do cartaz */
+  images?: Record<string, string | undefined>;
+  /** linha de informação própria de cada card (id do título -> texto) */
+  infos?: Record<string, string>;
+  /** o que fazer ao escolher o card; sem isso, abre os detalhes */
+  onSelect?: (title: Title) => void;
 }
 
 /** quantas fileiras além da focada ficam carregadas */
@@ -75,6 +81,9 @@ function LazyRow({ source, wanted, anchor, passed, autoFocusFirst, onActivate, o
               autoFocus={autoFocusFirst && i === 0}
               progress={source.progress ? source.progress[title.id] : undefined}
               showRating={source.showRating}
+              image={source.images ? source.images[title.id] : undefined}
+              info={source.infos ? source.infos[title.id] : undefined}
+              onSelect={source.onSelect ? () => source.onSelect && source.onSelect(title) : undefined}
             />
           ))
         : Array.from({ length: SKELETONS }, (_, i) => (

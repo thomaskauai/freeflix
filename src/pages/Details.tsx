@@ -19,8 +19,10 @@ import {
   inMyList,
   isFinished,
   toggleMyList,
+  wasFinished,
   type EpisodeProgress,
 } from '../data/storage';
+import { useSyncVersion } from '../data/sync';
 import type { Episode, Season, Title, TitleType } from '../data/types';
 import { focusElement, rememberedFocus } from '../focus/FocusContext';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
@@ -76,7 +78,7 @@ function EpisodeCard({
         {image && <img src={image} alt="" decoding="async" onError={() => setFailed(true)} />}
         <span className="episode__number display">{episode.number}</span>
         {watched && (
-          <span className="episode__watched">
+          <span className="watched-tag episode__watched">
             <Icon name="check" />
             Assistido
           </span>
@@ -109,6 +111,8 @@ export default function Details() {
   const id = params.id ?? '';
   const type: TitleType = params.type === 'series' ? 'series' : 'movie';
   const navigate = useNavigate();
+  // posições e episódios vistos em outra TV da casa redesenham a página
+  useSyncVersion();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [similar, setSimilar] = useState<{ id: string; items: Title[] } | null>(null);
   const [failed, setFailed] = useState(false);
@@ -204,6 +208,7 @@ export default function Details() {
   const seasons = data ? data.seasons : [];
   const similarItems = similar && similar.id === id ? similar.items : [];
   const saved = getProgress(id);
+  const movieWatched = title.type === 'movie' && ((!!saved && isFinished(saved)) || wasFinished(id));
   const isSeries = title.type === 'series';
   const resume = resumeEpisode(id, seasons);
   const episodes = isSeries ? getEpisodeProgress(id) : {};
@@ -234,6 +239,12 @@ export default function Details() {
               <p className="details__original">{title.originalTitle}</p>
             )}
             <Meta title={title} />
+            {movieWatched && (
+              <span className="watched-tag details__watched">
+                <Icon name="check" />
+                Assistido
+              </span>
+            )}
             <p className="details__synopsis">{title.synopsis}</p>
             <div className="details__actions">
               <Button icon="play" id="details-play" autoFocus onClick={play}>
@@ -287,7 +298,12 @@ export default function Details() {
                   still={title.backdrop ?? title.poster}
                   art={fallbackArt(id)}
                   focusId={`episode:${current.number}:${episode.number}`}
-                  progress={episodeProgressOf(episodes, current.number, episode.number)}
+                  progress={
+                    episodeProgressOf(episodes, current.number, episode.number) ??
+                    (wasFinished(id, current.number, episode.number)
+                      ? { time: 0, duration: 0, finished: true }
+                      : undefined)
+                  }
                   onSelect={() => navigate(watchPath(title, current.number, episode.number))}
                   onDwell={() => data && planFor(data.title, current.number, episode.number)}
                 />
