@@ -10,7 +10,7 @@ import { catalog } from '../data/provider';
 import { getAllProgress, isFinished, rememberStill, titleFromSnapshot, type Progress } from '../data/storage';
 import { useSyncVersion } from '../data/sync';
 import type { Title } from '../data/types';
-import { focusElement, rememberFocusFor } from '../focus/FocusContext';
+import { focusElement } from '../focus/FocusContext';
 import { useKeyHandler } from '../focus/keys';
 import { usePageFocus } from '../focus/useFocusable';
 import { titlePath, watchPath } from '../nav';
@@ -36,7 +36,7 @@ function remainingInfo(p: Progress): string {
  * Continuar assistindo: primeira fileira da Home, em cartões horizontais com a
  * imagem do episódio onde o espectador parou (ou o fotograma do título). Série
  * com o episódio já terminado mostra o seguinte; sem seguinte, sai da fileira.
- * Série abre nos detalhes com o foco já na temporada e no episódio.
+ * Escolher o card dá play direto.
  */
 function continueWatchingRow(
   version: number,
@@ -105,12 +105,12 @@ export default function Home() {
 
   const [cards, setCards] = useState<Record<string, EpisodeCard | 'done'>>({});
 
-  // Série: o foco dos detalhes já cai no episódio onde o espectador parou (ou no seguinte).
+  // Continuar assistindo vai direto para o player. Por baixo dele fica a tela do
+  // título: Voltar sai do player para ela.
   const openContinue = (title: Title, season?: number, episode?: number) => {
-    if (title.type === 'series' && season != null && episode != null) {
-      rememberFocusFor(`#${titlePath(title)}`, `episode:${season}:${episode}`);
-    }
+    const isEpisode = title.type === 'series' && season != null && episode != null;
     navigate(titlePath(title));
+    navigate(isEpisode ? watchPath(title, season, episode) : watchPath(title));
   };
 
   // Séries de Continuar assistindo: a lista de episódios diz a imagem do

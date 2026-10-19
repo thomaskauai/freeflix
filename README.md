@@ -68,12 +68,21 @@ opção; as outras fontes entram como reserva se ela falhar.
   sem ordem de data abrem numa das 3 primeiras páginas, embaralhadas. O sorteio muda a cada
   abertura do app e fica igual enquanto ele está aberto.
 
-## Sincronizar histórico entre TVs
+## Sincronizar entre TVs
 
-Sem conta nem e-mail: um **código da casa** de 8 números. Em Configurações, "Sincronizar
-histórico entre TVs" cria um código (o servidor sorteia um que ainda não existe) ou vincula
-esta TV a um que já existe ("Já tenho um código": teclado numérico na tela, setas e OK, ou os
-números do controle). Nada aparece na primeira abertura do app.
+Sem conta nem e-mail. Em Configurações, seção **Sincronizar entre TVs** (penúltima):
+
+- **Criar código**: a TV mostra um QR code. O celular que o abrir (`/parear.html`) cria o
+  código da casa (6 números, "123 456") e mostra como usá-lo; a TV do QR entra na casa
+  sozinha. O QR vale 15 min.
+- **Já tenho um código**: modal com teclado numérico (setas e OK, ou os números do
+  controle). No sexto número o código já é conferido.
+- A tela mostra sempre o código da casa e o botão Desvincular esta TV.
+
+Cada aparelho tem um id próprio: na Samsung sai do identificador da TV (DUID, só um resumo
+dele vai ao servidor), fora dela é sorteado. O servidor guarda de que casa é cada aparelho,
+então a TV reinstalada (ou com os dados apagados) volta sozinha para a casa. Desvincular
+apaga esse registro.
 
 - O servidor é a fonte da verdade; o aparelho guarda cache e uma fila de envio.
 - Posição vai ao servidor no máximo a cada 10 s, e na hora ao pausar e ao sair do player.
@@ -81,13 +90,15 @@ números do controle). Nada aparece na primeira abertura do app.
 - Começar um conteúdo registra no histórico; terminar marca como visto.
 - Ao abrir o app (e ao voltar a ele depois de 30 s), busca da casa e junta com o do
   aparelho: em cada conteúdo vale o registro mais recente. O que está mais novo no aparelho
-  sobe, então uma TV que ficou sem rede alcança as outras. Vincular junta o que a TV já tinha.
+  sobe, então uma TV que ficou sem rede alcança as outras. Entrar numa casa junta o que a TV
+  já tinha.
 - Visto até o fim aparece só nos detalhes ("Assistido" no filme e nos episódios).
 - 5 códigos errados seguidos travam o aparelho por 10 min (pela rede, 20). Código errado
-  conta em qualquer rota, não só ao vincular. Criar códigos: 20 por hora por rede.
+  conta em qualquer rota, não só ao vincular. QR codes novos: 60 por hora por rede.
 
-Backend: funções da Vercel em `api/` (`house.ts` cria e vincula; `sync.ts` lê e grava),
-Postgres Neon ligado ao projeto pela Vercel (`DATABASE_URL`). As tabelas `houses`,
+Backend: funções da Vercel em `api/` (`pair.ts` QR e criação da casa; `house.ts` vincular,
+desvincular e recuperar pelo aparelho; `sync.ts` lê e grava), Postgres Neon ligado ao
+projeto pela Vercel (`DATABASE_URL`). As tabelas `houses`, `devices`, `pairings`,
 `progress`, `history` e `code_attempts` são criadas na primeira chamada. O app da TV chama
 `https://freefliix.vercel.app/api`; no navegador, o mesmo endereço do site
 (`VITE_API_BASE` troca). Para rodar local com as funções: `vercel env pull .env.local` e
@@ -124,8 +135,9 @@ src/streams/      fontes instaladas, parser, ranking, teste de rede
 src/settings.ts   endereço do catálogo e idioma escolhido
 src/platform/     acesso a window.tizen, com guarda
 src/components/   Stage, Sidebar, Hero, Row, Card, PlayerShell, VideoPlayer…
-src/pages/        Home, Browse, Details, Search, MyList, Watch, Settings, AddSource, LinkHouse
+src/pages/        Home, Browse, Details, Search, MyList, Watch, Settings, AddSource
 api/              funções da Vercel: código da casa e sincronização (Postgres Neon)
+public/parear.html página do celular aberta pelo QR code
 config.xml        manifest Tizen, para a Fase 2
 ```
 

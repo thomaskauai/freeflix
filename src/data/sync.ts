@@ -1,5 +1,5 @@
 // Sincronização de Continuar assistindo e do histórico entre as TVs da casa,
-// pelo código da casa (8 dígitos, sem conta). O servidor é a fonte da verdade;
+// pelo código da casa (6 dígitos, sem conta). O servidor é a fonte da verdade;
 // o que está no aparelho é cache e fila de envio. Sem código, nada sai daqui.
 import { useEffect, useState } from 'react';
 import {
@@ -20,10 +20,13 @@ import {
 } from './storage';
 import type { Title } from './types';
 
+const SITE = 'https://freefliix.vercel.app';
 // No navegador a API está no mesmo endereço do site; o app da TV abre de file:// e usa o do site.
 const API_BASE =
   (import.meta.env.VITE_API_BASE as string | undefined) ||
-  (/^https?:$/.test(window.location.protocol) ? '' : 'https://freefliix.vercel.app');
+  (/^https?:$/.test(window.location.protocol) ? '' : SITE);
+/** onde o celular abre o link do QR code */
+const PAIR_PAGE = `${API_BASE || window.location.origin}/parear.html`;
 const API = `${API_BASE.replace(/\/$/, '')}/api`;
 const TIMEOUT_MS = 12000;
 /** posição vai ao servidor no máximo a cada 10 s; pausa e saída do player vão na hora */
@@ -35,6 +38,8 @@ export const SYNC_EVENT = 'freeflix:sync';
 
 const HOUSE_KEY = 'freeflix.house';
 const DEVICE_KEY = 'freeflix.device';
+/** código com que este aparelho já está registrado no servidor */
+const REGISTERED_KEY = 'freeflix.device.registered';
 
 function local<T>(name: string, fallback: T): T {
   try {
@@ -55,15 +60,54 @@ function keep(name: string, value: unknown) {
 }
 
 /** Código da casa desta TV, ou null se ela não sincroniza. */
-export const houseCode = (): string | null => local<{ code?: string } | null>(HOUSE_KEY, null)?.code ?? null;
+export function houseCode(): string | null {
+  const code = local<{ code?: string } | null>(HOUSE_KEY, null)?.code ?? null;
+  // códigos de 8 dígitos da primeira versão viraram os 6 últimos
+  if (code && /^[0-9]{8}$/.test(code)) {
+    keep(HOUSE_KEY, { code: code.slice(2) });
+    return code.slice(2);
+  }
+  return code;
+}
 
-/** Id aleatório deste aparelho: o servidor conta as tentativas de código por ele. */
+/** Duas passadas de FNV-1a: o identificador da TV não sai do aparelho como é. */
+function digest(text: string): string {
+  const pass = (seed: number) => {
+    let h = seed >>> 0;
+    for (let i = 0; i < text.length; i++) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    return ('0000000' + h.toString(16)).slice(-8);
+  };
+  return pass(2166136261) + pass(0x9747b28c);
+}
+
+/** Identificador da Samsung (DUID): o mesmo mesmo depois de reinstalar o app. */
+function tvIdentity(): string | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const webapis = (window as any).webapis;
+    const duid = webapis && webapis.productinfo && webapis.productinfo.getDuid();
+    return typeof duid === 'string' && duid.length > 4 ? duid : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Id deste aparelho. Na TV Samsung sai do identificador do aparelho, então a
+ * TV reencontra a casa mesmo reinstalada; fora dela, um id sorteado e guardado.
+ * O servidor também conta as tentativas de código por ele.
+ */
 function deviceId(): string {
   let id = local<string>(DEVICE_KEY, '');
-  if (!/^[A-Za-z0-9-]{8,64}$/.test(id)) {
-    id = `tv-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
-    keep(DEVICE_KEY, id);
-  }
+  if (/^[A-Za-z0-9-]{8,64}$/.test(id)) return id;
+  const duid = tvIdentity();
+  id = duid
+    ? `tv-${digest(duid)}`
+    : `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  keep(DEVICE_KEY, id);
   return id;
 }
 
@@ -216,7 +260,7 @@ function push(): Promise<void> {
       },
       (err) => {
         // código apagado no servidor: a TV deixa de sincronizar
-        if (err instanceof ApiError && err.status === 404) unlinkHouse();
+        if (err instanceof ApiError && err.status === 404) forgetHouse();
       },
     )
     .then(() => {
@@ -298,7 +342,7 @@ export function pull(): Promise<void> {
         return push();
       },
       (err) => {
-        if (err instanceof ApiError && err.status === 404) unlinkHouse();
+        if (err instanceof ApiError && err.status === 404) forgetHouse();
       },
     )
     .then(() => {
@@ -390,9 +434,32 @@ function merge(rows: ProgressRow[], historyRows: HistoryRow[]) {
   if (changed) window.dispatchEvent(new Event(SYNC_EVENT));
 }
 
-/** Busca de novo quando o app volta a aparecer e já faz um tempo. */
+/**
+ * Ao abrir o app: TV sem código pergunta ao servidor se ela já é de alguma
+ * casa (reinstalada, dados apagados); com código, busca as novidades. Depois
+ * busca de novo quando o app volta a aparecer e já faz um tempo.
+ */
 export function startSync() {
-  pull();
+  const code = houseCode();
+  if (code) {
+    pull();
+    // TV vinculada antes de o servidor guardar os aparelhos: registra uma vez
+    if (local<string>(REGISTERED_KEY, '') !== code) {
+      call('/house', { action: 'link', code, device: deviceId() }).then(
+        () => keep(REGISTERED_KEY, code),
+        () => undefined,
+      );
+    }
+  } else {
+    call(`/house?device=${encodeURIComponent(deviceId())}`).then(
+      (data) => {
+        if (typeof data.code === 'string' && !houseCode()) {
+          adopt(data.code).then(() => window.dispatchEvent(new Event(SYNC_EVENT)));
+        }
+      },
+      () => undefined,
+    );
+  }
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && Date.now() - lastPull > PULL_AGAIN_MS) pull();
   });
@@ -430,18 +497,38 @@ function failure(err: unknown): LinkResult {
 /** Vinculou: guarda o código e junta o que esta TV tinha com o que a casa já tem. */
 function adopt(code: string) {
   keep(HOUSE_KEY, { code });
+  keep(REGISTERED_KEY, code);
   write(SENT, {});
   return pull();
 }
 
-/** O servidor sorteia um código novo para esta casa. */
-export function createHouse(): Promise<LinkResult> {
-  return call('/house', { action: 'create', device: deviceId() }).then(
-    (data) => {
-      const code = String(data.code);
-      return adopt(code).then((): LinkResult => ({ status: 'ok', code }));
+export type Pairing = { status: 'waiting'; token: string; url: string } | { status: 'locked'; minutes: number } | { status: 'offline' };
+
+/** Criar código: a TV pede um QR; o celular que abrir o link cria a casa. */
+export function startPairing(): Promise<Pairing> {
+  return call('/pair', { action: 'start', device: deviceId() }).then(
+    (data): Pairing => {
+      const token = String(data.token);
+      return { status: 'waiting', token, url: `${PAIR_PAGE}?t=${token}` };
     },
-    failure,
+    (err): Pairing => {
+      const f = failure(err);
+      return f.status === 'locked' ? f : { status: 'offline' };
+    },
+  );
+}
+
+/** O celular já criou a casa? Quando sim, esta TV entra nela. */
+export function checkPairing(token: string): Promise<'waiting' | 'expired' | LinkResult> {
+  return call(`/pair?t=${token}&device=${encodeURIComponent(deviceId())}`).then(
+    (data) => {
+      if (data.status === 'done' && typeof data.code === 'string') {
+        const code = data.code;
+        return adopt(code).then((): LinkResult => ({ status: 'ok', code }));
+      }
+      return data.status === 'expired' ? 'expired' : 'waiting';
+    },
+    () => 'waiting' as const,
   );
 }
 
@@ -453,8 +540,14 @@ export function linkHouse(code: string): Promise<LinkResult> {
   );
 }
 
-/** Esta TV para de sincronizar. O que já está nela continua aqui. */
+/** Esta TV para de sincronizar (e o servidor esquece de que casa ela é). O que já está nela continua aqui. */
 export function unlinkHouse() {
+  call('/house', { action: 'unlink', device: deviceId() }).catch(() => undefined);
+  forgetHouse();
+}
+
+/** Some com o código só neste aparelho (o servidor não o conhece mais). */
+function forgetHouse() {
   keep(HOUSE_KEY, null);
   write(PENDING, { progress: {}, history: {} });
   write(SENT, {});

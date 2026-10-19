@@ -18,30 +18,46 @@ interface HeroProps {
 /** os fundos dos outros destaques começam a baixar depois que a Home assentou */
 const PRELOAD_AFTER_MS = 2500;
 
+/** arte que não chega neste tempo dá lugar ao nome em texto */
+const LOGO_WAIT_MS = 4000;
+
 /**
  * Nome da obra: a arte de título do catálogo quando existe, senão texto.
  *
- * A arte aparece uma vez, já decodificada, numa camada própria. Na TV, com
- * decodificação assíncrona, ela sumia e voltava quando o fundo terminava de
- * carregar e redesenhava a tela por baixo.
+ * A arte é baixada fora da tela e só entra pronta, sem fade: na TV Tizen a
+ * imagem escondida esperando o "load" às vezes nunca reaparecia. Enquanto
+ * carrega, o espaço fica reservado; se falhar ou demorar, vira texto.
  */
 export function TitleArt({ title, className }: { title: Title; className: string }) {
-  const [failed, setFailed] = useState(false);
-  const [loaded, setLoaded] = useState('');
-  if (title.logo && !failed) {
-    const logo = title.logo;
+  const logo = title.logo;
+  const [state, setState] = useState<{ logo: string; ok: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!logo) return;
+    let alive = true;
+    const img = new Image();
+    const done = (ok: boolean) => {
+      if (!alive) return;
+      alive = false;
+      window.clearTimeout(timer);
+      setState({ logo, ok });
+    };
+    const timer = window.setTimeout(() => done(false), LOGO_WAIT_MS);
+    img.onload = () => done(img.naturalWidth > 0);
+    img.onerror = () => done(false);
+    img.src = logo;
+    if (img.complete && img.naturalWidth > 0) done(true);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [logo]);
+
+  const current = logo && state?.logo === logo ? state : null;
+  if (logo && (!current || current.ok)) {
     return (
       <div className={`${className} ${className}--logo`}>
-        <img
-          className={loaded === logo ? 'is-loaded' : undefined}
-          src={logo}
-          alt={title.title}
-          ref={(img) => {
-            if (img && loaded !== logo && img.complete && img.naturalWidth > 0) setLoaded(logo);
-          }}
-          onLoad={() => setLoaded(logo)}
-          onError={() => setFailed(true)}
-        />
+        {current && <img src={logo} alt={title.title} />}
       </div>
     );
   }

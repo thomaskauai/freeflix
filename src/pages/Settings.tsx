@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { ScrollArea } from '../components/ScrollArea';
 import { Icon, type IconName } from '../components/Icon';
-import { focusElement } from '../focus/FocusContext';
-import { createHouse, houseCode, unlinkHouse, useSyncVersion, type LinkResult } from '../data/sync';
+import { SyncSection } from '../components/SyncSection';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
 import { AUDIO_LANGUAGES, getSettings, saveSettings, type AudioLanguage } from '../settings';
 import { lastSpeed, measureSpeed, type SpeedReading } from '../streams/network';
@@ -55,107 +54,6 @@ function SourceRow({
       </div>
       <span className="settings__source-action">{action}</span>
     </div>
-  );
-}
-
-const pretty = (code: string) => `${code.slice(0, 4)} ${code.slice(4)}`;
-
-/**
- * Sincronizar histórico entre TVs: sem código, cria um ou vai digitar um que já
- * existe; com código, mostra o código e o aviso para anotar.
- */
-function HouseSync() {
-  const navigate = useNavigate();
-  useSyncVersion();
-  const code = houseCode();
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<LinkResult | null>(null);
-  const [confirmUnlink, setConfirmUnlink] = useState(false);
-
-  // O botão em foco some (criou, desvinculou, pediu confirmação): o foco vai para o novo.
-  useEffect(() => {
-    const active = document.activeElement;
-    if (active && active !== document.body && active.isConnected) return;
-    const id = !code ? 'house-create' : confirmUnlink ? 'house-unlink-cancel' : 'house-unlink';
-    focusElement(document.querySelector<HTMLElement>(`[data-focus-id="${id}"]`));
-  }, [code, confirmUnlink]);
-
-  const create = () => {
-    if (creating) return;
-    setCreating(true);
-    setError(null);
-    createHouse().then((r) => {
-      setCreating(false);
-      if (r.status !== 'ok') setError(r);
-    });
-  };
-
-  if (code) {
-    return (
-      <section className="settings__block" data-scroll-anchor="top">
-        <h2 className="settings__title">Sincronizar histórico entre TVs</h2>
-        <p className="settings__note">Código da casa</p>
-        <p className="house__code display">{pretty(code)}</p>
-        <p className="settings__warning">Anote este código. Sem ele não é possível recuperar o histórico.</p>
-        <p className="settings__note">
-          Nas outras TVs: Configurações, Sincronizar histórico entre TVs, Já tenho um código. Continuar assistindo e os
-          episódios assistidos ficam iguais em todas.
-        </p>
-        <div className="settings__options">
-          {confirmUnlink ? (
-            <>
-              <Button
-                variant="pill"
-                id="house-unlink-confirm"
-                onClick={() => {
-                  setConfirmUnlink(false);
-                  unlinkHouse();
-                }}
-              >
-                Desvincular
-              </Button>
-              <Button variant="pill" id="house-unlink-cancel" onClick={() => setConfirmUnlink(false)}>
-                Cancelar
-              </Button>
-            </>
-          ) : (
-            <Button variant="pill" id="house-unlink" onClick={() => setConfirmUnlink(true)}>
-              Desvincular esta TV
-            </Button>
-          )}
-        </div>
-        {confirmUnlink && (
-          <p className="settings__note">
-            Esta TV para de sincronizar e mantém o que já tem. O histórico continua no código, para as outras TVs.
-          </p>
-        )}
-      </section>
-    );
-  }
-
-  return (
-    <section className="settings__block" data-scroll-anchor="top">
-      <h2 className="settings__title">Sincronizar histórico entre TVs</h2>
-      <p className="settings__note">
-        Continuar assistindo e os episódios assistidos iguais em todas as TVs da casa, sem conta nem e-mail: só um
-        código de 8 números.
-      </p>
-      {error && (
-        <p className="settings__error">
-          {error.status === 'locked'
-            ? `Muitos códigos criados por esta rede. Tente de novo em ${error.minutes} min.`
-            : 'Sem conexão com o servidor. Confira a internet e tente de novo.'}
-        </p>
-      )}
-      <div className="settings__options">
-        <Button variant="pill" icon="plus" id="house-create" onClick={create}>
-          {creating ? 'Criando…' : 'Criar código'}
-        </Button>
-        <Button variant="pill" id="house-link" onClick={() => navigate('/settings/house')}>
-          Já tenho um código
-        </Button>
-      </div>
-    </section>
   );
 }
 
@@ -223,9 +121,7 @@ export default function Settings() {
           <h1 className="page-head__title display">Configurações</h1>
         </div>
 
-        <HouseSync />
-
-        <section className="settings__block" data-scroll-anchor="200">
+        <section className="settings__block" data-scroll-anchor="top">
           <h2 className="settings__title">Fontes de vídeo</h2>
           <p className="settings__note">Addons que fornecem o vídeo dos títulos.</p>
           {sources.length === 0 && <p className="settings__empty">Nenhuma fonte instalada.</p>}
@@ -280,6 +176,8 @@ export default function Settings() {
             ))}
           </div>
         </section>
+
+        <SyncSection />
 
         <section className="settings__block" data-scroll-anchor="200">
           <h2 className="settings__title">Rede</h2>

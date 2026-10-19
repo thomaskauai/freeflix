@@ -10,9 +10,8 @@ import { catalog, previewTitle } from '../data/provider';
 import { rememberSource, saveProgress } from '../data/storage';
 import { syncProgress, syncStarted } from '../data/sync';
 import type { Season, Title, TitleType } from '../data/types';
-import { rememberFocusFor } from '../focus/FocusContext';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
-import { titlePath, useGoBack, watchPath } from '../nav';
+import { useGoBack, watchPath } from '../nav';
 import {
   firstWorking,
   markFailed,
@@ -143,17 +142,6 @@ export default function Watch() {
       alive = false;
     };
   }, [type, id]);
-
-  // Voltando para os detalhes da série, o foco cai no episódio que estava tocando.
-  const here = useRef({ id, type, season, episode });
-  here.current = { id, type, season, episode };
-  useEffect(
-    () => () => {
-      const { id: was, type: kind, season: s, episode: e } = here.current;
-      if (s != null && e != null) rememberFocusFor(`#${titlePath({ type: kind, id: was })}`, `episode:${s}:${e}`);
-    },
-    [],
-  );
 
   // Com uma fonte escolhida antes, o plano sai só com o addon dela; as outras chegam depois, como reserva.
   useEffect(() => {

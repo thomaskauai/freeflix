@@ -7,7 +7,6 @@ import { FocusProvider } from './focus/FocusContext';
 import { useKeyHandler } from './focus/keys';
 import { useGoBack } from './nav';
 import AddSource from './pages/AddSource';
-import LinkHouse from './pages/LinkHouse';
 import Browse from './pages/Browse';
 import Details from './pages/Details';
 import Home from './pages/Home';
@@ -57,7 +56,6 @@ export default function App() {
           <Route path="/list" element={<MyList />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/settings/add-source" element={<AddSource />} />
-          <Route path="/settings/house" element={<LinkHouse />} />
           <Route path="/watch/:type/:id" element={<Watch />} />
           <Route path="/watch/:type/:id/:season/:episode" element={<Watch />} />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -24,7 +24,7 @@ import {
 } from '../data/storage';
 import { useSyncVersion } from '../data/sync';
 import type { Episode, Season, Title, TitleType } from '../data/types';
-import { focusElement, rememberedFocus } from '../focus/FocusContext';
+import { forgetPage } from '../focus/FocusContext';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
 import { watchPath } from '../nav';
 import { planFor, preloadPlayback, releasePreload } from '../streams/playback';
@@ -40,6 +40,7 @@ function EpisodeCard({
   still,
   art,
   focusId,
+  isDefault,
   progress,
   onSelect,
   onDwell,
@@ -49,13 +50,15 @@ function EpisodeCard({
   /** fundo usado quando não há imagem */
   art: string;
   focusId: string;
+  /** episódio da vez: descendo até a fileira, o foco cai nele */
+  isDefault?: boolean;
   /** quanto já foi visto deste episódio neste aparelho */
   progress?: EpisodeProgress;
   onSelect: () => void;
   /** o foco ficou um tempo aqui */
   onDwell: () => void;
 }) {
-  const focus = useFocusable({ id: focusId });
+  const focus = useFocusable({ id: focusId, isDefault });
   const [failed, setFailed] = useState(false);
   const dwell = useRef(0);
   useEffect(() => () => window.clearTimeout(dwell.current), []);
@@ -103,9 +106,6 @@ interface Loaded {
   seasons: Season[];
 }
 
-/** "episode:3:8" -> temporada 3 */
-const seasonOfFocus = (focusId: string) => Number(focusId.split(':')[1]);
-
 export default function Details() {
   const params = useParams();
   const id = params.id ?? '';
@@ -121,13 +121,9 @@ export default function Details() {
   const preview = useMemo(() => previewTitle(type, id), [type, id]);
   const [season, setSeason] = useState(1);
   const [listed, setListed] = useState(false);
-  // Voltando do player, o foco vai para o episódio que estava tocando; ele só
-  // existe na tela quando os episódios chegam, então a página guarda o pedido.
-  const returnTo = useMemo(() => {
-    const remembered = rememberedFocus();
-    return remembered && remembered.indexOf('episode:') === 0 ? remembered : null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  // Ao abrir (ou voltar do player), o foco é sempre do botão de assistir: a
+  // página não devolve o foco ao último item usado nela.
+  useMemo(() => forgetPage(window.location.hash), [id]);
 
   useEffect(() => {
     let alive = true;
@@ -148,7 +144,7 @@ export default function Details() {
           navigate('/', { replace: true });
           return;
         }
-        setSeason(returnTo ? seasonOfFocus(returnTo) : resumeEpisode(id, seasons).season);
+        setSeason(resumeEpisode(id, seasons).season);
         setLoaded({ id, title, seasons });
         if (!early || !early.genres.length) findSimilar(title);
       },
@@ -180,15 +176,6 @@ export default function Details() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data && data.id]);
 
-  // Episódios na tela: se o espectador não mexeu no foco, ele vai para o episódio de onde voltou.
-  useEffect(() => {
-    if (!data || !returnTo) return;
-    const active = document.activeElement as HTMLElement | null;
-    const untouched = !active || active === document.body || active.getAttribute('data-focus-id') === 'details-play';
-    if (untouched) focusElement(document.querySelector<HTMLElement>(`[data-focus-id="${returnTo}"]`));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data && data.id]);
-
   if (failed && !data) {
     return (
       <div className="page details" data-focus-main="">
@@ -217,12 +204,14 @@ export default function Details() {
     episodeProgressOf(episodes, resume.season, resume.episode) ??
     (saved && saved.season === resume.season && saved.episode === resume.episode ? saved : undefined);
   const resuming = !!resumeProgress && resumeProgress.time > 0 && !isFinished(resumeProgress);
+  // série já começada: Continuar, mesmo que o episódio da vez ainda não tenha sido aberto
+  const started = Object.keys(episodes).length > 0 || !!saved;
   const current = seasons.filter((s) => s.number === season)[0] ?? seasons[0];
   const manySeasons = seasons.length > 1;
 
   const play = () => navigate(isSeries ? watchPath(title, resume.season, resume.episode) : watchPath(title));
   const playLabel = isSeries
-    ? `${resuming ? 'Continuar' : 'Assistir'} T${resume.season} E${resume.episode}`
+    ? `${resuming || started ? 'Continuar' : 'Assistir'} T${resume.season} E${resume.episode}`
     : saved && saved.time > 0 && !isFinished(saved)
       ? 'Continuar'
       : 'Assistir';
@@ -270,6 +259,7 @@ export default function Details() {
                   variant="pill"
                   id={`season:${s.number}`}
                   selected={s.number === season}
+                  isDefault={s.number === season}
                   onClick={() => setSeason(s.number)}
                 >
                   Temporada {s.number}
@@ -298,6 +288,7 @@ export default function Details() {
                   still={title.backdrop ?? title.poster}
                   art={fallbackArt(id)}
                   focusId={`episode:${current.number}:${episode.number}`}
+                  isDefault={current.number === resume.season && episode.number === resume.episode}
                   progress={
                     episodeProgressOf(episodes, current.number, episode.number) ??
                     (wasFinished(id, current.number, episode.number)

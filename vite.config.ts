@@ -20,7 +20,13 @@ function classicScripts(): Plugin {
     apply: 'build',
     enforce: 'post',
     transformIndexHtml(html) {
-      return html.replace(/<script type="module" crossorigin/g, '<script defer').replace(/ crossorigin/g, '');
+      return (
+        html
+          .replace(/<script type="module" crossorigin/g, '<script defer')
+          .replace(/ crossorigin/g, '')
+          // APIs da Samsung (identificador da TV), antes do app; a TV resolve o $WEBAPIS
+          .replace('</title>', '</title>\n    <script src="$WEBAPIS/webapis/webapis.js"></script>')
+      );
     },
   };
 }

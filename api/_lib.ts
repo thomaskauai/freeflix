@@ -12,7 +12,7 @@ export function ensureSchema() {
   if (!schema) {
     schema = (async () => {
       await sql`create table if not exists houses (
-        code text primary key check (code ~ '^[0-9]{8}$'),
+        code text primary key check (code ~ '^[0-9]{6}$'),
         created_at timestamptz not null default now()
       )`;
       await sql`create table if not exists progress (
@@ -38,6 +38,19 @@ export function ensureSchema() {
         watched_at timestamptz not null,
         finished boolean not null default false,
         primary key (house_code, content_id)
+      )`;
+      // cada aparelho sabe de que casa é: reinstalado, volta sozinho
+      await sql`create table if not exists devices (
+        device_id text primary key,
+        house_code text not null references houses(code) on delete cascade,
+        linked_at timestamptz not null default now()
+      )`;
+      // QR code da TV: o celular que abrir o link cria a casa e liga esta TV a ela
+      await sql`create table if not exists pairings (
+        token text primary key,
+        device_id text not null,
+        house_code text references houses(code) on delete cascade,
+        created_at timestamptz not null default now()
       )`;
       await sql`create table if not exists code_attempts (
         key text primary key,
@@ -81,8 +94,17 @@ export async function readBody(req: Request): Promise<Record<string, unknown>> {
   }
 }
 
-export const CODE = /^[0-9]{8}$/;
-const DEVICE = /^[A-Za-z0-9-]{8,64}$/;
+export const CODE = /^[0-9]{6}$/;
+export const DEVICE = /^[A-Za-z0-9-]{8,64}$/;
+
+/** Liga o aparelho à casa (ou troca de casa). */
+export async function linkDevice(device: unknown, code: string) {
+  if (typeof device !== 'string' || !DEVICE.test(device)) return;
+  await sql`
+    insert into devices (device_id, house_code) values (${device}, ${code})
+    on conflict (device_id) do update set house_code = excluded.house_code, linked_at = now()
+  `;
+}
 
 // ---------- Tentativas ----------
 

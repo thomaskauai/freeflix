@@ -3,7 +3,7 @@
      tratar como outro app (instala ao lado, sem herdar dados). A versão vem do
      package.json: npm run build:tizen a copia para cá. -->
 <widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
-        id="http://freeflix.local/app" version="0.4.0" viewmodes="maximized">
+        id="http://freeflix.local/app" version="0.5.3" viewmodes="maximized">
   <tizen:application id="FreeFlixTV.Freeflix" package="FreeFlixTV" required_version="5.0"/>
   <tizen:profile name="tv-samsung"/>
   <name>Freeflix</name>
@@ -14,6 +14,8 @@
   <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
   <!-- catálogo remoto e embed -->
   <tizen:privilege name="http://tizen.org/privilege/internet"/>
+  <!-- identificador da TV (DUID): reencontra a casa da sincronização depois de reinstalar -->
+  <tizen:privilege name="http://developer.samsung.com/privilege/productinfo"/>
   <access origin="*" subdomains="true"/>
   <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable"
                  encryption="disable" install-location="auto" hwkey-event="enable"/>

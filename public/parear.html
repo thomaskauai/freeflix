@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="robots" content="noindex" />
+    <title>Freeflix · Código da casa</title>
+    <!-- Aberta pelo QR code da TV: cria o código da casa e liga aquela TV a ele. -->
+    <style>
+      :root {
+        --red: #e5202a;
+        --smoke: #b3b3b3;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      html,
+      body {
+        min-height: 100%;
+        background: #000;
+        color: #fff;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        max-width: 440px;
+        margin: 0 auto;
+        padding: 40px 24px 56px;
+      }
+      .brand {
+        font-weight: 900;
+        font-size: 30px;
+        letter-spacing: 0.02em;
+        color: var(--red);
+        transform: scaleY(1.15);
+        transform-origin: left;
+      }
+      h1 {
+        margin-top: 40px;
+        font-size: 26px;
+        line-height: 1.25;
+      }
+      p {
+        margin-top: 12px;
+        font-size: 17px;
+        line-height: 1.5;
+        color: var(--smoke);
+      }
+      .ok {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 32px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.1);
+        font-size: 15px;
+        color: #fff;
+      }
+      .ok::before {
+        content: '';
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #46d369;
+      }
+      .label {
+        margin-top: 36px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--smoke);
+      }
+      .code {
+        margin-top: 8px;
+        font-size: 64px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        font-variant-numeric: tabular-nums;
+      }
+      ol {
+        margin-top: 14px;
+        padding-left: 22px;
+        font-size: 17px;
+        line-height: 1.7;
+        color: #fff;
+      }
+      b {
+        font-weight: 700;
+      }
+      button {
+        margin-top: 28px;
+        padding: 14px 24px;
+        border: 0;
+        border-radius: 8px;
+        background: #fff;
+        color: #000;
+        font: inherit;
+        font-weight: 700;
+      }
+      .spinner {
+        width: 40px;
+        height: 40px;
+        margin-top: 48px;
+        border: 4px solid rgba(255, 255, 255, 0.2);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 900ms linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand">FREEFLIX</div>
+
+      <section id="loading">
+        <h1>Criando o código da casa…</h1>
+        <div class="spinner"></div>
+      </section>
+
+      <section id="done" hidden>
+        <span class="ok">A TV do QR code já está sincronizada</span>
+        <div class="label">Código da casa</div>
+        <div class="code" id="code"></div>
+        <h1>Para sincronizar outra TV</h1>
+        <ol>
+          <li>Abra o Freeflix na TV.</li>
+          <li>Entre em <b>Configurações</b> e vá até <b>Sincronizar entre TVs</b>.</li>
+          <li>Escolha <b>Já tenho um código</b> e digite os 6 números acima.</li>
+        </ol>
+        <p>Continuar assistindo e os episódios assistidos ficam iguais em todas as TVs da casa.</p>
+      </section>
+
+      <section id="expired" hidden>
+        <h1>Este QR code expirou</h1>
+        <p>Na TV, em Configurações, Sincronizar entre TVs, escolha Criar código de novo para gerar outro.</p>
+      </section>
+
+      <section id="error" hidden>
+        <h1>Não deu para falar com o servidor</h1>
+        <p>Confira a internet do celular e tente de novo.</p>
+        <button type="button" id="retry">Tentar de novo</button>
+      </section>
+    </main>
+
+    <script>
+      (function () {
+        var token = (new URLSearchParams(location.search).get('t') || '').toLowerCase();
+
+        function show(id) {
+          ['loading', 'done', 'expired', 'error'].forEach(function (s) {
+            document.getElementById(s).hidden = s !== id;
+          });
+        }
+
+        function claim() {
+          if (!/^[a-f0-9]{24}$/.test(token)) return show('expired');
+          show('loading');
+          fetch('/api/pair', {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'claim', token: token }),
+          })
+            .then(function (res) {
+              if (res.status === 410 || res.status === 400) return show('expired');
+              if (!res.ok) throw new Error('http ' + res.status);
+              return res.json().then(function (data) {
+                document.getElementById('code').textContent = data.code.slice(0, 3) + ' ' + data.code.slice(3);
+                show('done');
+              });
+            })
+            .catch(function () {
+              show('error');
+            });
+        }
+
+        document.getElementById('retry').addEventListener('click', claim);
+        claim();
+      })();
+    </script>
+  </body>
+</html>

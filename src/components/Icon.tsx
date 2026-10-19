@@ -15,6 +15,7 @@ export type IconName =
   | 'next'
   | 'settings'
   | 'swap'
+  | 'sync'
   | 'forward'
   | 'rewind';
 
@@ -47,6 +48,7 @@ const STROKED: Partial<Record<IconName, JSX.Element>> = {
     </>
   ),
   swap: <path d="M4 8h14l-3.5-3.5M20 16H6l3.5 3.5" />,
+  sync: <path d="M19.5 10A8 8 0 0 0 5 7.2M4.5 3.5v4h4M4.5 14A8 8 0 0 0 19 16.8M19.5 20.5v-4h-4" />,
   prev: <path d="M15 4.5 7.5 12l7.5 7.5" />,
   next: <path d="M9 4.5 16.5 12 9 19.5" />,
   check: <path d="m4.5 12.5 5 5 10-11" />,
