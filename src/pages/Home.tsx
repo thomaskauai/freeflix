@@ -155,7 +155,7 @@ export default function Home() {
     Promise.all([catalog.getFeatured(), catalog.listRows()]).then(
       ([featured, refs]) => {
         if (!alive) return;
-        setData({ featured, rows: refs.map((ref) => ({ ...ref, load: () => catalog.loadRow(ref) })) });
+        setData({ featured, rows: refs.map((ref) => ({ ...ref, load: (page) => catalog.loadRow(ref, page) })) });
       },
       () => alive && setFailed(true),
     );

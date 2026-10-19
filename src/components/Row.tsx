@@ -7,6 +7,8 @@ import { useTouchScroll } from './useTouchScroll';
 
 /** quantos cards as setas do mouse avançam por clique */
 const ARROW_STEP = 4;
+/** foco a esta distância do último card pede mais itens */
+const NEAR_END_ITEMS = 6;
 
 interface RowProps {
   title: string;
@@ -16,11 +18,13 @@ interface RowProps {
   /** já ficou acima da fileira em foco: some, em vez de sobrar uma tira no topo */
   passed?: boolean;
   onActivate?: () => void;
+  /** foco ou rolagem perto do último card: hora de trazer mais */
+  onNearEnd?: () => void;
   children: ReactNode;
 }
 
 /** Fileira horizontal: o item focado estaciona na primeira posição. */
-export function Row({ title, variant, anchor = ROW_ANCHOR, passed, onActivate, children }: RowProps) {
+export function Row({ title, variant, anchor = ROW_ANCHOR, passed, onActivate, onNearEnd, children }: RowProps) {
   const viewport = useRef<HTMLDivElement>(null);
   const track = useRef<HTMLDivElement>(null);
   const [x, setX] = useState(0);
@@ -47,11 +51,12 @@ export function Row({ title, variant, anchor = ROW_ANCHOR, passed, onActivate, c
     if (onActivate) onActivate();
     const max = limit();
     setMaxX(max);
-    // Foco que veio do ponteiro não rola: o card sairia de baixo do cursor.
-    if (isPointerFocus()) return;
     const t = track.current;
     const item = (e.target as HTMLElement).closest<HTMLElement>('[data-focusable]');
     if (!t || !item || !t.contains(item)) return;
+    if (onNearEnd && Array.prototype.indexOf.call(t.children, item) >= t.children.length - NEAR_END_ITEMS) onNearEnd();
+    // Foco que veio do ponteiro não rola: o card sairia de baixo do cursor.
+    if (isPointerFocus()) return;
     setFree(false);
     setX(Math.min(item.offsetLeft, max));
   };
@@ -60,6 +65,7 @@ export function Row({ title, variant, anchor = ROW_ANCHOR, passed, onActivate, c
     const max = limit();
     const next = Math.min(max, Math.max(0, target));
     setMaxX(max);
+    if (onNearEnd && next >= max - viewport.current!.clientWidth) onNearEnd();
     setFree(true);
     position.current = next;
     setX(next);

@@ -26,7 +26,7 @@ export default function Browse() {
     setFailed(false);
     catalog.listRows(section.filter).then(
       (refs) =>
-        alive && setLoaded({ kind, rows: refs.map((ref) => ({ ...ref, load: () => catalog.loadRow(ref) })) }),
+        alive && setLoaded({ kind, rows: refs.map((ref) => ({ ...ref, load: (page) => catalog.loadRow(ref, page) })) }),
       () => alive && setFailed(true),
     );
     return () => {

@@ -11,8 +11,8 @@ export interface RowSource {
   style: RowStyle;
   /** itens já em mãos (ex.: continuar assistindo) */
   items?: Title[];
-  /** ou como buscá-los quando a fileira entrar em cena */
-  load?: () => Promise<Title[]>;
+  /** ou como buscá-los quando a fileira entrar em cena; page 1, 2… traz mais para o fim (vazio: acabou) */
+  load?: (page: number) => Promise<Title[]>;
   /** id do título -> 0..1 */
   progress?: Record<string, number>;
   /** cards mostram a nota IMDb */
@@ -46,17 +46,23 @@ function LazyRow({ source, wanted, anchor, passed, autoFocusFirst, onActivate, o
   const [items, setItems] = useState<Title[] | null>(source.items ?? null);
   const settled = useRef(onSettled);
   settled.current = onSettled;
+  // próxima página a pedir; 0 quando a lista acabou ou não tem páginas
+  const nextPage = useRef(source.items ? 0 : 1);
+  const loadingMore = useRef(false);
+  const alive = useRef(true);
+  useEffect(
+    () => () => {
+      alive.current = false;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (items || !wanted || !source.load) return;
-    let alive = true;
-    source.load().then(
-      (list) => alive && setItems(list),
-      () => alive && setItems([]),
+    source.load(0).then(
+      (list) => alive.current && setItems(list),
+      () => alive.current && setItems([]),
     );
-    return () => {
-      alive = false;
-    };
     // a fonte de uma fileira não muda depois de montada
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wanted]);
@@ -65,12 +71,43 @@ function LazyRow({ source, wanted, anchor, passed, autoFocusFirst, onActivate, o
     if (items) settled.current();
   }, [items]);
 
+  // Foco perto do fim: a próxima página entra no fim da fileira, sem repetidos.
+  const loadMore = () => {
+    const page = nextPage.current;
+    if (!page || loadingMore.current || !source.load || !items) return;
+    loadingMore.current = true;
+    source.load(page).then(
+      (list) => {
+        loadingMore.current = false;
+        if (!alive.current) return;
+        setItems((current) => {
+          const have: Record<string, boolean> = {};
+          (current ?? []).forEach((t) => (have[t.id] = true));
+          const fresh = list.filter((t) => !have[t.id] && (have[t.id] = true));
+          nextPage.current = fresh.length ? page + 1 : 0;
+          return fresh.length ? (current ?? []).concat(fresh) : current;
+        });
+      },
+      () => {
+        // falhou: tenta de novo na próxima vez que o foco andar
+        loadingMore.current = false;
+      },
+    );
+  };
+
   if (!items && !wanted) return null;
   // lista vazia ou que falhou: a fileira some, em vez de ficar um título sem cards
   if (items && items.length === 0) return null;
 
   return (
-    <Row title={source.title} variant={source.style} anchor={anchor} passed={passed} onActivate={onActivate}>
+    <Row
+      title={source.title}
+      variant={source.style}
+      anchor={anchor}
+      passed={passed}
+      onActivate={onActivate}
+      onNearEnd={items && source.load ? loadMore : undefined}
+    >
       {items
         ? items.map((title, i) => (
             <Card

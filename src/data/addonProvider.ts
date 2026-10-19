@@ -1,5 +1,6 @@
 import { fetchCatalog, fetchManifest, fetchMeta, type AddonMeta } from './addonClient';
-import { CATALOG_NAMES_PT, PARAMETERIZED_CATALOGS } from './catalogNames';
+import { STREAMING } from '../settings';
+import { CATALOG_NAMES_PT, GENRE_NAMES_PT, HIDDEN_CATALOGS, PARAMETERIZED_CATALOGS } from './catalogNames';
 import type { CatalogProvider, Episode, RowRef, Season, Title, TitleType } from './types';
 
 const SIMILAR_LIMIT = 12;
@@ -9,18 +10,17 @@ const FEATURED_COUNT = 4;
 const FEATURED_MIN_RATING = 6.5;
 const TOP_RATED_MIN = 7.5;
 const TOP_RATED_LIMIT = 24;
-/** listas que já vêm em ordem de "mais em alta" ou de data: ficam na página 1 e na ordem do addon */
-const TIMELY = [
-  'trending-movies',
-  'trending-series',
-  'airing-today-series',
-  'new-and-upcoming-movies',
-  'new-and-returning-series',
-];
-/** sempre no topo da Home, nesta ordem; as outras fileiras vêm embaralhadas */
+/** listas que já vêm em ordem de "mais em alta" ou de data: começam na página 1 */
+const TIMELY = ['trending-movies', 'trending-series', 'new-and-upcoming-movies', 'new-and-returning-series'];
+/** sempre no topo, nesta ordem; as outras fileiras seguem a ordem do addon */
 const PINNED = ['trending-movies', 'trending-series'];
-/** páginas de 20 itens sorteadas nas listas sem ordem de data */
-const PAGES = 3;
+/** listas sem ordem de data começam numa destas primeiras páginas de 20, sorteada */
+const PAGES = 4;
+const PAGE_SIZE = 20;
+/** o addon de streamings devolve 100 por vez; a fileira mostra de 20 em 20 */
+const STREAMING_BLOCK = 100;
+/** fileiras de streaming entram depois desta lista (a última das de streaming do addon) */
+const STREAMING_AFTER = 'prime-video-';
 
 // Sorteio desta abertura do app: muda cada vez que o app abre e fica igual
 // enquanto ele está aberto (voltar à Home não reembaralha nada).
@@ -191,6 +191,10 @@ export function createAddonProvider(base: string, localized: boolean): CatalogPr
     fetchCatalog(base, type, catalogId, skip ? { skip: String(skip) } : undefined).then((metas) =>
       remember(metas.map(toTitle)),
     );
+  const streamingBlock = (type: TitleType, id: string, skip: number) =>
+    fetchCatalog(STREAMING.base, type, id, skip ? { skip: String(skip) } : undefined).then((metas) =>
+      metas.map(toTitle).filter((t) => !!t.poster),
+    );
   const plural = (type: TitleType) => (type === 'series' ? 'series' : 'movies');
 
   /**
@@ -245,9 +249,8 @@ export function createAddonProvider(base: string, localized: boolean): CatalogPr
     },
 
     async listRows(filter) {
-      const list = (await catalogs()).filter((c) => {
-        return !filter || c.type === filter;
-      });
+      const all = await catalogs();
+      const list = all.filter((c) => (!filter || c.type === filter) && HIDDEN_CATALOGS.indexOf(c.id) < 0);
       const refs = list.map(
         (c): RowRef => ({
           id: `${c.type}:${c.id}`,
@@ -255,12 +258,12 @@ export function createAddonProvider(base: string, localized: boolean): CatalogPr
           style: 'poster',
           type: c.type as TitleType,
           catalogId: c.id,
-          // listas sem ordem de data abrem numa página sorteada, embaralhadas
-          skip: TIMELY.indexOf(c.id) < 0 ? Math.floor(randomFor(`page:${c.id}`)() * PAGES) * 20 : undefined,
-          shuffle: TIMELY.indexOf(c.id) < 0,
+          // a cada abertura, cada fileira começa numa página sorteada e embaralha os itens
+          skip: TIMELY.indexOf(c.id) < 0 ? Math.floor(randomFor(`page:${c.id}`)() * PAGES) * PAGE_SIZE : 0,
+          shuffle: true,
         }),
       );
-      // Em alta no topo; depois as notas altas; o resto em ordem sorteada a cada abertura.
+      // Em alta no topo; depois as notas altas; o resto na ordem do addon (fixa).
       const pinned = PINNED.map((id) => refs.filter((r) => r.catalogId === id)[0]).filter(Boolean);
       const topRow: RowRef = {
         id: `top-rated:${filter ?? 'all'}`,
@@ -270,18 +273,63 @@ export function createAddonProvider(base: string, localized: boolean): CatalogPr
         kind: 'top-rated',
         showRating: true,
       };
-      const rest = shuffled(
-        refs.filter((r) => pinned.indexOf(r) < 0),
-        `rows:${filter ?? 'all'}`,
+      const rest = refs.filter((r) => pinned.indexOf(r) < 0);
+      if (!filter) return [...pinned, topRow, ...rest].map((r, i) => ({ ...r, style: i === 0 ? 'tall' : r.style }));
+
+      // Filmes e Séries: mais streamings logo depois dos do addon, e uma fileira por gênero no fim.
+      const name = filter === 'series' ? 'Séries' : 'Filmes';
+      const streaming = STREAMING.services.map(
+        (service): RowRef => ({
+          id: `streaming:${filter}:${service.id}`,
+          title: localized ? `${name} ${service.id === 'hbm' ? 'da' : 'do'} ${service.name}` : `${service.name} ${filter === 'series' ? 'series' : 'movies'}`,
+          style: 'poster',
+          type: filter,
+          catalogId: service.id,
+          kind: 'streaming',
+          shuffle: true,
+        }),
       );
-      return [...pinned, topRow, ...rest].map((r, i) => ({ ...r, style: i === 0 ? 'tall' : r.style }));
+      const lastProvider = rest.map((r) => (r.catalogId ?? '').indexOf(STREAMING_AFTER) === 0).lastIndexOf(true);
+      const at = lastProvider >= 0 ? lastProvider + 1 : rest.length;
+      const popular = all.filter((c) => c.type === filter && c.id === `popular-${plural(filter)}`)[0];
+      const options = (popular?.extra ?? []).filter((e) => e.name === 'genre')[0]?.options ?? [];
+      const genres = options
+        .filter((g) => GENRE_NAMES_PT[g])
+        .map(
+          (genre): RowRef => ({
+            id: `genre:${filter}:${genre}`,
+            title: localized ? GENRE_NAMES_PT[genre] : genre,
+            style: 'poster',
+            type: filter,
+            catalogId: popular.id,
+            genre,
+            skip: Math.floor(randomFor(`page:${filter}:${genre}`)() * PAGES) * PAGE_SIZE,
+            shuffle: true,
+          }),
+        );
+      return [...pinned, topRow, ...rest.slice(0, at), ...streaming, ...rest.slice(at), ...genres].map((r, i) => ({
+        ...r,
+        style: i === 0 ? 'tall' : r.style,
+      }));
     },
 
-    async loadRow(ref) {
-      if (ref.kind === 'top-rated') return topRated(ref.type);
+    async loadRow(ref, n = 0) {
+      if (ref.kind === 'top-rated') return n ? [] : topRated(ref.type);
       if (!ref.type || !ref.catalogId) return [];
-      const items = await page(ref.type, ref.catalogId, ref.skip);
-      return ref.shuffle ? shuffled(items, `items:${ref.id}`) : items;
+      if (ref.kind === 'streaming') {
+        // em ordem de popularidade, 100 por vez: embaralha o bloco e entrega 20 por página
+        const offset = n * PAGE_SIZE;
+        const block = Math.floor(offset / STREAMING_BLOCK) * STREAMING_BLOCK;
+        const items = await streamingBlock(ref.type, ref.catalogId, block);
+        const mixed = shuffled(items, `items:${ref.id}:${block}`);
+        return remember(mixed.slice(offset - block, offset - block + PAGE_SIZE));
+      }
+      const skip = (ref.skip ?? 0) + n * PAGE_SIZE;
+      const extra: Record<string, string> = {};
+      if (ref.genre) extra.genre = ref.genre;
+      if (skip) extra.skip = String(skip);
+      const items = remember((await fetchCatalog(base, ref.type, ref.catalogId, extra)).map(toTitle));
+      return ref.shuffle ? shuffled(items, `items:${ref.id}:${n}`) : items;
     },
 
     peekTitle(type, id) {

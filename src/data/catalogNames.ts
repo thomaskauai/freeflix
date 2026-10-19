@@ -4,7 +4,6 @@ export const CATALOG_NAMES_PT: Record<string, string> = {
   'trending-series': 'Séries em alta',
   'popular-movies': 'Filmes populares',
   'popular-series': 'Séries populares',
-  'airing-today-series': 'No ar hoje',
   'critically-acclaimed-movies': 'Filmes aclamados pela crítica',
   'critically-acclaimed-series': 'Séries aclamadas pela crítica',
   'new-and-upcoming-movies': 'Filmes novos e em breve',
@@ -23,6 +22,39 @@ export const CATALOG_NAMES_PT: Record<string, string> = {
   'documentary-series': 'Séries documentais',
   'family-movies': 'Filmes para a família',
   'family-series': 'Séries para a família',
+};
+
+/**
+ * Listas que ficam fora das fileiras. "No ar hoje" é qualquer série com episódio
+ * passando hoje em algum país (talk shows, novelas de 1970…), não novidades.
+ */
+export const HIDDEN_CATALOGS = ['airing-today-series'];
+
+/**
+ * Gêneros que viram fileira em Filmes e Séries (filtro genre de "populares").
+ * Documentário e família já têm lista própria; os de TV aberta ficam de fora.
+ */
+export const GENRE_NAMES_PT: Record<string, string> = {
+  Action: 'Ação',
+  Adventure: 'Aventura',
+  'Action & Adventure': 'Ação e aventura',
+  Animation: 'Animação',
+  Comedy: 'Comédia',
+  Crime: 'Crime',
+  Drama: 'Drama',
+  Fantasy: 'Fantasia',
+  'Science Fiction': 'Ficção científica',
+  'Sci-Fi & Fantasy': 'Ficção científica e fantasia',
+  Horror: 'Terror',
+  Thriller: 'Suspense',
+  Mystery: 'Mistério',
+  Romance: 'Romance',
+  History: 'História',
+  War: 'Guerra',
+  'War & Politics': 'Guerra e política',
+  Music: 'Música',
+  Western: 'Faroeste',
+  Kids: 'Infantil',
 };
 
 /** Listas que só fazem sentido com um filtro escolhido (ano, idioma): ficam fora das fileiras. */

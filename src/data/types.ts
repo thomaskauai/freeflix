@@ -52,12 +52,14 @@ export interface RowRef {
   /** só no catálogo por addon */
   type?: TitleType;
   catalogId?: string;
-  /** página da lista (itens pulados), sorteada para a Home não ficar sempre igual */
+  /** primeira página da lista (itens pulados), sorteada para a Home não ficar sempre igual */
   skip?: number;
-  /** embaralhar os itens (listas sem ordem de "o mais em alta primeiro") */
+  /** embaralhar os itens de cada página */
   shuffle?: boolean;
-  /** fileira montada pelo app, não uma lista do addon */
-  kind?: 'top-rated';
+  /** gênero do addon (filtro genre da lista) */
+  genre?: string;
+  /** fileira montada pelo app (top-rated) ou vinda do addon de streamings */
+  kind?: 'top-rated' | 'streaming';
   /** cards mostram a nota IMDb */
   showRating?: boolean;
 }
@@ -69,7 +71,8 @@ export interface CatalogProvider {
   getFeatured(): Promise<Title[]>;
   /** Fileiras de uma seção, sem os itens: carregar todas de uma vez pesa na TV. */
   listRows(filter?: RowFilter): Promise<RowRef[]>;
-  loadRow(ref: RowRef): Promise<Title[]>;
+  /** itens de uma fileira; page 1, 2… traz mais itens para o fim dela (vazio: acabou) */
+  loadRow(ref: RowRef, page?: number): Promise<Title[]>;
   getTitle(type: TitleType, id: string): Promise<Title | null>;
   /**
    * O que já se sabe do título pelas listas (fileiras, busca, semelhantes), sem
