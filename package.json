@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "mock-addon": "node scripts/mock-addon.mjs"
+    "mock-addon": "node scripts/mock-addon.mjs",
+    "tv:install": "node --experimental-websocket scripts/tv-install.mjs"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",
