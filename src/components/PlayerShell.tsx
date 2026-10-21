@@ -30,6 +30,8 @@ const SAVE_EVERY_MS = 5000;
 const START_TIMEOUT_MS = 15000;
 /** altura das legendas, em % da tela a partir do topo */
 const SUBTITLE_LINE = 82;
+/** com os controles na tela, a legenda sobe para não ficar entre a barra e os botões */
+const SUBTITLE_LINE_CONTROLS = 70;
 /** idioma da legenda dos atalhos ("… com legendas") */
 const PRESET_SUBTITLE: SubtitleLanguage = 'pt';
 
@@ -206,6 +208,8 @@ export function PlayerShell({
   /** quanto a última passada moveu, para o aviso no meio da tela */
   const [feedback, setFeedback] = useState<number | null>(null);
   const [visible, setVisible] = useState(true);
+  const visibleRef = useRef(true);
+  visibleRef.current = visible;
   const [toast, setToast] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
@@ -483,6 +487,22 @@ export function PlayerShell({
     toastTimer.current = window.setTimeout(() => setToast(''), 4500);
   };
 
+  /** Altura da legenda: acima da faixa dos controles quando eles estão na tela. */
+  const placeCues = (controls: boolean) => {
+    if (!media) return;
+    Array.prototype.slice.call(media.querySelectorAll('track[data-freeflix]')).forEach((t: HTMLTrackElement) => {
+      const cues = t.track.cues;
+      for (let i = 0; cues && i < cues.length; i++) {
+        const cue = cues[i] as VTTCue;
+        cue.snapToLines = false;
+        cue.line = controls ? SUBTITLE_LINE_CONTROLS : SUBTITLE_LINE;
+      }
+    });
+  };
+
+  const showControls = visible || failed;
+  useEffect(() => placeCues(showControls), [showControls, media]);
+
   // Tira a legenda em uso: a faixa que este shell pôs no <video> e o arquivo dela.
   const clearSubtitle = () => {
     if (!media) return;
@@ -514,14 +534,7 @@ export function PlayerShell({
         track.track.mode = 'showing';
         // Por padrão a fala encosta na borda de baixo e corta; sobe para uma
         // faixa segura, acima da barra de progresso.
-        track.addEventListener('load', () => {
-          const cues = track.track.cues;
-          for (let i = 0; cues && i < cues.length; i++) {
-            const cue = cues[i] as VTTCue;
-            cue.snapToLines = false;
-            cue.line = SUBTITLE_LINE;
-          }
-        });
+        track.addEventListener('load', () => placeCues(visibleRef.current));
         setSubtitleBusy(false);
         if (announce) showToast(`Legendas: ${option.label}`);
       },
