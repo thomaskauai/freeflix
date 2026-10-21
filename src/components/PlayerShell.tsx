@@ -165,8 +165,6 @@ interface PlayerShellProps {
   /** onde o vídeo está: a cada poucos segundos (tick), ao pausar e ao sair do player */
   onProgress: (time: number, duration: number, moment: 'tick' | 'pause' | 'exit') => void;
   onExit: () => void;
-  /** imagem do episódio, ao lado do título enquanto o vídeo carrega */
-  thumb?: string;
   /** próximo episódio: no fim aparece um cartão com contagem e ele começa sozinho */
   upNext?: { label: string; title: string; thumb?: string };
   onNext?: () => void;
@@ -191,7 +189,6 @@ export function PlayerShell({
   onFail,
   onProgress,
   onExit,
-  thumb,
   upNext,
   onNext,
   onStart,
@@ -213,14 +210,12 @@ export function PlayerShell({
   const [toast, setToast] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
-  /** áudio e legendas lado a lado ("Outro…") */
-  const [subsOpen, setSubsOpen] = useState(false);
   /** null enquanto procura; lista vazia quando não há */
   const [subtitles, setSubtitles] = useState<SubtitleOption[] | null>(null);
   const [subtitleLang, setSubtitleLang] = useState<SubtitleLanguage | null>(null);
   const [subtitleBusy, setSubtitleBusy] = useState(false);
   const menuOpenRef = useRef(false);
-  menuOpenRef.current = menuOpen || subsOpen;
+  menuOpenRef.current = menuOpen;
 
   const timeline = useRef<HTMLDivElement>(null);
   const upNextCard = useRef<HTMLDivElement>(null);
@@ -437,7 +432,7 @@ export function PlayerShell({
     const wasVisible = visible;
     wake();
     // Voltar fecha a lista de fontes antes de sair do player.
-    if (menuOpen || subsOpen) {
+    if (menuOpen) {
       if (action === 'back') return closeMenu(), true;
       if (action === 'up' || action === 'down' || action === 'left' || action === 'right' || action === 'ok') {
         return false;
@@ -590,20 +585,18 @@ export function PlayerShell({
   };
 
   const closeMenu = () => {
-    const opener = subsOpen ? 'shell-other' : 'shell-sources';
     setMenuOpen(false);
-    setSubsOpen(false);
-    focusElement(document.querySelector<HTMLElement>(`[data-focus-id="${opener}"]`));
+    focusElement(document.querySelector<HTMLElement>('[data-focus-id="shell-sources"]'));
   };
 
   // A lista aberta vira a camada de foco: o controle só anda dentro dela.
   useEffect(() => {
-    if (!(menuOpen || subsOpen) || !menu.current) return;
+    if (!menuOpen || !menu.current) return;
     focusElement(
       menu.current.querySelector<HTMLElement>('[data-autofocus]') ||
         menu.current.querySelector<HTMLElement>('[data-focusable]'),
     );
-  }, [menuOpen, subsOpen, subtitles]);
+  }, [menuOpen, subtitles]);
 
   // aparece mesmo com uma fonte só, para ver qual está tocando
   const hasSources = !!sources && sources.length > 0 && !!onPickSource;
@@ -625,16 +618,16 @@ export function PlayerShell({
   return (
     <>
       <div
-        className={`shell${visible || failed ? '' : ' is-hidden'}${seeking ? ' is-seeking' : ''}${subsOpen ? ' is-panel' : ''}`}
+        className={`shell${visible || failed ? '' : ' is-hidden'}${seeking ? ' is-seeking' : ''}`}
       >
         <div className="shell__top" data-focus-group="">
           <ShellButton icon="back" label="Voltar" autoFocus={!hasControls} onClick={onExit} />
-          {hasControls && (
-            <>
-              <ShellButton icon="restart" label="Reiniciar" onClick={() => seekTo(0)} />
-            </>
-          )}
         </div>
+        {hasControls && (
+          <div className="shell__top shell__top--right" data-focus-group="">
+            <ShellButton icon="restart" label="Recomeçar do início" onClick={() => seekTo(0)} />
+          </div>
+        )}
 
         {menuOpen && sources && onPickSource && (
           // ⚙: barra lateral com a fonte de vídeo e, embaixo, as legendas
@@ -666,38 +659,6 @@ export function PlayerShell({
           </div>
         )}
 
-        {subsOpen && (
-          <div ref={menu} className="shell__panel" data-focus-layer="">
-            <div className="shell__column" data-native-scroll="">
-              <div className="shell__menu-title">Áudio</div>
-              {audios.length ? (
-                audios.map((audio, i) => (
-                  <SourceOption
-                    key={audio.key}
-                    label={audio.label}
-                    current={i === audioIndex}
-                    onPick={() => (i === audioIndex ? closeMenu() : pickAudio(i))}
-                  />
-                ))
-              ) : (
-                <SourceOption label="Original" current onPick={closeMenu} />
-              )}
-            </div>
-            <div className="shell__column" data-native-scroll="">
-              <div className="shell__menu-title">{subtitlesTitle}</div>
-              <SourceOption label="Desligadas" current={subtitleLang === null} onPick={() => pickSubtitle(null)} />
-              {(subtitles ?? []).map((option) => (
-                <SourceOption
-                  key={option.language}
-                  label={option.label}
-                  current={subtitleLang === option.language}
-                  onPick={() => pickSubtitle(option)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
         {toast && <div className="shell__toast">{toast}</div>}
 
         {hasControls && buffering && !failed && feedback === null && (
@@ -719,8 +680,7 @@ export function PlayerShell({
           </div>
         )}
 
-        <div className={`shell__heading${thumb && !started ? ' has-thumb' : ''}`}>
-          {thumb && !started && <img className="shell__thumb" src={thumb} alt="" decoding="async" />}
+        <div className="shell__heading">
           <div className="shell__title display">{title}</div>
           {subtitle && <div className="shell__subtitle">{subtitle}</div>}
         </div>
@@ -767,24 +727,12 @@ export function PlayerShell({
             {presets.map((p) => (
               <Chip key={p.label} label={p.label} current={p === presetNow} onPick={() => pickPreset(p)} />
             ))}
-            <Chip
-              label="Outro…"
-              id="shell-other"
-              current={!presetNow}
-              onPick={() => {
-                setMenuOpen(false);
-                setSubsOpen(true);
-              }}
-            />
             {hasSources && (
               <ShellButton
                 icon="settings"
                 label="Qualidade e fonte"
                 id="shell-sources"
-                onClick={() => {
-                  setSubsOpen(false);
-                  setMenuOpen(true);
-                }}
+                onClick={() => setMenuOpen(true)}
               />
             )}
           </div>

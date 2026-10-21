@@ -59,7 +59,12 @@ const STROKED: Partial<Record<IconName, JSX.Element>> = {
       <path d="M7 9.3h4M13.5 9.3H17M7 12.7h2.5M12 12.7h5" />
     </>
   ),
-  restart: <path d="M5 4.5v15M19.5 4.5 8.5 12l11 7.5z" />,
+  restart: (
+    <>
+      <path d="M3 12a9 9 0 1 0 2.64-6.36L3 8.3" />
+      <path d="M3 3v5.3h5.3" />
+    </>
+  ),
   erase: (
     <>
       <path d="M8.5 5H21v14H8.5L2.5 12z" />

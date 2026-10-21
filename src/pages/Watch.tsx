@@ -52,21 +52,8 @@ const MESSAGES: Record<NoSourceReason | 'all-failed', { title: string; text: str
 /** perto do fim do episódio, as fontes do próximo já são procuradas */
 const WARM_NEXT_S = 120;
 
-/**
- * Enquanto a fonte é procurada: a mesma cara do player carregando, com o
- * título (e a imagem do episódio) embaixo e só o Voltar.
- */
-function Waiting({
-  title,
-  subtitle,
-  thumb,
-  onExit,
-}: {
-  title: string;
-  subtitle?: string;
-  thumb?: string;
-  onExit: () => void;
-}) {
+/** Enquanto a fonte é procurada: a mesma cara do player, com o título no alto e só o Voltar. */
+function Waiting({ title, subtitle, onExit }: { title: string; subtitle?: string; onExit: () => void }) {
   const back = useFocusable({ autoFocus: true });
   return (
     <div className="shell">
@@ -76,8 +63,7 @@ function Waiting({
         </div>
       </div>
       <div className="shell__spinner" aria-label="Carregando" />
-      <div className={`shell__heading${thumb ? ' has-thumb' : ''}`}>
-        {thumb && <img className="shell__thumb" src={thumb} alt="" decoding="async" />}
+      <div className="shell__heading">
         <div className="shell__title display">{title}</div>
         {subtitle && <div className="shell__subtitle">{subtitle}</div>}
       </div>
@@ -216,7 +202,6 @@ export default function Watch() {
         <Waiting
           title={title ? title.title : known ? known.title : ''}
           subtitle={subtitle}
-          thumb={thumb}
           onExit={goBack}
         />
       </div>
@@ -325,7 +310,6 @@ export default function Watch() {
         key={`shell:${key}:${plan.index}`}
         title={title.title}
         subtitle={subtitle}
-        thumb={thumb}
         mode="video"
         media={media}
         duration={duration}

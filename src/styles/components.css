@@ -1184,6 +1184,16 @@
   z-index: 1;
 }
 
+/* recomeçar do início, no canto direito */
+.shell__top--right {
+  left: auto;
+  right: 112px;
+}
+
+.shell__top--right .shell__btn {
+  margin-right: 0;
+}
+
 .shell__menu {
   position: absolute;
   top: 196px;
@@ -1296,12 +1306,12 @@
   color: var(--smoke);
 }
 
-/* título e episódio no alto, ao lado do Voltar e do Reiniciar */
+/* título e episódio no alto, ao lado do Voltar */
 .shell__heading {
   position: absolute;
   top: 82px;
-  left: 358px;
-  right: 112px;
+  left: 235px;
+  right: 235px;
   min-height: 64px;
   z-index: 1;
   display: flex;
@@ -1309,26 +1319,7 @@
   justify-content: center;
 }
 
-/* carregando o episódio: imagem e título grandes, embaixo */
-.shell__heading.has-thumb {
-  top: auto;
-  left: 213px;
-  bottom: 240px;
-  min-height: 0;
-}
 
-/* episódio carregando: a imagem dele acima do título */
-.shell__thumb {
-  display: block;
-  width: 384px;
-  height: 216px;
-  margin-bottom: 26px;
-  border-radius: 10px;
-  object-fit: cover;
-  background: var(--coal);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
-  animation: loading-in 300ms linear both;
-}
 
 .shell__title {
   font-size: 40px;
@@ -1347,14 +1338,7 @@
   color: var(--smoke);
 }
 
-.shell__heading.has-thumb .shell__title {
-  font-size: 56px;
-}
 
-.shell__heading.has-thumb .shell__subtitle {
-  margin-top: 10px;
-  font-size: 24px;
-}
 
 .shell__bottom {
   position: absolute;
@@ -1581,44 +1565,10 @@
   border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-/* com o painel aberto, título e linha do tempo saem de trás dele */
-.shell.is-panel .shell__bottom {
-  visibility: hidden;
-}
 
-/* "Outro…": áudio e legendas lado a lado */
-.shell__panel {
-  position: absolute;
-  left: 213px;
-  right: 213px;
-  bottom: 150px;
-  max-height: calc(100% - 300px);
-  z-index: 2;
-  display: flex;
-  padding: 20px;
-  border-radius: 12px;
-  background: rgba(20, 20, 20, 0.96);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 24px 70px rgba(0, 0, 0, 0.6);
-}
 
-.shell__column {
-  flex: 1;
-  min-width: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
 
-.shell__column::-webkit-scrollbar {
-  display: none;
-}
 
-.shell__column + .shell__column {
-  margin-left: 20px;
-  padding-left: 20px;
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
-}
 
 /* destino da passada, acima do marcador */
 .shell__bubble {
@@ -2589,11 +2539,10 @@
   top: 44px;
 }
 
-.is-short .shell__heading.has-thumb {
-  top: auto;
-  left: 112px;
-  bottom: 176px;
+.is-short .shell__top--right {
+  right: 112px;
 }
+
 
 /* controles mais perto das bordas: a barra de progresso ganha o comprimento */
 .is-short .shell__play {
@@ -2623,18 +2572,7 @@
   bottom: 40px;
 }
 
-.is-short .shell__panel {
-  left: 112px;
-  right: 112px;
-  bottom: 100px;
-  max-height: calc(100% - 200px);
-}
 
-.is-short .shell__thumb {
-  width: 256px;
-  height: 144px;
-  margin-bottom: 16px;
-}
 
 .is-short .upnext {
   bottom: 128px;
@@ -2920,15 +2858,19 @@
 
 .is-compact .shell__heading {
   top: 44px;
-  left: 216px;
+  left: 122px;
+  right: 122px;
+}
+
+.is-compact .shell__top--right {
+  left: auto;
   right: 28px;
 }
 
-.is-compact .shell__heading.has-thumb {
-  top: auto;
-  left: 28px;
-  bottom: 214px;
+.is-compact .shell__top--right .shell__btn {
+  margin-right: 0;
 }
+
 
 .is-compact .shell__title {
   font-size: 30px;
@@ -2938,9 +2880,6 @@
   font-size: 19px;
 }
 
-.is-compact .shell__heading.has-thumb .shell__title {
-  font-size: 40px;
-}
 
 .is-compact .shell__bottom {
   bottom: 116px;
@@ -2957,27 +2896,8 @@
   bottom: 52px;
 }
 
-/* tela estreita: legendas embaixo do áudio */
-.is-compact .shell__panel {
-  left: 28px;
-  right: 28px;
-  bottom: 116px;
-  max-height: calc(100% - 300px);
-  flex-direction: column;
-  overflow-y: auto;
-}
 
-.is-compact .shell__column {
-  flex: none;
-  overflow: visible;
-}
 
-.is-compact .shell__column + .shell__column {
-  margin: 16px 0 0;
-  padding: 16px 0 0;
-  border-left: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
-}
 
 .is-compact .shell__play {
   left: 16px;
@@ -3001,10 +2921,6 @@
   right: 28px;
 }
 
-.is-compact .shell__thumb {
-  width: 288px;
-  height: 162px;
-}
 
 .is-compact .upnext {
   top: 150px;
