@@ -1,8 +1,10 @@
 // Instala os .wgt de tizen-build/ nas TVs da casa pelo TizenBrew Installer
 // Desktop, sem passar pela interface: fala direto com o WebSocket do serviço
 // (ws://localhost:8091), como a página /ui/dist/index.html/desktop faz.
-//   sala    192.168.18.44  Tizen antigo   Freeflix-tv-antiga.wgt
-//   quarto  192.168.18.45  Tizen 7+       Freeflix-tv-nova.wgt (reassinado)
+//   sala    UN55RU7100 (2019)  Tizen antigo  Freeflix-tv-antiga.wgt
+//   quarto  QN43QEF1A (2025)   Tizen 7+      Freeflix-tv-nova.wgt (reassinado)
+// O IP é só o último conhecido: se lá não estiver a TV desse modelo, ela é
+// procurada na rede pela API da Samsung (porta 8001), já que o DHCP muda o IP.
 //
 // Requisitos na TV: Developer Mode ligado (Apps → 12345) com Host PC IP = IP
 // deste Mac, e TV ligada na mesma rede.
@@ -39,8 +41,8 @@ const require = createRequire(import.meta.url);
 const adbhost = require('adbhost');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TVS = {
-  sala: { ip: '192.168.18.44', wgt: 'Freeflix-tv-antiga.wgt' },
-  quarto: { ip: '192.168.18.45', wgt: 'Freeflix-tv-nova.wgt' },
+  sala: { ip: '192.168.18.30', model: 'UN55RU7100GXZD', wgt: 'Freeflix-tv-antiga.wgt' },
+  quarto: { ip: '192.168.18.45', model: 'QN43QEF1AGXZD', wgt: 'Freeflix-tv-nova.wgt' },
 };
 const Events = { InstallPackage: 1, Error: 3, InstallationStatus: 4, DeleteConfiguration: 5, ConnectToTV: 6, InstallFile: 7 };
 const RELEASE = 'v1.1.3';
@@ -194,8 +196,29 @@ function uninstall(ip) {
   });
 }
 
+async function tvModel(ip) {
+  try {
+    const res = await fetch(`http://${ip}:8001/api/v2/`, { signal: AbortSignal.timeout(2000) });
+    return (await res.json()).device?.modelName;
+  } catch {
+    return undefined;
+  }
+}
+
+/** IP atual da TV: o conhecido, ou o da TV do mesmo modelo achada na sub-rede */
+async function locate(tv) {
+  if ((await tvModel(tv.ip)) === tv.model) return tv.ip;
+  const prefix = tv.ip.split('.').slice(0, 3).join('.');
+  const ips = Array.from({ length: 254 }, (_, i) => `${prefix}.${i + 1}`);
+  const models = await Promise.all(ips.map(tvModel));
+  return ips[models.indexOf(tv.model)];
+}
+
 async function install(name) {
-  const tv = TVS[name];
+  const tv = { ...TVS[name] };
+  const ip = await locate(tv);
+  if (ip && ip !== tv.ip) console.log(`\n${name}: IP mudou de ${tv.ip} para ${ip} (atualize TVS em scripts/tv-install.mjs)`);
+  tv.ip = ip ?? tv.ip;
   console.log(`\n${name} (${tv.ip})`);
   if (reinstall && !checkOnly) {
     await stopInstaller();
