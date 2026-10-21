@@ -52,6 +52,13 @@ export function ensureSchema() {
         house_code text references houses(code) on delete cascade,
         created_at timestamptz not null default now()
       )`;
+      // título apagado do histórico (pelo celular): TV com cópia antiga não o devolve
+      await sql`create table if not exists removed (
+        house_code text not null references houses(code) on delete cascade,
+        title_id text not null,
+        removed_at timestamptz not null,
+        primary key (house_code, title_id)
+      )`;
       await sql`create table if not exists code_attempts (
         key text primary key,
         failures int not null default 0,

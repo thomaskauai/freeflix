@@ -6,7 +6,8 @@
     <meta name="theme-color" content="#000000" />
     <meta name="robots" content="noindex" />
     <title>Freeflix · Código da casa</title>
-    <!-- Aberta pelo QR code da TV: cria o código da casa e liga aquela TV a ele. -->
+    <!-- Aberta pelo QR code da TV: cria o código da casa e liga aquela TV a ele.
+         Depois mostra o histórico da casa, com opção de apagar. -->
     <style>
       :root {
         --red: #e5202a;
@@ -115,6 +116,106 @@
           transform: rotate(360deg);
         }
       }
+      .history {
+        margin-top: 48px;
+        padding-top: 32px;
+        border-top: 1px solid rgba(255, 255, 255, 0.15);
+      }
+      .history-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .history-head h1 {
+        margin-top: 0;
+      }
+      .link {
+        margin-top: 0;
+        padding: 8px 0;
+        background: none;
+        color: var(--smoke);
+        font-size: 15px;
+        font-weight: 600;
+        text-decoration: underline;
+      }
+      ul {
+        list-style: none;
+        padding: 0;
+        margin-top: 16px;
+      }
+      li.item {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 10px 0;
+      }
+      .poster {
+        flex: none;
+        width: 48px;
+        height: 72px;
+        border-radius: 4px;
+        background: #222 center / cover no-repeat;
+      }
+      .info {
+        flex: 1;
+        min-width: 0;
+      }
+      .name {
+        font-size: 16px;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .meta {
+        margin-top: 4px;
+        font-size: 14px;
+        color: var(--smoke);
+      }
+      .remove {
+        flex: none;
+        margin-top: 0;
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        font-size: 22px;
+        line-height: 44px;
+      }
+      .remove:disabled {
+        opacity: 0.4;
+      }
+      .empty {
+        margin-top: 16px;
+      }
+      form {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+      }
+      input {
+        flex: 1;
+        min-width: 0;
+        padding: 14px 16px;
+        border: 0;
+        border-radius: 8px;
+        background: #222;
+        color: #fff;
+        font: inherit;
+        font-size: 22px;
+        letter-spacing: 0.15em;
+      }
+      form button {
+        margin-top: 0;
+      }
+      .error {
+        margin-top: 12px;
+        color: #ff6b6b;
+        font-size: 15px;
+      }
       [hidden] {
         display: none !important;
       }
@@ -130,7 +231,7 @@
       </section>
 
       <section id="done" hidden>
-        <span class="ok">A TV do QR code já está sincronizada</span>
+        <span class="ok" id="paired">A TV do QR code já está sincronizada</span>
         <div class="label">Código da casa</div>
         <div class="code" id="code"></div>
         <h1>Para sincronizar outra TV</h1>
@@ -140,6 +241,25 @@
           <li>Escolha <b>Já tenho um código</b> e digite os 6 números acima.</li>
         </ol>
         <p>Continuar assistindo e os episódios assistidos ficam iguais em todas as TVs da casa.</p>
+
+        <div class="history">
+          <div class="history-head">
+            <h1>Histórico da casa</h1>
+            <button type="button" class="link" id="clear" hidden>Apagar tudo</button>
+          </div>
+          <p class="empty" id="history-status">Carregando…</p>
+          <ul id="history"></ul>
+        </div>
+      </section>
+
+      <section id="ask" hidden>
+        <h1>Ver o histórico da casa</h1>
+        <p>Digite o código da casa, mostrado em Configurações, Sincronizar entre TVs, numa TV já sincronizada.</p>
+        <form id="ask-form">
+          <input id="ask-code" inputmode="numeric" autocomplete="off" maxlength="7" placeholder="000 000" />
+          <button type="submit">Ver</button>
+        </form>
+        <p class="error" id="ask-error" hidden></p>
       </section>
 
       <section id="expired" hidden>
@@ -157,33 +277,266 @@
     <script>
       (function () {
         var token = (new URLSearchParams(location.search).get('t') || '').toLowerCase();
+        // separado do código do app: abrir o Freeflix neste celular não o faz sincronizar
+        var HOUSE_KEY = 'freeflix.phone.house';
+        var DEVICE_KEY = 'freeflix.phone.device';
+        var house = null;
+
+        function store(key, value) {
+          try {
+            if (value == null) localStorage.removeItem(key);
+            else localStorage.setItem(key, value);
+          } catch (e) {
+            /* sem persistência */
+          }
+        }
+
+        function stored(key) {
+          try {
+            return localStorage.getItem(key);
+          } catch (e) {
+            return null;
+          }
+        }
+
+        /** O servidor conta as tentativas de código por aparelho. */
+        function device() {
+          var id = stored(DEVICE_KEY);
+          if (id && /^[A-Za-z0-9-]{8,64}$/.test(id)) return id;
+          id = 'ph-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+          store(DEVICE_KEY, id);
+          return id;
+        }
 
         function show(id) {
-          ['loading', 'done', 'expired', 'error'].forEach(function (s) {
+          ['loading', 'done', 'ask', 'expired', 'error'].forEach(function (s) {
             document.getElementById(s).hidden = s !== id;
           });
         }
 
-        function claim() {
-          if (!/^[a-f0-9]{24}$/.test(token)) return show('expired');
-          show('loading');
-          fetch('/api/pair', {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action: 'claim', token: token }),
-          })
-            .then(function (res) {
-              if (res.status === 410 || res.status === 400) return show('expired');
-              if (!res.ok) throw new Error('http ' + res.status);
-              return res.json().then(function (data) {
-                document.getElementById('code').textContent = data.code.slice(0, 3) + ' ' + data.code.slice(3);
-                show('done');
+        function api(path, body) {
+          return fetch(
+            path,
+            body
+              ? { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) }
+              : undefined,
+          ).then(function (res) {
+            return res
+              .json()
+              .catch(function () {
+                return {};
+              })
+              .then(function (data) {
+                if (!res.ok) {
+                  var err = new Error('http ' + res.status);
+                  err.status = res.status;
+                  err.body = data;
+                  throw err;
+                }
+                return data;
               });
+          });
+        }
+
+        function openHouse(code, paired) {
+          house = code;
+          store(HOUSE_KEY, code);
+          document.getElementById('code').textContent = code.slice(0, 3) + ' ' + code.slice(3);
+          document.getElementById('paired').hidden = !paired;
+          show('done');
+          loadHistory();
+        }
+
+        function claim() {
+          if (!/^[a-f0-9]{24}$/.test(token)) return start();
+          show('loading');
+          api('/api/pair', { action: 'claim', token: token })
+            .then(function (data) {
+              openHouse(data.code, true);
             })
-            .catch(function () {
+            .catch(function (err) {
+              if (err.status === 410 || err.status === 400) {
+                // QR velho, mas este celular já conhece a casa
+                if (stored(HOUSE_KEY)) return openHouse(stored(HOUSE_KEY), false);
+                return show('expired');
+              }
               show('error');
             });
         }
+
+        /** Sem QR: a casa que este celular já abriu, ou pergunta o código. */
+        function start() {
+          var code = stored(HOUSE_KEY);
+          if (code && /^[0-9]{6}$/.test(code)) return openHouse(code, false);
+          show('ask');
+        }
+
+        // ---------- Histórico ----------
+
+        var titles = [];
+
+        function ago(at) {
+          var days = Math.floor((Date.now() - at) / 86400000);
+          if (days <= 0) return 'hoje';
+          if (days === 1) return 'ontem';
+          if (days < 30) return 'há ' + days + ' dias';
+          return new Date(at).toLocaleDateString('pt-BR');
+        }
+
+        /** Um item por título: o episódio mais recente e se já foi visto até o fim. */
+        function group(history, progress) {
+          var byTitle = {};
+          function add(row, at, finished) {
+            var t = byTitle[row.title_id];
+            if (!t) t = byTitle[row.title_id] = { id: row.title_id, at: 0, title: null, finished: false };
+            if (row.title) t.title = t.title || row.title;
+            if (at >= t.at) {
+              t.at = at;
+              t.season = row.season;
+              t.episode = row.episode;
+              t.finished = finished;
+              if (row.title) t.title = row.title;
+            }
+          }
+          history.forEach(function (r) {
+            add(r, Date.parse(r.watched_at) || 0, r.finished);
+          });
+          progress.forEach(function (r) {
+            add(r, Date.parse(r.updated_at) || 0, r.finished);
+          });
+          return Object.keys(byTitle)
+            .map(function (k) {
+              return byTitle[k];
+            })
+            .sort(function (a, b) {
+              return b.at - a.at;
+            });
+        }
+
+        function render() {
+          var list = document.getElementById('history');
+          var status = document.getElementById('history-status');
+          list.textContent = '';
+          document.getElementById('clear').hidden = !titles.length;
+          status.hidden = titles.length > 0;
+          if (!titles.length) status.textContent = 'Nada assistido ainda.';
+          titles.forEach(function (t) {
+            var li = document.createElement('li');
+            li.className = 'item';
+            var poster = document.createElement('div');
+            poster.className = 'poster';
+            if (t.title && t.title.poster) poster.style.backgroundImage = 'url("' + encodeURI(t.title.poster) + '")';
+            var info = document.createElement('div');
+            info.className = 'info';
+            var name = document.createElement('div');
+            name.className = 'name';
+            name.textContent = (t.title && t.title.title) || t.id;
+            var meta = document.createElement('div');
+            meta.className = 'meta';
+            var parts = [];
+            if (t.season != null && t.episode != null) parts.push('T' + t.season + ':E' + t.episode);
+            parts.push(t.finished ? 'visto' : 'em andamento');
+            parts.push(ago(t.at));
+            meta.textContent = parts.join(' · ');
+            info.appendChild(name);
+            info.appendChild(meta);
+            var remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'remove';
+            remove.setAttribute('aria-label', 'Apagar ' + name.textContent + ' do histórico');
+            remove.textContent = '×';
+            remove.addEventListener('click', function () {
+              if (!confirm('Apagar "' + name.textContent + '" do histórico e de Continuar assistindo em todas as TVs?')) return;
+              remove.disabled = true;
+              removeTitles({ titles: [t.id] }, function () {
+                titles = titles.filter(function (x) {
+                  return x.id !== t.id;
+                });
+                render();
+              }, function () {
+                remove.disabled = false;
+              });
+            });
+            li.appendChild(poster);
+            li.appendChild(info);
+            li.appendChild(remove);
+            list.appendChild(li);
+          });
+        }
+
+        function loadHistory() {
+          var status = document.getElementById('history-status');
+          status.hidden = false;
+          status.textContent = 'Carregando…';
+          document.getElementById('history').textContent = '';
+          api('/api/sync?code=' + house + '&device=' + encodeURIComponent(device()))
+            .then(function (data) {
+              titles = group(data.history || [], data.progress || []);
+              render();
+            })
+            .catch(function (err) {
+              if (err.status === 404) {
+                // casa não existe mais
+                store(HOUSE_KEY, null);
+                return show('ask');
+              }
+              status.textContent = 'Não deu para carregar o histórico. Confira a internet e recarregue a página.';
+            });
+        }
+
+        function removeTitles(what, done, failed) {
+          var body = { action: 'remove', code: house, device: device() };
+          if (what.all) body.all = true;
+          else body.titles = what.titles;
+          api('/api/sync', body).then(done, function () {
+            alert('Não deu para apagar. Confira a internet e tente de novo.');
+            failed();
+          });
+        }
+
+        document.getElementById('clear').addEventListener('click', function () {
+          var button = this;
+          if (!confirm('Apagar todo o histórico e Continuar assistindo em todas as TVs da casa?')) return;
+          button.disabled = true;
+          removeTitles(
+            { all: true },
+            function () {
+              button.disabled = false;
+              titles = [];
+              render();
+            },
+            function () {
+              button.disabled = false;
+            },
+          );
+        });
+
+        document.getElementById('ask-form').addEventListener('submit', function (e) {
+          e.preventDefault();
+          var code = document.getElementById('ask-code').value.replace(/\D/g, '');
+          var error = document.getElementById('ask-error');
+          error.hidden = true;
+          if (code.length !== 6) {
+            error.textContent = 'São 6 números.';
+            error.hidden = false;
+            return;
+          }
+          api('/api/sync?code=' + code + '&device=' + encodeURIComponent(device()))
+            .then(function () {
+              openHouse(code, false);
+            })
+            .catch(function (err) {
+              if (err.status === 429) {
+                var min = Math.max(1, Math.ceil(Number((err.body && err.body.retryAfter) || 600) / 60));
+                error.textContent = 'Muitas tentativas. Tente de novo em ' + min + ' min.';
+              } else if (err.status === 404) {
+                error.textContent = 'Código não encontrado.';
+              } else {
+                error.textContent = 'Não deu para falar com o servidor.';
+              }
+              error.hidden = false;
+            });
+        });
 
         document.getElementById('retry').addEventListener('click', claim);
         claim();

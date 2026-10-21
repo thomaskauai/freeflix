@@ -1,8 +1,10 @@
 // Posições e histórico de uma casa.
 //   GET  ?code=&device=                          -> { progress: [...], history: [...] }
 //   POST { code, device, progress: [], history: [] } -> { saved }
+//   POST { action: "remove", code, device, titles: [] | all: true } -> { removed }
 // Em conflito vale o registro com updated_at mais recente; posição igual à
-// guardada não grava nada.
+// guardada não grava nada. Título apagado deixa marca em "removed": o que
+// chegar com horário de antes dela não volta.
 import { checkHouse, ensureSchema, json, preflight, readBody, sql } from './_lib.js';
 
 /** linhas por envio e por leitura */
@@ -18,7 +20,7 @@ export async function GET(req: Request) {
   const code = params.get('code');
   const refused = await checkHouse(req, code, params.get('device'));
   if (refused) return refused;
-  const [progress, history] = await Promise.all([
+  const [progress, history, removed] = await Promise.all([
     sql`
       select content_id, title_id, season, episode, position_seconds, duration_seconds, finished, title,
              updated_at
@@ -30,8 +32,12 @@ export async function GET(req: Request) {
       from history where house_code = ${code}
       order by watched_at desc limit ${MAX_READ}
     `,
+    sql`
+      select title_id, removed_at from removed where house_code = ${code}
+      order by removed_at desc limit ${MAX_READ}
+    `,
   ]);
-  return json({ progress, history });
+  return json({ progress, history, removed });
 }
 
 const int = (value: unknown, max = 1_000_000) =>
@@ -89,6 +95,8 @@ export async function POST(req: Request) {
   if (refused) return refused;
   const code = body.code as string;
 
+  if (body.action === 'remove') return remove(code, body);
+
   const progress = (Array.isArray(body.progress) ? body.progress : []).slice(0, MAX_WRITE).map(rowOf);
   const history = (Array.isArray(body.history) ? body.history : []).slice(0, MAX_WRITE).map(rowOf);
 
@@ -101,8 +109,12 @@ export async function POST(req: Request) {
         sql`
           insert into progress as p (house_code, content_id, title_id, season, episode, position_seconds,
                                      duration_seconds, finished, title, updated_at)
-          values (${code}, ${r.content}, ${r.titleId}, ${r.season}, ${r.episode}, ${position}, ${duration},
-                  ${r.raw.finished === true}, ${snapshot(r.raw.title)}::jsonb, ${when(r.raw.updated_at)})
+          select ${code}, ${r.content}, ${r.titleId}, ${r.season}, ${r.episode}, ${position}, ${duration},
+                 ${r.raw.finished === true}, ${snapshot(r.raw.title)}::jsonb, ${when(r.raw.updated_at)}::timestamptz
+          where not exists (
+            select 1 from removed where house_code = ${code} and title_id = ${r.titleId}
+              and removed_at >= ${when(r.raw.updated_at)}::timestamptz
+          )
           on conflict (house_code, content_id) do update set
             title_id = excluded.title_id,
             season = excluded.season,
@@ -124,8 +136,12 @@ export async function POST(req: Request) {
         ? [
             sql`
               insert into history as h (house_code, content_id, title_id, season, episode, title, watched_at, finished)
-              values (${code}, ${r.content}, ${r.titleId}, ${r.season}, ${r.episode},
-                      ${snapshot(r.raw.title)}::jsonb, ${when(r.raw.watched_at)}, ${r.raw.finished === true})
+              select ${code}, ${r.content}, ${r.titleId}, ${r.season}, ${r.episode},
+                     ${snapshot(r.raw.title)}::jsonb, ${when(r.raw.watched_at)}::timestamptz, ${r.raw.finished === true}
+              where not exists (
+                select 1 from removed where house_code = ${code} and title_id = ${r.titleId}
+                  and removed_at >= ${when(r.raw.watched_at)}::timestamptz
+              )
               on conflict (house_code, content_id) do update set
                 watched_at = greatest(h.watched_at, excluded.watched_at),
                 finished = h.finished or excluded.finished,
@@ -138,4 +154,32 @@ export async function POST(req: Request) {
   ];
   if (writes.length) await sql.transaction(writes);
   return json({ saved: writes.length });
+}
+
+/** Apaga títulos (ou tudo) de Continuar assistindo e do histórico da casa. */
+async function remove(code: string, body: Record<string, unknown>) {
+  const now = new Date().toISOString();
+  let titles: string[];
+  if (body.all === true) {
+    const rows = (await sql`
+      select title_id from history where house_code = ${code}
+      union select title_id from progress where house_code = ${code}
+    `) as { title_id: string }[];
+    titles = rows.map((r) => r.title_id);
+  } else {
+    titles = (Array.isArray(body.titles) ? body.titles : [])
+      .filter((t): t is string => typeof t === 'string' && CONTENT.test(t))
+      .slice(0, MAX_WRITE);
+  }
+  if (!titles.length) return json({ removed: 0 });
+  await sql.transaction([
+    sql`delete from progress where house_code = ${code} and title_id = any(${titles})`,
+    sql`delete from history where house_code = ${code} and title_id = any(${titles})`,
+    sql`
+      insert into removed (house_code, title_id, removed_at)
+      select ${code}, t, ${now}::timestamptz from unnest(${titles}::text[]) as t
+      on conflict (house_code, title_id) do update set removed_at = excluded.removed_at
+    `,
+  ]);
+  return json({ removed: titles.length });
 }

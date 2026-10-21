@@ -33,6 +33,8 @@ const TIMEOUT_MS = 12000;
 const PUSH_EVERY_MS = 10000;
 /** voltar ao app (trocar de entrada da TV, por exemplo) busca de novo, se faz tempo */
 const PULL_AGAIN_MS = 30000;
+/** com o app aberto, busca o que as outras TVs (e o celular) mudaram de tempos em tempos */
+const PULL_EVERY_MS = 60000;
 /** avisado quando chegam dados de outra TV: telas abertas se redesenham */
 export const SYNC_EVENT = 'freeflix:sync';
 
@@ -166,6 +168,12 @@ interface HistoryRow {
   title: TitleSnapshot | null;
   watched_at: string | number;
   finished: boolean;
+}
+
+/** título apagado do histórico da casa (pelo celular) */
+interface RemovedRow {
+  title_id: string;
+  removed_at: string | number;
 }
 
 const time = (value: string | number) => (typeof value === 'number' ? value : Date.parse(value) || 0);
@@ -338,6 +346,7 @@ export function pull(): Promise<void> {
     .then(
       (data) => {
         lastPull = Date.now();
+        forget((data.removed as RemovedRow[]) || []);
         merge((data.progress as ProgressRow[]) || [], (data.history as HistoryRow[]) || []);
         return push();
       },
@@ -349,6 +358,52 @@ export function pull(): Promise<void> {
       pulling = null;
     });
   return pulling;
+}
+
+/** Apaga daqui o que a casa apagou: só o visto antes da remoção (depois dela é novo). */
+function forget(removed: RemovedRow[]) {
+  if (!removed.length) return;
+  const all = getAllProgress();
+  const episodes = getAllEpisodeProgress();
+  const history = getHistory();
+  const box = pending();
+  let changed = false;
+  removed.forEach((r) => {
+    const at = time(r.removed_at);
+    const id = r.title_id;
+    if (all[id] && all[id].updatedAt <= at) {
+      delete all[id];
+      changed = true;
+    }
+    const mine = episodes[id];
+    if (mine) {
+      Object.keys(mine).forEach((k) => {
+        if ((mine[k].updatedAt ?? 0) <= at) {
+          delete mine[k];
+          changed = true;
+        }
+      });
+      if (!Object.keys(mine).length) delete episodes[id];
+    }
+    Object.keys(history).forEach((k) => {
+      if (history[k].titleId === id && history[k].watchedAt <= at) {
+        delete history[k];
+        changed = true;
+      }
+    });
+    Object.keys(box.progress).forEach((k) => {
+      if (box.progress[k].title_id === id && time(box.progress[k].updated_at) <= at) delete box.progress[k];
+    });
+    Object.keys(box.history).forEach((k) => {
+      if (box.history[k].title_id === id && time(box.history[k].watched_at) <= at) delete box.history[k];
+    });
+  });
+  if (!changed) return;
+  write('progress', all);
+  write('episodes', episodes);
+  write('history', history);
+  write(PENDING, box);
+  window.dispatchEvent(new Event(SYNC_EVENT));
 }
 
 function merge(rows: ProgressRow[], historyRows: HistoryRow[]) {
@@ -437,7 +492,7 @@ function merge(rows: ProgressRow[], historyRows: HistoryRow[]) {
 /**
  * Ao abrir o app: TV sem código pergunta ao servidor se ela já é de alguma
  * casa (reinstalada, dados apagados); com código, busca as novidades. Depois
- * busca de novo quando o app volta a aparecer e já faz um tempo.
+ * busca de novo a cada minuto com o app na tela e quando ele volta a aparecer.
  */
 export function startSync() {
   const code = houseCode();
@@ -463,6 +518,9 @@ export function startSync() {
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && Date.now() - lastPull > PULL_AGAIN_MS) pull();
   });
+  window.setInterval(() => {
+    if (!document.hidden && Date.now() - lastPull >= PULL_EVERY_MS - 1000) pull();
+  }, PULL_EVERY_MS);
 }
 
 /** Redesenha a tela quando chegam dados de outra TV. */
