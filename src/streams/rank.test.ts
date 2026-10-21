@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AddonStream } from '../data/addonClient';
 import { parseStream } from './parse';
 import { srtToVtt } from './subtitles';
-import { audioChoice, describeStream, hasOriginalAudio, rankStreams, resolutionCap, type RankContext } from './rank';
+import { audioChoice, describeStream, foreignOnly, hasOriginalAudio, rankStreams, resolutionCap, type RankContext } from './rank';
 
 const stream = (name: string, title: string, extra: Partial<AddonStream> = {}): AddonStream => ({
   name,
@@ -211,5 +211,19 @@ describe('audioChoice', () => {
     expect(audioChoice({ languages: ['pt'], multiAudio: false }, 'en')).toMatchObject({ label: 'Português', lang: 'pt', original: false });
     expect(audioChoice({ languages: ['pt', 'en'], multiAudio: true }, 'en').label).toBe('Dual: Português e Inglês');
     expect(audioChoice({ languages: [], multiAudio: false }).label).toBe('Original');
+  });
+});
+
+describe('foreignOnly', () => {
+  const ctx = { audio: 'original' as const, originalLanguage: 'en' };
+  const stream = (title: string) => parseStream({ name: 'X', title, url: 'http://x/v.mp4' }, 'X');
+  it('dublagem russa sai; português, inglês, original e dual ficam', () => {
+    expect(foreignOnly(stream('Filme.1080p 🇷🇺'), ctx)).toBe(true);
+    expect(foreignOnly(stream('Filme.1080p.RUS'), ctx)).toBe(true);
+    expect(foreignOnly(stream('Filme.1080p 🇧🇷'), ctx)).toBe(false);
+    expect(foreignOnly(stream('Filme.1080p.English'), ctx)).toBe(false);
+    expect(foreignOnly(stream('Filme.1080p'), ctx)).toBe(false);
+    expect(foreignOnly(stream('Filme.1080p.Dual.Audio RUS'), ctx)).toBe(false);
+    expect(foreignOnly(stream('Anime.1080p.Japanese'), { audio: 'original', originalLanguage: 'ja' })).toBe(false);
   });
 });

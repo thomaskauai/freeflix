@@ -81,6 +81,18 @@ function languageTier(s: ParsedStream, ctx: RankContext): number {
   return 1;
 }
 
+/**
+ * Áudio que ninguém aqui pediu: dublagem só em outro idioma (russo, francês…),
+ * sem português, inglês, o original da obra ou o preferido.
+ */
+export function foreignOnly(s: ParsedStream, ctx: Pick<RankContext, 'audio' | 'originalLanguage'>): boolean {
+  if (s.multiAudio || s.languages.length === 0) return false;
+  const wanted = ['pt', 'en'];
+  if (ctx.originalLanguage) wanted.push(ctx.originalLanguage);
+  if (ctx.audio !== 'original') wanted.push(ctx.audio);
+  return !s.languages.some((l) => wanted.indexOf(l) >= 0);
+}
+
 const sameAudio = (s: ParsedStream, p: SourceProfile) =>
   s.multiAudio === p.multiAudio && s.languages.slice().sort().join() === p.languages.slice().sort().join();
 
@@ -145,7 +157,17 @@ export function rankStreams(streams: ParsedStream[], ctx: RankContext): ParsedSt
     .map((entry) => entry.s);
 }
 
-const LANGUAGE_LABELS: Record<string, string> = { pt: 'português', en: 'inglês', es: 'espanhol' };
+const LANGUAGE_LABELS: Record<string, string> = {
+  pt: 'português',
+  en: 'inglês',
+  es: 'espanhol',
+  fr: 'francês',
+  de: 'alemão',
+  it: 'italiano',
+  ja: 'japonês',
+  ko: 'coreano',
+  ru: 'russo',
+};
 
 /** Resumo de uma linha da fonte em uso, para o espectador. */
 export function describeStream(s: ParsedStream): string {

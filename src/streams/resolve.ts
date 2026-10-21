@@ -3,7 +3,7 @@ import type { Title } from '../data/types';
 import { getSettings } from '../settings';
 import { getSpeed } from './network';
 import { parseStream, type ParsedStream } from './parse';
-import { audioChoice, describeStream, rankStreams, type RankContext, type SourceProfile } from './rank';
+import { audioChoice, describeStream, foreignOnly, rankStreams, type RankContext, type SourceProfile } from './rank';
 import { installDefaultSources, listSources, sourcePriority, type SourceAddon } from './sources';
 
 export interface Candidate {
@@ -106,7 +106,10 @@ export async function resolvePlayback(
     canPlay: deviceCanPlay,
     prefer: options.prefer,
   };
-  const ranked = rankStreams(all, context);
+  // Dublagem só em outro idioma (russo, francês…) fica de fora, a não ser que seja o que há.
+  const playable = rankStreams(all, context);
+  const wanted = playable.filter((s) => !foreignOnly(s, context));
+  const ranked = wanted.length ? wanted : playable;
   if (ranked.length === 0) {
     return { reason: all.some((s) => s.unplayable === 'torrent') ? 'torrent-only' : 'not-found' };
   }
