@@ -27,6 +27,7 @@
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
+    "adbhost": "^0.0.2",
     "tizen": "github:reisxd/tizen.js#45b00106149d0c8eff74ead4a979c909dd80efd6",
     "typescript": "^5.5.4",
     "vite": "^5.4.6",
