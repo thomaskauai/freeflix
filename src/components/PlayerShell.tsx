@@ -28,10 +28,6 @@ const UPNEXT_S = 20;
 const SAVE_EVERY_MS = 5000;
 /** fonte que não começa a tocar nesse tempo é dada como ruim */
 const START_TIMEOUT_MS = 15000;
-/** altura das legendas, em % da tela a partir do topo */
-const SUBTITLE_LINE = 82;
-/** com os controles na tela, a legenda sobe para não ficar entre a barra e os botões */
-const SUBTITLE_LINE_CONTROLS = 70;
 /** idioma da legenda dos atalhos ("… com legendas") */
 const PRESET_SUBTITLE: SubtitleLanguage = 'pt';
 
@@ -51,6 +47,19 @@ export function formatClock(seconds: number) {
   // sem padStart: o WebView das TVs mais antigas não tem
   const two = (n: number) => (n < 10 ? `0${n}` : String(n));
   return h ? `${h}:${two(m)}:${two(s % 60)}` : `${m}:${two(s % 60)}`;
+}
+
+/** Texto da fala sem marcações (<i>, <font>, {\an8}…); quebras de linha ficam. */
+function cueText(cue: VTTCue): string {
+  return cue.text
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\{[^}]*\}/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .trim();
 }
 
 function SourceOption({ label, current, onPick }: { label: string; current: boolean; onPick: () => void }) {
@@ -205,8 +214,8 @@ export function PlayerShell({
   /** quanto a última passada moveu, para o aviso no meio da tela */
   const [feedback, setFeedback] = useState<number | null>(null);
   const [visible, setVisible] = useState(true);
-  const visibleRef = useRef(true);
-  visibleRef.current = visible;
+  /** fala em exibição: a legenda é desenhada pelo app, não pelo navegador */
+  const [caption, setCaption] = useState('');
   const [toast, setToast] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
@@ -482,22 +491,6 @@ export function PlayerShell({
     toastTimer.current = window.setTimeout(() => setToast(''), 4500);
   };
 
-  /** Altura da legenda: acima da faixa dos controles quando eles estão na tela. */
-  const placeCues = (controls: boolean) => {
-    if (!media) return;
-    Array.prototype.slice.call(media.querySelectorAll('track[data-freeflix]')).forEach((t: HTMLTrackElement) => {
-      const cues = t.track.cues;
-      for (let i = 0; cues && i < cues.length; i++) {
-        const cue = cues[i] as VTTCue;
-        cue.snapToLines = false;
-        cue.line = controls ? SUBTITLE_LINE_CONTROLS : SUBTITLE_LINE;
-      }
-    });
-  };
-
-  const showControls = visible || failed;
-  useEffect(() => placeCues(showControls), [showControls, media]);
-
   // Tira a legenda em uso: a faixa que este shell pôs no <video> e o arquivo dela.
   const clearSubtitle = () => {
     if (!media) return;
@@ -505,6 +498,7 @@ export function PlayerShell({
       if (t.src.indexOf('blob:') === 0) URL.revokeObjectURL(t.src);
       media.removeChild(t);
     });
+    setCaption('');
   };
 
   const applySubtitle = (option: SubtitleOption | null, announce: boolean) => {
@@ -525,11 +519,15 @@ export function PlayerShell({
         track.src = src;
         track.setAttribute('data-freeflix', '');
         media.appendChild(track);
-        // o navegador só mostra a faixa recém-criada se mandarmos
-        track.track.mode = 'showing';
-        // Por padrão a fala encosta na borda de baixo e corta; sobe para uma
-        // faixa segura, acima da barra de progresso.
-        track.addEventListener('load', () => placeCues(visibleRef.current));
+        // Escondida: o navegador (e a TV) desenharia com tarja própria, que CSS
+        // não tira. O app lê a fala da vez e desenha como a Netflix.
+        track.track.mode = 'hidden';
+        track.track.addEventListener('cuechange', () => {
+          const active = track.track.activeCues;
+          const lines: string[] = [];
+          for (let i = 0; active && i < active.length; i++) lines.push(cueText(active[i] as VTTCue));
+          setCaption(lines.join('\n'));
+        });
         setSubtitleBusy(false);
         if (announce) showToast(`Legendas: ${option.label}`);
       },
@@ -617,6 +615,11 @@ export function PlayerShell({
 
   return (
     <>
+      {caption && (
+        <div className={`captions${visible || failed ? ' is-raised' : ''}`} aria-live="polite">
+          <span>{caption}</span>
+        </div>
+      )}
       <div
         className={`shell${visible || failed ? '' : ' is-hidden'}${seeking ? ' is-seeking' : ''}`}
       >
