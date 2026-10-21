@@ -594,6 +594,13 @@ export function PlayerShell({
 
   // aparece mesmo com uma fonte só, para ver qual está tocando
   const hasSources = !!sources && sources.length > 0 && !!onPickSource;
+  const subtitlesTitle = !subtitlesFor
+    ? 'Legendas indisponíveis'
+    : subtitles === null
+      ? 'Procurando legendas'
+      : subtitleBusy
+        ? 'Carregando legenda'
+        : 'Legendas';
   const presets = presetsFor(audios, audioIndex, subtitles);
   const presetNow = presets.filter((p) => p.audio === audioIndex && p.subtitle === subtitleLang)[0];
 
@@ -617,8 +624,9 @@ export function PlayerShell({
         </div>
 
         {menuOpen && sources && onPickSource && (
-          <div ref={menu} className="shell__menu" data-focus-layer="" data-native-scroll="">
-            <div className="shell__menu-title">Fontes deste título</div>
+          // ⚙: barra lateral com a fonte de vídeo e, embaixo, as legendas
+          <div ref={menu} className="shell__sidebar" data-focus-layer="" data-native-scroll="">
+            <div className="shell__menu-title">Fonte de vídeo</div>
             {sources.map((label, i) => (
               <SourceOption
                 key={i}
@@ -630,6 +638,16 @@ export function PlayerShell({
                   if (time > 0) onProgress(time, length, 'pause');
                   onPickSource(i);
                 }}
+              />
+            ))}
+            <div className="shell__menu-title shell__menu-title--section">{subtitlesTitle}</div>
+            <SourceOption label="Desligadas" current={subtitleLang === null} onPick={() => pickSubtitle(null)} />
+            {(subtitles ?? []).map((option) => (
+              <SourceOption
+                key={option.language}
+                label={option.label}
+                current={subtitleLang === option.language}
+                onPick={() => pickSubtitle(option)}
               />
             ))}
           </div>
@@ -653,15 +671,7 @@ export function PlayerShell({
               )}
             </div>
             <div className="shell__column" data-native-scroll="">
-              <div className="shell__menu-title">
-                {!subtitlesFor
-                  ? 'Legendas indisponíveis'
-                  : subtitles === null
-                    ? 'Procurando legendas'
-                    : subtitleBusy
-                      ? 'Carregando legenda'
-                      : 'Legendas'}
-              </div>
+              <div className="shell__menu-title">{subtitlesTitle}</div>
               <SourceOption label="Desligadas" current={subtitleLang === null} onPick={() => pickSubtitle(null)} />
               {(subtitles ?? []).map((option) => (
                 <SourceOption

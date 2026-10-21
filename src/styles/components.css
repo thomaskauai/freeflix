@@ -1495,6 +1495,46 @@
   transform: scale(1.2);
 }
 
+/* ⚙: barra lateral à direita, fonte de vídeo e legendas */
+.shell__sidebar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 640px;
+  max-width: 100%;
+  z-index: 2;
+  padding: 72px 40px;
+  background: var(--coal);
+  box-shadow: -24px 0 70px rgba(0, 0, 0, 0.6);
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  animation: sidebar-in 200ms var(--ease) both;
+}
+
+.shell__sidebar::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes sidebar-in {
+  from {
+    transform: translate3d(100%, 0, 0);
+  }
+}
+
+.shell__sidebar .shell__menu-title {
+  font-size: 24px;
+  color: var(--white);
+}
+
+.shell__menu-title--section {
+  margin-top: 28px;
+  padding-top: 32px !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
 /* com o painel aberto, título e linha do tempo saem de trás dele */
 .shell.is-panel .shell__heading,
 .shell.is-panel .shell__bottom {
@@ -2840,6 +2880,11 @@
 
 .is-compact .shell__bottom {
   bottom: 116px;
+}
+
+.is-compact .shell__sidebar {
+  width: 100%;
+  padding: 44px 28px;
 }
 
 .is-compact .shell__chips {
