@@ -167,7 +167,47 @@ export function searchTier(title: Title, wanted: string): number {
  * Catálogo servido por um addon. `localized` troca os nomes das listas pelos
  * em português; títulos e sinopses já vêm no idioma do endereço do addon.
  */
-export function createAddonProvider(base: string, localized: boolean): CatalogProvider {
+/** Nome que o catálogo inventa quando o episódio não tem título traduzido. */
+const GENERIC_EPISODE = /^(epis[oó]dio|episode)\s*\d+$/i;
+
+/**
+ * Completa o catálogo traduzido com o mesmo título em outro idioma (mesmos ids
+ * e numeração, vindos do TMDB): nome, duração e imagem de episódio que faltam,
+ * e a sinopse vazia.
+ */
+export function fillFrom(meta: AddonMeta, other: AddonMeta | null): AddonMeta {
+  if (!other) return meta;
+  const byNumber: Record<string, NonNullable<AddonMeta['videos']>[number]> = {};
+  (other.videos ?? []).forEach((v) => (byNumber[`${v.season}:${v.episode}`] = v));
+  return {
+    ...meta,
+    description: meta.description || other.description,
+    videos: (meta.videos ?? []).map((v) => {
+      const o = byNumber[`${v.season}:${v.episode}`];
+      if (!o) return v;
+      const name = v.title || v.name || '';
+      const otherName = o.title || o.name || '';
+      return {
+        ...v,
+        title: (!name || GENERIC_EPISODE.test(name)) && otherName && !GENERIC_EPISODE.test(otherName) ? otherName : name,
+        runtime: v.runtime || o.runtime,
+        thumbnail: v.thumbnail || o.thumbnail,
+      };
+    }),
+  };
+}
+
+/** Falta algo que o outro idioma pode ter? */
+function incomplete(meta: AddonMeta): boolean {
+  if (!meta.description) return true;
+  return (meta.videos ?? []).some((v) => {
+    if (!v.season || !v.episode) return false;
+    const name = v.title || v.name || '';
+    return !name || GENERIC_EPISODE.test(name) || !v.thumbnail;
+  });
+}
+
+export function createAddonProvider(base: string, localized: boolean, fallback?: string): CatalogProvider {
   const catalogs = () =>
     fetchManifest(base).then((m) =>
       (m.catalogs ?? []).filter(
@@ -178,7 +218,13 @@ export function createAddonProvider(base: string, localized: boolean): CatalogPr
       ),
     );
 
-  const meta = (type: TitleType, id: string) => fetchMeta(base, type, id).catch(() => null);
+  const meta = async (type: TitleType, id: string) => {
+    // os dois ao mesmo tempo: o /meta leva segundos, e esperar um depois do outro dobraria
+    const other = fallback ? fetchMeta(fallback, type, id).catch(() => null) : null;
+    const m = await fetchMeta(base, type, id).catch(() => null);
+    if (!m || !other || !incomplete(m)) return m;
+    return fillFrom(m, await other);
+  };
 
   // Títulos vistos em listas, para peekTitle. O /meta deste addon leva segundos.
   const known: Record<string, Title> = {};

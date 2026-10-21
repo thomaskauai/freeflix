@@ -15,6 +15,8 @@ function prefersPortuguese(): boolean {
 export const CATALOG = {
   base: prefersPortuguese() ? ADDON_PT : ADDON_EN,
   localized: prefersPortuguese(),
+  /** mesmo catálogo em inglês: completa episódio e sinopse que o TMDB ainda não traduziu */
+  fallback: prefersPortuguese() ? ADDON_EN : undefined,
 };
 
 // Addon "Streaming Catalogs": o que está em cada streaming no país (dados do

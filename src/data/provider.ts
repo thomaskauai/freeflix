@@ -3,7 +3,7 @@ import { createAddonProvider } from './addonProvider';
 import { getMyList, getProgress, titleFromSnapshot } from './storage';
 import type { CatalogProvider, Title, TitleType } from './types';
 
-export const catalog: CatalogProvider = createAddonProvider(CATALOG.base, CATALOG.localized);
+export const catalog: CatalogProvider = createAddonProvider(CATALOG.base, CATALOG.localized, CATALOG.fallback);
 
 /**
  * O que já se sabe do título sem ir ao servidor: o cartão de onde ele foi
