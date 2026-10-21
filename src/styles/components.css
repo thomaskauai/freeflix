@@ -1172,7 +1172,7 @@
 
 .shell::after {
   bottom: 0;
-  height: 340px;
+  height: 440px;
   background: linear-gradient(0deg, rgba(0, 0, 0, 0.8) 0, rgba(0, 0, 0, 0) 100%);
 }
 
@@ -1182,17 +1182,6 @@
   left: 112px;
   display: flex;
   z-index: 1;
-}
-
-/* legendas e fontes ficam à direita */
-.shell__top--right {
-  left: auto;
-  right: 112px;
-}
-
-.shell__top--right .shell__btn {
-  margin-right: 0;
-  margin-left: 59px;
 }
 
 .shell__menu {
@@ -1310,7 +1299,7 @@
 .shell__heading {
   position: absolute;
   left: 213px;
-  bottom: 168px;
+  bottom: 240px;
   z-index: 1;
 }
 
@@ -1339,7 +1328,7 @@
 
 .shell__bottom {
   position: absolute;
-  bottom: 79px;
+  bottom: 150px;
   left: 0;
   width: 100%;
   height: 64px;
@@ -1440,6 +1429,110 @@
 
 .shell__bottom:focus .shell__time {
   color: var(--white);
+}
+
+/* Áudio e legendas como na Netflix: atalhos embaixo da linha do tempo. */
+.shell__chips {
+  position: absolute;
+  left: 213px;
+  right: 213px;
+  bottom: 60px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.shell__chips::-webkit-scrollbar {
+  display: none;
+}
+
+.shell__chip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 56px;
+  margin-right: 16px;
+  padding: 0 26px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 22px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.82);
+  transition: background-color var(--focus-ms) linear, color var(--focus-ms) linear;
+}
+
+.shell__chip svg {
+  width: 24px;
+  height: 24px;
+  margin-right: 12px;
+}
+
+.shell__chip.is-current {
+  color: var(--white);
+}
+
+.shell__chip:focus {
+  background: var(--white);
+  color: var(--black);
+}
+
+.shell__chips .shell__btn {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  margin: 0 0 0 8px;
+}
+
+.shell__chips .shell__btn svg {
+  width: 32px;
+  height: 32px;
+}
+
+.shell__chips .shell__btn:focus {
+  transform: scale(1.2);
+}
+
+/* com o painel aberto, título e linha do tempo saem de trás dele */
+.shell.is-panel .shell__heading,
+.shell.is-panel .shell__bottom {
+  visibility: hidden;
+}
+
+/* "Outro…": áudio e legendas lado a lado */
+.shell__panel {
+  position: absolute;
+  left: 213px;
+  right: 213px;
+  bottom: 150px;
+  max-height: calc(100% - 300px);
+  z-index: 2;
+  display: flex;
+  padding: 20px;
+  border-radius: 12px;
+  background: rgba(20, 20, 20, 0.96);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 24px 70px rgba(0, 0, 0, 0.6);
+}
+
+.shell__column {
+  flex: 1;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.shell__column::-webkit-scrollbar {
+  display: none;
+}
+
+.shell__column + .shell__column {
+  margin-left: 20px;
+  padding-left: 20px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 /* destino da passada, acima do marcador */
@@ -2409,7 +2502,7 @@
 
 .is-short .shell__heading {
   left: 112px;
-  bottom: 128px;
+  bottom: 176px;
 }
 
 /* controles mais perto das bordas: a barra de progresso ganha o comprimento */
@@ -2431,7 +2524,20 @@
 }
 
 .is-short .shell__bottom {
-  bottom: 46px;
+  bottom: 100px;
+}
+
+.is-short .shell__chips {
+  left: 112px;
+  right: 112px;
+  bottom: 28px;
+}
+
+.is-short .shell__panel {
+  left: 112px;
+  right: 112px;
+  bottom: 100px;
+  max-height: calc(100% - 200px);
 }
 
 .is-short .shell__thumb {
@@ -2699,18 +2805,8 @@
   left: 28px;
 }
 
-.is-compact .shell__top--right {
-  left: auto;
-  right: 28px;
-}
-
 .is-compact .shell__btn {
   margin-right: 30px;
-}
-
-.is-compact .shell__top--right .shell__btn {
-  margin-right: 0;
-  margin-left: 44px;
 }
 
 .is-compact .shell__menu {
@@ -2735,7 +2831,7 @@
 .is-compact .shell__heading {
   left: 28px;
   right: 28px;
-  bottom: 150px;
+  bottom: 214px;
 }
 
 .is-compact .shell__title {
@@ -2743,7 +2839,35 @@
 }
 
 .is-compact .shell__bottom {
-  bottom: 56px;
+  bottom: 116px;
+}
+
+.is-compact .shell__chips {
+  left: 28px;
+  right: 28px;
+  bottom: 36px;
+}
+
+/* tela estreita: legendas embaixo do áudio */
+.is-compact .shell__panel {
+  left: 28px;
+  right: 28px;
+  bottom: 116px;
+  max-height: calc(100% - 300px);
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.is-compact .shell__column {
+  flex: none;
+  overflow: visible;
+}
+
+.is-compact .shell__column + .shell__column {
+  margin: 16px 0 0;
+  padding: 16px 0 0;
+  border-left: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .is-compact .shell__play {

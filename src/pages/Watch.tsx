@@ -21,6 +21,7 @@ import {
   resumePoint,
   type Plan,
 } from '../streams/playback';
+import { audioChoice } from '../streams/rank';
 import type { NoSourceReason } from '../streams/resolve';
 
 const MESSAGES: Record<NoSourceReason | 'all-failed', { title: string; text: string; settings?: boolean }> = {
@@ -272,6 +273,10 @@ export default function Watch() {
   // A lista mostra uma linha por opção distinta. Espelhos da mesma opção não
   // aparecem: são a reserva que o player usa sozinho se o primeiro falhar.
   const options = plan.candidates.map((c) => c.label).filter((label, i, all) => all.indexOf(label) === i);
+  // Áudios: um por tipo entre as fontes (dublada, original, dual), na ordem da melhor fonte de cada.
+  const audioOf = plan.candidates.map((c) => audioChoice(c.profile, title.originalLanguage));
+  const audios = audioOf.filter((a, i) => audioOf.map((b) => b.key).indexOf(a.key) === i);
+  const audioKeys = audios.map((a) => a.key);
   // Fonte ruim fica marcada: a próxima abertura deste título já começa pela
   // seguinte. Acabou a lista e as outras fontes ainda vão chegar: espera por elas.
   const next = () => {
@@ -328,6 +333,9 @@ export default function Watch() {
         subtitlesFor={subtitleId ? { type: title.type, videoId: subtitleId } : undefined}
         sources={options}
         sourceIndex={options.indexOf(candidate.label)}
+        audios={audios}
+        audioIndex={audioKeys.indexOf(audioOf[plan.index].key)}
+        onPickAudio={(i) => setPlan({ ...plan, index: audioOf.map((a) => a.key).indexOf(audioKeys[i]) })}
         onPickSource={(option) =>
           setPlan({ ...plan, index: plan.candidates.map((c) => c.label).indexOf(options[option]) })
         }

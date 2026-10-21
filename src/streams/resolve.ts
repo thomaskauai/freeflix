@@ -3,7 +3,7 @@ import type { Title } from '../data/types';
 import { getSettings } from '../settings';
 import { getSpeed } from './network';
 import { parseStream, type ParsedStream } from './parse';
-import { describeStream, hasOriginalAudio, rankStreams, type RankContext, type SourceProfile } from './rank';
+import { audioChoice, describeStream, rankStreams, type RankContext, type SourceProfile } from './rank';
 import { installDefaultSources, listSources, sourcePriority, type SourceAddon } from './sources';
 
 export interface Candidate {
@@ -42,6 +42,8 @@ const MAX_CANDIDATES = 12;
  * tiraria o lugar de opções realmente diferentes.
  */
 const MAX_MIRRORS = 3;
+/** áudios a mais (um de cada) além da lista, para dar o que escolher no player */
+const MAX_EXTRA_AUDIOS = 4;
 
 const accepts = (addon: SourceAddon, type: string, id: string) =>
   (addon.types.length === 0 || addon.types.indexOf(type) >= 0) &&
@@ -128,15 +130,16 @@ export async function resolvePlayback(
     kept.push(s);
   }
 
-  // Com um idioma preferido, as dubladas podem ocupar a lista inteira. A melhor
-  // fonte no idioma original entra sempre, para dar a opção de trocar.
-  const original = (s: ParsedStream) => hasOriginalAudio(s, title.originalLanguage);
-  if (!kept.some(original)) {
-    const best = ranked.filter(original)[0];
-    if (best) {
-      if (kept.length >= MAX_CANDIDATES) kept.pop();
-      kept.push(best);
-    }
-  }
+  // Um áudio pode ocupar a lista inteira (as dubladas, com um idioma preferido,
+  // ou o original). A melhor fonte de cada áudio entra sempre, para o player
+  // oferecer a troca, como a Netflix.
+  const audioKey = (s: ParsedStream) => audioChoice(s, title.originalLanguage).key;
+  const present = kept.map(audioKey);
+  ranked.forEach((s) => {
+    const k = audioKey(s);
+    if (present.indexOf(k) >= 0 || present.length >= MAX_CANDIDATES + MAX_EXTRA_AUDIOS) return;
+    present.push(k);
+    kept.push(s);
+  });
   return { candidates: kept.map(toCandidate) };
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AddonStream } from '../data/addonClient';
 import { parseStream } from './parse';
 import { srtToVtt } from './subtitles';
-import { describeStream, hasOriginalAudio, rankStreams, resolutionCap, type RankContext } from './rank';
+import { audioChoice, describeStream, hasOriginalAudio, rankStreams, resolutionCap, type RankContext } from './rank';
 
 const stream = (name: string, title: string, extra: Partial<AddonStream> = {}): AddonStream => ({
   name,
@@ -201,5 +201,15 @@ describe('srtToVtt', () => {
     expect(srtToVtt(srt)).toBe(
       'WEBVTT\n\n1\n00:00:01.000 --> 00:00:07.190\nA General\n\n2\n00:00:51.620 --> 00:00:59.800\nLinha um\nLinha dois\n',
     );
+  });
+});
+
+describe('audioChoice', () => {
+  it('nomeia como a Netflix', () => {
+    expect(audioChoice({ languages: [], multiAudio: false }, 'en')).toMatchObject({ key: 'original', label: 'Inglês [original]', original: true });
+    expect(audioChoice({ languages: ['en'], multiAudio: false }, 'en').key).toBe('original');
+    expect(audioChoice({ languages: ['pt'], multiAudio: false }, 'en')).toMatchObject({ label: 'Português', lang: 'pt', original: false });
+    expect(audioChoice({ languages: ['pt', 'en'], multiAudio: true }, 'en').label).toBe('Dual: Português e Inglês');
+    expect(audioChoice({ languages: [], multiAudio: false }).label).toBe('Original');
   });
 });

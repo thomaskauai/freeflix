@@ -159,3 +159,44 @@ export function describeStream(s: ParsedStream): string {
   parts.push(s.addon);
   return parts.join(', ');
 }
+
+const AUDIO_NAMES: Record<string, string> = {
+  pt: 'Português',
+  en: 'Inglês',
+  es: 'Espanhol',
+  fr: 'Francês',
+  it: 'Italiano',
+  de: 'Alemão',
+  ja: 'Japonês',
+  ko: 'Coreano',
+  zh: 'Chinês',
+  hi: 'Hindi',
+  ru: 'Russo',
+  tr: 'Turco',
+};
+
+const audioName = (code: string) => AUDIO_NAMES[code] ?? code.toUpperCase();
+
+/** Um áudio que dá para escolher no player: fontes com o mesmo áudio viram uma opção só. */
+export interface AudioChoice {
+  key: string;
+  label: string;
+  /** idioma principal, quando se sabe */
+  lang?: string;
+  /** só o áudio original da obra */
+  original: boolean;
+}
+
+/** O áudio de uma fonte, como a Netflix mostra: "Português", "Inglês [original]", "Dual: …". */
+export function audioChoice(s: { languages: string[]; multiAudio: boolean }, originalLanguage?: string): AudioChoice {
+  const sorted = s.languages.slice().sort().join('+');
+  if (s.multiAudio) {
+    const named = s.languages.map(audioName).join(' e ');
+    return { key: `multi:${sorted}`, label: named ? `Dual: ${named}` : 'Dual áudio', original: false };
+  }
+  if (!s.languages.length || (!!originalLanguage && s.languages.length === 1 && s.languages[0] === originalLanguage)) {
+    const lang = originalLanguage;
+    return { key: 'original', label: lang ? `${audioName(lang)} [original]` : 'Original', lang, original: true };
+  }
+  return { key: sorted, label: s.languages.map(audioName).join(' e '), lang: s.languages[0], original: false };
+}

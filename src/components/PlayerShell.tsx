@@ -10,6 +10,7 @@ import {
   type SubtitleLanguage,
   type SubtitleOption,
 } from '../streams/subtitles';
+import type { AudioChoice } from '../streams/rank';
 import { Icon, type IconName } from './Icon';
 
 const HIDE_AFTER_MS = 4000;
@@ -29,6 +30,8 @@ const SAVE_EVERY_MS = 5000;
 const START_TIMEOUT_MS = 15000;
 /** altura das legendas, em % da tela a partir do topo */
 const SUBTITLE_LINE = 82;
+/** idioma da legenda dos atalhos ("… com legendas") */
+const PRESET_SUBTITLE: SubtitleLanguage = 'pt';
 
 /** Segundos por toque: cresce com a sequência no mesmo sentido. */
 function seekStep(count: number) {
@@ -56,6 +59,57 @@ function SourceOption({ label, current, onPick }: { label: string; current: bool
       {label}
     </div>
   );
+}
+
+/** Atalho de áudio e legenda, embaixo da linha do tempo, como na Netflix. */
+function Chip({ label, current, id, onPick }: { label: string; current: boolean; id?: string; onPick: () => void }) {
+  const focus = useFocusable({ id });
+  return (
+    <div {...focus} className={`shell__chip${current ? ' is-current' : ''}`} onClick={onPick}>
+      {current && <Icon name="check" />}
+      {label}
+    </div>
+  );
+}
+
+interface Preset {
+  audio: number;
+  subtitle: SubtitleLanguage | null;
+  label: string;
+}
+
+/**
+ * Atalhos como os da Netflix: a dublagem, o original com legenda e a dublagem
+ * com legenda. Sem saber os áudios, os atalhos são do áudio que está tocando.
+ */
+function presetsFor(audios: AudioChoice[], current: number, subtitles: SubtitleOption[] | null): Preset[] {
+  const withSubs = !!subtitles && subtitles.some((o) => o.language === PRESET_SUBTITLE);
+  let dub = -1;
+  let original = -1;
+  audios.forEach((a, i) => {
+    if (dub < 0 && !a.original && a.lang === PRESET_SUBTITLE) dub = i;
+    if (original < 0 && a.original) original = i;
+  });
+  const list: Preset[] = [];
+  const add = (audio: number, subtitle: boolean) => {
+    if (audio < 0 || (subtitle && !withSubs)) return;
+    const label = audios[audio] ? audios[audio].label : 'Sem legendas';
+    list.push({
+      audio,
+      subtitle: subtitle ? PRESET_SUBTITLE : null,
+      label: subtitle ? (audios[audio] ? `${label} com legendas` : 'Com legendas') : label,
+    });
+  };
+  if (dub < 0 && original < 0) {
+    add(current, false);
+    add(current, true);
+    return list;
+  }
+  add(dub, false);
+  add(original, true);
+  if (original >= 0 && !withSubs) add(original, false);
+  add(dub, true);
+  return list;
 }
 
 function ShellButton({
@@ -100,6 +154,10 @@ interface PlayerShellProps {
   sources?: string[];
   sourceIndex?: number;
   onPickSource?: (index: number) => void;
+  /** áudios das fontes encontradas; escolher um troca de fonte */
+  audios?: AudioChoice[];
+  audioIndex?: number;
+  onPickAudio?: (index: number) => void;
   /** a fonte não tocou; sem isso, o shell mostra o erro */
   onFail?: () => void;
   /** onde o vídeo está: a cada poucos segundos (tick), ao pausar e ao sair do player */
@@ -125,6 +183,9 @@ export function PlayerShell({
   sources,
   sourceIndex = 0,
   onPickSource,
+  audios = [],
+  audioIndex = 0,
+  onPickAudio,
   onFail,
   onProgress,
   onExit,
@@ -148,6 +209,7 @@ export function PlayerShell({
   const [toast, setToast] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
+  /** áudio e legendas lado a lado ("Outro…") */
   const [subsOpen, setSubsOpen] = useState(false);
   /** null enquanto procura; lista vazia quando não há */
   const [subtitles, setSubtitles] = useState<SubtitleOption[] | null>(null);
@@ -373,7 +435,9 @@ export function PlayerShell({
     // Voltar fecha a lista de fontes antes de sair do player.
     if (menuOpen || subsOpen) {
       if (action === 'back') return closeMenu(), true;
-      if (action === 'up' || action === 'down' || action === 'ok') return false;
+      if (action === 'up' || action === 'down' || action === 'left' || action === 'right' || action === 'ok') {
+        return false;
+      }
       return true;
     }
     if (action === 'back') return false;
@@ -493,11 +557,27 @@ export function PlayerShell({
   const pickSubtitle = (option: SubtitleOption | null) => {
     rememberSubtitle(option ? option.language : null);
     applySubtitle(option, true);
-    closeMenu();
+  };
+
+  /** Outro áudio é outra fonte: o player recomeça nela de onde estava, e com a legenda lembrada. */
+  const pickAudio = (index: number) => {
+    if (index === audioIndex || !onPickAudio) return;
+    if (time > 0) onProgress(time, length, 'pause');
+    onPickAudio(index);
+  };
+
+  const pickPreset = (preset: Preset) => {
+    const option = (subtitles ?? []).filter((o) => o.language === preset.subtitle)[0] ?? null;
+    if (preset.audio !== audioIndex && onPickAudio) {
+      rememberSubtitle(option ? option.language : null);
+      pickAudio(preset.audio);
+    } else if ((option ? option.language : null) !== subtitleLang) {
+      pickSubtitle(option);
+    }
   };
 
   const closeMenu = () => {
-    const opener = subsOpen ? 'shell-subtitles' : 'shell-sources';
+    const opener = subsOpen ? 'shell-other' : 'shell-sources';
     setMenuOpen(false);
     setSubsOpen(false);
     focusElement(document.querySelector<HTMLElement>(`[data-focus-id="${opener}"]`));
@@ -514,6 +594,8 @@ export function PlayerShell({
 
   // aparece mesmo com uma fonte só, para ver qual está tocando
   const hasSources = !!sources && sources.length > 0 && !!onPickSource;
+  const presets = presetsFor(audios, audioIndex, subtitles);
+  const presetNow = presets.filter((p) => p.audio === audioIndex && p.subtitle === subtitleLang)[0];
 
   const timelineFocus = useFocusable({ autoFocus: true, id: 'shell-timeline' });
   const upNextFocus = useFocusable({ id: 'shell-upnext' });
@@ -522,7 +604,9 @@ export function PlayerShell({
 
   return (
     <>
-      <div className={`shell${visible || failed ? '' : ' is-hidden'}${seeking ? ' is-seeking' : ''}`}>
+      <div
+        className={`shell${visible || failed ? '' : ' is-hidden'}${seeking ? ' is-seeking' : ''}${subsOpen ? ' is-panel' : ''}`}
+      >
         <div className="shell__top" data-focus-group="">
           <ShellButton icon="back" label="Voltar" autoFocus={!hasControls} onClick={onExit} />
           {hasControls && (
@@ -532,35 +616,6 @@ export function PlayerShell({
           )}
         </div>
 
-        {hasControls && (
-          <div className="shell__top shell__top--right" data-focus-group="">
-            <ShellButton
-              icon="options"
-              label="Legendas"
-              showLabel
-              id="shell-subtitles"
-              onClick={() => {
-                if (subsOpen) return closeMenu();
-                setMenuOpen(false);
-                setSubsOpen(true);
-              }}
-            />
-            {hasSources && (
-              <ShellButton
-                icon="swap"
-                label="Fontes"
-                showLabel
-                id="shell-sources"
-                onClick={() => {
-                  if (menuOpen) return closeMenu();
-                  setSubsOpen(false);
-                  setMenuOpen(true);
-                }}
-              />
-            )}
-          </div>
-        )}
-
         {menuOpen && sources && onPickSource && (
           <div ref={menu} className="shell__menu" data-focus-layer="" data-native-scroll="">
             <div className="shell__menu-title">Fontes deste título</div>
@@ -569,34 +624,54 @@ export function PlayerShell({
                 key={i}
                 label={label}
                 current={i === sourceIndex}
-                onPick={() => (i === sourceIndex ? closeMenu() : onPickSource(i))}
+                onPick={() => {
+                  if (i === sourceIndex) return closeMenu();
+                  // a outra fonte recomeça de onde esta estava
+                  if (time > 0) onProgress(time, length, 'pause');
+                  onPickSource(i);
+                }}
               />
             ))}
           </div>
         )}
 
         {subsOpen && (
-          <div ref={menu} className="shell__menu" data-focus-layer="" data-native-scroll="">
-            <div className="shell__menu-title">
-              {!subtitlesFor
-                ? 'Este título não tem legendas disponíveis'
-                : subtitles === null
-                  ? 'Procurando legendas'
-                  : subtitles.length === 0
-                    ? 'Nenhuma legenda encontrada para este título'
+          <div ref={menu} className="shell__panel" data-focus-layer="">
+            <div className="shell__column" data-native-scroll="">
+              <div className="shell__menu-title">Áudio</div>
+              {audios.length ? (
+                audios.map((audio, i) => (
+                  <SourceOption
+                    key={audio.key}
+                    label={audio.label}
+                    current={i === audioIndex}
+                    onPick={() => (i === audioIndex ? closeMenu() : pickAudio(i))}
+                  />
+                ))
+              ) : (
+                <SourceOption label="Original" current onPick={closeMenu} />
+              )}
+            </div>
+            <div className="shell__column" data-native-scroll="">
+              <div className="shell__menu-title">
+                {!subtitlesFor
+                  ? 'Legendas indisponíveis'
+                  : subtitles === null
+                    ? 'Procurando legendas'
                     : subtitleBusy
                       ? 'Carregando legenda'
                       : 'Legendas'}
+              </div>
+              <SourceOption label="Desligadas" current={subtitleLang === null} onPick={() => pickSubtitle(null)} />
+              {(subtitles ?? []).map((option) => (
+                <SourceOption
+                  key={option.language}
+                  label={option.label}
+                  current={subtitleLang === option.language}
+                  onPick={() => pickSubtitle(option)}
+                />
+              ))}
             </div>
-            <SourceOption label="Desligadas" current={subtitleLang === null} onPick={() => pickSubtitle(null)} />
-            {(subtitles ?? []).map((option) => (
-              <SourceOption
-                key={option.language}
-                label={option.label}
-                current={subtitleLang === option.language}
-                onPick={() => pickSubtitle(option)}
-              />
-            ))}
           </div>
         )}
 
@@ -661,6 +736,34 @@ export function PlayerShell({
               </b>
             </div>
             <div className="shell__time shell__time--total">{formatClock(length)}</div>
+          </div>
+        )}
+
+        {hasControls && (
+          <div className="shell__chips" data-focus-group="">
+            {presets.map((p) => (
+              <Chip key={p.label} label={p.label} current={p === presetNow} onPick={() => pickPreset(p)} />
+            ))}
+            <Chip
+              label="Outro…"
+              id="shell-other"
+              current={!presetNow}
+              onPick={() => {
+                setMenuOpen(false);
+                setSubsOpen(true);
+              }}
+            />
+            {hasSources && (
+              <ShellButton
+                icon="settings"
+                label="Qualidade e fonte"
+                id="shell-sources"
+                onClick={() => {
+                  setSubsOpen(false);
+                  setMenuOpen(true);
+                }}
+              />
+            )}
           </div>
         )}
       </div>
