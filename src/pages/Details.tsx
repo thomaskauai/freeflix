@@ -24,7 +24,7 @@ import {
 } from '../data/storage';
 import { useSyncVersion } from '../data/sync';
 import type { Episode, Season, Title, TitleType } from '../data/types';
-import { forgetPage } from '../focus/FocusContext';
+import { focusElement, forgetPage } from '../focus/FocusContext';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
 import { watchPath } from '../nav';
 import { planFor, preloadPlayback, releasePreload } from '../streams/playback';
@@ -158,6 +158,38 @@ export default function Details() {
   const data = loaded && loaded.id === id ? loaded : null;
   const shown = data ? data.title : preview;
   usePageFocus(!!shown || failed, id);
+
+  // Série: ↓ nos botões do topo vai direto ao episódio da vez (o em andamento,
+  // ou o 1º da 1ª temporada), já com a temporada dele aberta, sem parar nas
+  // temporadas. Elas continuam a um ↑ do episódio.
+  const pendingEpisode = useRef<string | null>(null);
+  const focusEpisode = (focusId: string) =>
+    focusElement(document.querySelector<HTMLElement>(`[data-focus-id="${focusId}"]`));
+  const jumpDown = useRef<(target: HTMLElement) => boolean>(() => false);
+  jumpDown.current = (target) => {
+    if (!data || data.title.type !== 'series' || !target.closest('.details__actions')) return false;
+    const next = resumeEpisode(id, data.seasons);
+    const focusId = `episode:${next.season}:${next.episode}`;
+    if (next.season === season && focusEpisode(focusId)) return true;
+    if (!data.seasons.some((s) => s.number === next.season)) return false;
+    pendingEpisode.current = focusId;
+    setSeason(next.season);
+    return true;
+  };
+  useEffect(() => {
+    const listener = (e: Event) => {
+      const { dir } = (e as CustomEvent<{ dir: string }>).detail;
+      if (dir === 'down' && jumpDown.current(e.target as HTMLElement)) e.preventDefault();
+    };
+    window.addEventListener('focusmove', listener);
+    return () => window.removeEventListener('focusmove', listener);
+  }, []);
+  // a lista da temporada trocada já está na tela: foca o episódio pedido
+  useEffect(() => {
+    const focusId = pendingEpisode.current;
+    pendingEpisode.current = null;
+    if (focusId) focusEpisode(focusId);
+  }, [season]);
 
   // O play do botão principal (filme, ou o episódio de "Assistir/Continuar")
   // já começa aqui: fonte procurada e vídeo baixando, sem tocar. Outro
