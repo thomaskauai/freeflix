@@ -10,9 +10,5 @@
     {
         "name": "FenixFlix", 
         "url": "https://fenixflix.fenixhub.online/qualities=4k,1080p,720p%7Caudio=dublado,legendado%7Ccatalogs=populares_movie,populares_series,recentes_movie,recentes_series/manifest.json"
-    },
-    {
-        "name": "FrostView TV", 
-        "url": "https://frostview.cloutteam.com/manifest.json"
     }
 ]

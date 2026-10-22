@@ -126,7 +126,7 @@ export function Hero({ titles, onPlay, onInfo, away, onFocus }: HeroProps) {
       </div>
       <div className="hero__body">
         <div key={title.id} className="hero__info">
-          <KindTag type={title.type} />
+          <KindTag title={title} />
           <TitleArt title={title} className="hero__title" />
           {title.tagline && <p className="hero__tagline">{title.tagline}</p>}
           <p className="hero__synopsis">{title.synopsis}</p>

@@ -28,6 +28,13 @@ export interface Title {
   episodeCount?: number;
 }
 
+/** O TMDB chama novela de "Soap" (as brasileiras, as turcas, as americanas). */
+export const isSoap = (title: Pick<Title, 'genres'>) => title.genres.indexOf('Soap') >= 0;
+
+/** Série, filme ou novela, para os selos e cartões. */
+export const kindLabel = (title: Pick<Title, 'type' | 'genres'>) =>
+  title.type === 'movie' ? 'Filme' : isSoap(title) ? 'Novela' : 'Série';
+
 export interface Episode {
   number: number;
   title: string;
@@ -59,7 +66,7 @@ export interface RowRef {
   /** gênero do addon (filtro genre da lista) */
   genre?: string;
   /** fileira montada pelo app (top-rated) ou vinda do addon de streamings */
-  kind?: 'top-rated' | 'streaming';
+  kind?: 'top-rated' | 'streaming' | 'novelas';
   /** cards mostram a nota IMDb */
   showRating?: boolean;
 }

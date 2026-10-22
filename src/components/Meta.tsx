@@ -1,4 +1,6 @@
-import type { Title, TitleType } from '../data/types';
+import { GENRE_LABELS_PT } from '../data/catalogNames';
+import { kindLabel, type Title } from '../data/types';
+import { CATALOG } from '../settings';
 
 export function formatRuntime(minutes: number) {
   const h = Math.floor(minutes / 60);
@@ -8,11 +10,11 @@ export function formatRuntime(minutes: number) {
 }
 
 /** Selo de tipo com a inicial da marca, na posição do selo da referência. */
-export function KindTag({ type }: { type: TitleType }) {
+export function KindTag({ title }: { title: Pick<Title, 'type' | 'genres'> }) {
   return (
     <div className="kind">
       <span className="kind__mark display">F</span>
-      {type === 'series' ? 'Série' : 'Filme'}
+      {kindLabel(title)}
     </div>
   );
 }
@@ -26,6 +28,9 @@ function lengthOf(title: Title): string | null {
   return title.runtime ? formatRuntime(title.runtime) : null;
 }
 
+// o catálogo em português traduz títulos e sinopses, mas manda os gêneros em inglês
+const genreLabel = (genre: string) => (CATALOG.localized && GENRE_LABELS_PT[genre]) || genre;
+
 /** Só o que o catálogo informou; nada aqui é inventado para preencher a linha. */
 export function Meta({ title }: { title: Title }) {
   const length = lengthOf(title);
@@ -34,7 +39,7 @@ export function Meta({ title }: { title: Title }) {
       {title.year && <span className="meta__year">{title.year}</span>}
       {length && <span>{length}</span>}
       {title.rating && <span className="meta__rating">IMDb {title.rating}</span>}
-      {title.genres.length > 0 && <span>{title.genres.slice(0, 3).join(', ')}</span>}
+      {title.genres.length > 0 && <span>{title.genres.slice(0, 3).map(genreLabel).join(', ')}</span>}
     </div>
   );
 }

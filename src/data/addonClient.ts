@@ -35,6 +35,8 @@ export interface AddonMeta {
   genres?: string[];
   imdbRating?: string;
   language?: string;
+  /** código (BR) no catálogo principal; nome (Brazil) no de streamings */
+  country?: string;
   videos?: {
     id: string;
     title?: string;

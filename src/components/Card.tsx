@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { catalog } from '../data/provider';
-import type { Title } from '../data/types';
+import { kindLabel, type Title } from '../data/types';
 import { useFocusable } from '../focus/useFocusable';
 import { titlePath } from '../nav';
 
@@ -114,7 +114,7 @@ export function Card({
               ) : (
                 ''
               )}
-              {title.type === 'series' ? 'Série' : 'Filme'}
+              {kindLabel(title)}
             </>
           )}
         </div>

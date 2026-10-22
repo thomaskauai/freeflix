@@ -254,7 +254,7 @@ export default function Details() {
         <div className="details__top" data-scroll-anchor="top">
           <Backdrop title={title} />
           <div className="details__body">
-            <KindTag type={title.type} />
+            <KindTag title={title} />
             <TitleArt title={title} className="details__title" />
             {title.originalTitle && title.originalTitle !== title.title && (
               <p className="details__original">{title.originalTitle}</p>

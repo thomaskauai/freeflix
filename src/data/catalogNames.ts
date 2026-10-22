@@ -57,6 +57,17 @@ export const GENRE_NAMES_PT: Record<string, string> = {
   Kids: 'Infantil',
 };
 
+/** Nomes dos gêneros na tela (o catálogo em português os manda em inglês). */
+export const GENRE_LABELS_PT: Record<string, string> = {
+  ...GENRE_NAMES_PT,
+  Soap: 'Novela',
+  Documentary: 'Documentário',
+  Family: 'Família',
+  News: 'Notícias',
+  Reality: 'Reality show',
+  Talk: 'Talk show',
+};
+
 /** Listas que só fazem sentido com um filtro escolhido (ano, idioma): ficam fora das fileiras. */
 export const PARAMETERIZED_CATALOGS = ['movies-by-year', 'series-by-year', 'movies-by-language', 'series-by-language'];
 
