@@ -1843,15 +1843,6 @@
   will-change: transform, opacity;
 }
 
-.splash__word {
-  font-family: var(--font);
-  font-stretch: 62%;
-  font-weight: 900;
-  font-size: 236px;
-  letter-spacing: 2px;
-  fill: var(--red);
-}
-
 /* surge, cresce devagar, depois avança sobre o espectador e some */
 @keyframes splash-mark {
   0% {
