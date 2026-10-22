@@ -22,7 +22,7 @@ import type { Title } from './types';
 
 const SITE = 'https://freefliix.vercel.app';
 // No navegador a API está no mesmo endereço do site; o app da TV abre de file:// e usa o do site.
-const API_BASE =
+export const API_BASE =
   (import.meta.env.VITE_API_BASE as string | undefined) ||
   (/^https?:$/.test(window.location.protocol) ? '' : SITE);
 /** onde o celular abre o link do QR code */
