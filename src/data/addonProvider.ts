@@ -1,5 +1,5 @@
 import { fetchCached, fetchCatalog, fetchManifest, fetchMeta, getJson, type AddonMeta } from './addonClient';
-import { API_BASE } from './sync';
+import { API_BASE } from './site';
 import { STREAMING } from '../settings';
 import { CATALOG_NAMES_PT, GENRE_NAMES_PT, HIDDEN_CATALOGS, PARAMETERIZED_CATALOGS } from './catalogNames';
 import { read, write } from './storage';
