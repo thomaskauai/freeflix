@@ -35,7 +35,7 @@ export const INSTALL_ERRORS: Record<InstallError, string> = {
  * Fontes padrão: instaladas na primeira abertura e, se removidas, oferecidas
  * com um clique em Configurações. A lista é um JSON de { "name", "url" } (url
  * = link do manifest) lido de SOURCES_URL a cada abertura, então mudar o
- * arquivo no GitHub muda as fontes de todas as TVs sem gerar outro .wgt. Sem
+ * arquivo no main (e o deploy do site) muda as fontes de todas as TVs sem gerar outro .wgt. Sem
  * rede, vale a última lista baixada; na primeira abertura sem rede, a cópia de
  * src/sources.json embutida no app.
  */
@@ -44,9 +44,9 @@ export interface ListedSource {
   url: string;
 }
 
+// o repositório é privado: a lista sai pelo site (api/sources.ts), publicada a cada deploy do main
 const SOURCES_URL =
-  (import.meta.env.VITE_SOURCES_URL as string | undefined) ||
-  'https://raw.githubusercontent.com/thomaskauai/freeflix/main/src/sources.json';
+  (import.meta.env.VITE_SOURCES_URL as string | undefined) || 'https://freefliix.vercel.app/api/sources';
 /** a lista remota não pode segurar a abertura: passado isso, vale a guardada */
 const SOURCES_TIMEOUT_MS = 6000;
 const REMOTE_KEY = 'freeflix.sources.remote';
