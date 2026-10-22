@@ -7,5 +7,7 @@ import { json, preflight } from './_lib.js';
 
 export const OPTIONS = preflight;
 
-// um minuto no CDN: a mudança chega rápido sem cada abertura bater na função
-export const GET = () => json(listed, 200, { 'Cache-Control': 'public, s-maxage=60' });
+// um minuto no CDN: a mudança chega rápido sem cada abertura bater na função.
+// Público só para as TVs: buscadores não indexam (há tokens nos links).
+export const GET = () =>
+  json(listed, 200, { 'Cache-Control': 'public, s-maxage=60', 'X-Robots-Tag': 'noindex, nofollow' });
