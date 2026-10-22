@@ -267,11 +267,13 @@
   animation: loading-in 450ms linear both;
 }
 
-/* um ponto por destaque, depois dos botões */
+/* um ponto por destaque, na linha dos botões, encostado na margem direita da tela */
 .hero__pager {
   display: flex;
   align-items: center;
-  margin-left: 30px;
+  margin-left: auto;
+  /* o último ponto (52px, desenho no meio) termina na margem do conteúdo */
+  margin-right: -19px;
 }
 
 .hero__dot {
@@ -391,6 +393,8 @@
 .hero__actions {
   display: flex;
   margin-top: 26px;
+  /* a tela toda, além da coluna de texto: os pontos ficam do lado direito */
+  width: calc(var(--stage-w) - var(--content-left) * 2);
 }
 
 .hero .meta {
@@ -2776,6 +2780,10 @@
 }
 
 /* os pontos descem para a linha de baixo, alinhados ao texto */
+.is-compact .hero__actions {
+  width: auto;
+}
+
 .is-compact .hero__pager {
   margin: 0 0 12px -19px;
 }
