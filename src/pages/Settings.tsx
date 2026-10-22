@@ -78,6 +78,7 @@ export default function Settings() {
   }, []);
 
   const chooseAudio = (audio: AudioLanguage) => setSettings(saveSettings({ audio }));
+  const toggleCrunchyroll = () => setSettings(saveSettings({ crunchyroll: !settings.crunchyroll }));
 
   const remove = (base: string) => {
     removeSource(base);
@@ -174,6 +175,22 @@ export default function Settings() {
                 {a.label}
               </Button>
             ))}
+          </div>
+        </section>
+
+        <section className="settings__block" data-scroll-anchor="200">
+          <h2 className="settings__title">Catálogo</h2>
+          <p className="settings__note">Fileiras de animes do Crunchyroll em Filmes e Séries.</p>
+          <div className="settings__options">
+            <Button
+              variant="pill"
+              id="catalog:crunchyroll"
+              icon={settings.crunchyroll ? 'check' : undefined}
+              selected={settings.crunchyroll}
+              onClick={toggleCrunchyroll}
+            >
+              Incluir Crunchyroll
+            </Button>
           </div>
         </section>
 

@@ -19,24 +19,22 @@ export const CATALOG = {
   fallback: prefersPortuguese() ? ADDON_EN : undefined,
 };
 
-// Addon "Streaming Catalogs": o que está em cada streaming no país (dados do
-// JustWatch). Configuração no endereço, em base64: "serviços::país:…".
-// Netflix, Disney+ e Prime Video já vêm do catálogo acima, com nomes em português.
-const STREAMING_ADDON = 'https://7a82163c306e-stremio-netflix-catalog-addon.baby-beamup.club';
-const STREAMING_BR = 'aGJtLGF0cCxwbXAsZ29wLGNydTo6QlI6MTc2MDAwMDAwMDAwMDowOjA6'; // hbm,atp,pmp,gop,cru::BR
-const STREAMING_US = 'aGJtLGF0cCxwbXAsY3J1OjpVUzoxNzYwMDAwMDAwMDAwOjA6MDo%3D'; // hbm,atp,pmp,cru::US
+// Streamings que o catálogo acima não tem, pelo api/justwatch.ts do site (dados
+// do JustWatch, no Brasil). Netflix, Disney+ e Prime Video já vêm do catálogo.
+// O id é o código do streaming no JustWatch.
+const STREAMING_SERVICES = [
+  { id: 'mxx', name: 'HBO Max' },
+  { id: 'atp', name: 'Apple TV+' },
+  { id: 'pmp', name: 'Paramount+' },
+  { id: 'gop', name: 'Globoplay' },
+  { id: 'cru', name: 'Crunchyroll' },
+];
 
-/** Fileiras por streaming em Filmes e Séries, na ordem em que aparecem. */
-export const STREAMING = {
-  base: `${STREAMING_ADDON}/${prefersPortuguese() ? STREAMING_BR : STREAMING_US}`,
-  services: [
-    { id: 'hbm', name: 'HBO Max' },
-    { id: 'atp', name: 'Apple TV+' },
-    { id: 'pmp', name: 'Paramount+' },
-    ...(prefersPortuguese() ? [{ id: 'gop', name: 'Globoplay' }] : []),
-    { id: 'cru', name: 'Crunchyroll' },
-  ],
-};
+/** Fileiras por streaming em Filmes e Séries, na ordem em que aparecem; o Crunchyroll só se ligado nas Configurações. */
+export function streamingServices() {
+  const { crunchyroll } = getSettings();
+  return STREAMING_SERVICES.filter((s) => s.id !== 'cru' || crunchyroll);
+}
 
 export const AUDIO_LANGUAGES: { id: AudioLanguage; label: string }[] = [
   { id: 'original', label: 'Original' },
@@ -47,16 +45,18 @@ export const AUDIO_LANGUAGES: { id: AudioLanguage; label: string }[] = [
 
 export interface Settings {
   audio: AudioLanguage;
+  /** fileiras do Crunchyroll em Filmes e Séries */
+  crunchyroll: boolean;
 }
 
 const KEY = 'freeflix.settings';
-const DEFAULTS: Settings = { audio: 'original' };
+const DEFAULTS: Settings = { audio: 'original', crunchyroll: false };
 
 export function getSettings(): Settings {
   try {
     const saved = JSON.parse(window.localStorage.getItem(KEY) || '{}') as Partial<Settings>;
     const audio = AUDIO_LANGUAGES.some((a) => a.id === saved.audio) ? (saved.audio as AudioLanguage) : DEFAULTS.audio;
-    return { audio };
+    return { audio, crunchyroll: saved.crunchyroll === true };
   } catch {
     return DEFAULTS;
   }
