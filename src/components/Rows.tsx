@@ -25,6 +25,14 @@ export interface RowSource {
   onSelect?: (title: Title) => void;
 }
 
+/**
+ * Cards já carregados de cada fileira nesta abertura do app (por página e
+ * fileira). Voltar para a página remonta as fileiras já com eles, sem passar
+ * pelo esqueleto. As listas vêm do mesmo cache do catálogo, então não mudam.
+ */
+const loadedRows: Record<string, { items: Title[]; nextPage: number }> = {};
+const rowKey = (id: string) => `${window.location.hash || '#/'}${SEP}${id}`;
+
 /** quantas fileiras além da focada ficam carregadas */
 const AHEAD = 3;
 const SKELETONS = 8;
@@ -43,11 +51,14 @@ interface LazyRowProps {
 }
 
 function LazyRow({ source, wanted, anchor, passed, autoFocusFirst, onActivate, onSettled }: LazyRowProps) {
-  const [items, setItems] = useState<Title[] | null>(source.items ?? null);
+  // itens próprios (Continuar assistindo) mudam a cada visita; os das listas ficam guardados
+  const [key] = useState(() => rowKey(source.id));
+  const saved = source.items ? undefined : loadedRows[key];
+  const [items, setItems] = useState<Title[] | null>(source.items ?? (saved ? saved.items : null));
   const settled = useRef(onSettled);
   settled.current = onSettled;
   // próxima página a pedir; 0 quando a lista acabou ou não tem páginas
-  const nextPage = useRef(source.items ? 0 : 1);
+  const nextPage = useRef(source.items ? 0 : saved ? saved.nextPage : 1);
   const loadingMore = useRef(false);
   const alive = useRef(true);
   useEffect(
@@ -68,7 +79,10 @@ function LazyRow({ source, wanted, anchor, passed, autoFocusFirst, onActivate, o
   }, [wanted]);
 
   useEffect(() => {
-    if (items) settled.current();
+    if (!items) return;
+    if (!source.items) loadedRows[key] = { items, nextPage: nextPage.current };
+    settled.current();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
 
   // Foco perto do fim: a próxima página entra no fim da fileira, sem repetidos.

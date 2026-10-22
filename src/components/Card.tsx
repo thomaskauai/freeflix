@@ -25,6 +25,12 @@ interface CardProps {
   onSelect?: () => void;
 }
 
+/**
+ * Imagens já mostradas nesta abertura do app: voltando a uma página, o cartão
+ * aparece com a imagem na hora (o navegador já a tem), sem o fade da primeira vez.
+ */
+const shown: Record<string, boolean> = {};
+
 /** foco parado por este tempo num cartão adianta a busca dos detalhes */
 const PREFETCH_AFTER_MS = 400;
 
@@ -55,11 +61,12 @@ export function Card({
   onSelect,
 }: CardProps) {
   const navigate = useNavigate();
-  const [loaded, setLoaded] = useState(false);
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const focus = useFocusable({ id: focusId, autoFocus });
   const picture = image ?? (variant === 'wide' ? (title.backdrop ?? title.poster) : title.poster);
   const hasImage = !!picture && !failed;
+  const loaded = !!picture && (loadedSrc === picture || !!shown[picture]);
 
   // Foco parado no cartão: os detalhes deste título já começam a ser buscados,
   // porque o servidor do catálogo leva segundos. Passando direto, nada é pedido.
@@ -97,7 +104,10 @@ export function Card({
             src={picture}
             alt=""
             decoding="async"
-            onLoad={() => setLoaded(true)}
+            onLoad={() => {
+              shown[picture] = true;
+              setLoadedSrc(picture);
+            }}
             onError={() => setFailed(true)}
           />
         ) : (
