@@ -3,6 +3,7 @@ import type { Title } from '../data/types';
 import { useFocusable } from '../focus/useFocusable';
 import { Backdrop } from './Backdrop';
 import { Button } from './Button';
+import { useLogo } from './logo';
 import { KindTag, Meta } from './Meta';
 
 interface HeroProps {
@@ -18,9 +19,6 @@ interface HeroProps {
 /** os fundos dos outros destaques começam a baixar depois que a Home assentou */
 const PRELOAD_AFTER_MS = 2500;
 
-/** arte que não chega neste tempo dá lugar ao nome em texto */
-const LOGO_WAIT_MS = 4000;
-
 /**
  * Nome da obra: a arte de título do catálogo quando existe, senão texto.
  *
@@ -30,34 +28,11 @@ const LOGO_WAIT_MS = 4000;
  */
 export function TitleArt({ title, className }: { title: Title; className: string }) {
   const logo = title.logo;
-  const [state, setState] = useState<{ logo: string; ok: boolean } | null>(null);
-
-  useEffect(() => {
-    if (!logo) return;
-    let alive = true;
-    const img = new Image();
-    const done = (ok: boolean) => {
-      if (!alive) return;
-      alive = false;
-      window.clearTimeout(timer);
-      setState({ logo, ok });
-    };
-    const timer = window.setTimeout(() => done(false), LOGO_WAIT_MS);
-    img.onload = () => done(img.naturalWidth > 0);
-    img.onerror = () => done(false);
-    img.src = logo;
-    if (img.complete && img.naturalWidth > 0) done(true);
-    return () => {
-      alive = false;
-      window.clearTimeout(timer);
-    };
-  }, [logo]);
-
-  const current = logo && state?.logo === logo ? state : null;
-  if (logo && (!current || current.ok)) {
+  const ready = useLogo(logo);
+  if (logo && ready !== false) {
     return (
       <div className={`${className} ${className}--logo`}>
-        {current && <img src={logo} alt={title.title} />}
+        {ready && <img src={logo} alt={title.title} />}
       </div>
     );
   }

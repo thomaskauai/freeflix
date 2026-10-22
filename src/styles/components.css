@@ -772,6 +772,13 @@
   left: var(--content-left);
   right: var(--content-left);
   max-width: 1100px;
+  -webkit-transition: opacity 0.25s ease-out;
+  transition: opacity 0.25s ease-out;
+}
+
+/* esperando a arte de título: o bloco entra inteiro, não sem o nome */
+.details__body.is-waiting {
+  opacity: 0;
 }
 
 .details__title {

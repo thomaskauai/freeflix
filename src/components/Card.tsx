@@ -4,6 +4,7 @@ import { catalog } from '../data/provider';
 import { kindLabel, type Title } from '../data/types';
 import { useFocusable } from '../focus/useFocusable';
 import { titlePath } from '../nav';
+import { loadLogo } from './logo';
 
 interface CardProps {
   title: Title;
@@ -68,6 +69,8 @@ export function Card({
     window.clearTimeout(prefetch.current);
     prefetch.current = window.setTimeout(() => {
       catalog.getTitle(title.type, title.id).catch(() => undefined);
+      // a arte de título também: os detalhes abrem com ela pronta
+      if (title.logo) loadLogo(title.logo);
     }, PREFETCH_AFTER_MS);
   };
 
@@ -79,7 +82,13 @@ export function Card({
       data-scroll-anchor={anchor}
       onFocus={onFocus}
       onBlur={() => window.clearTimeout(prefetch.current)}
-      onClick={onSelect ?? (() => navigate(titlePath(title)))}
+      onClick={
+        onSelect ??
+        (() => {
+          if (title.logo) loadLogo(title.logo);
+          navigate(titlePath(title));
+        })
+      }
     >
       <div className="card__art">
         {hasImage ? (

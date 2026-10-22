@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { Card, fallbackArt } from '../components/Card';
 import { Icon } from '../components/Icon';
 import { TitleArt } from '../components/Hero';
+import { useLogoSettled } from '../components/logo';
 import { Loading } from '../components/Loading';
 import { formatRuntime, KindTag, Meta } from '../components/Meta';
 import { PageError } from '../components/PageError';
@@ -32,6 +33,8 @@ import { ROW_ANCHOR } from '../styles/tokens';
 
 /** altura da fileira de temporadas, que fica visível acima dos episódios */
 const SEASONS_ROW = 128;
+/** o bloco do título espera a arte no máximo isso; depois entra mesmo sem ela */
+const LOGO_GATE_MS = 1200;
 /** parado num episódio por esse tempo, as fontes dele já são procuradas */
 const WARM_AFTER_MS = 700;
 
@@ -158,6 +161,12 @@ export default function Details() {
   const data = loaded && loaded.id === id ? loaded : null;
   const shown = data ? data.title : preview;
   usePageFocus(!!shown || failed, id);
+  // título, sinopse e botões entram juntos com a arte, não com o espaço dela vazio
+  const logoSettled = useLogoSettled(shown?.logo, LOGO_GATE_MS);
+  // já apareceu: não some de novo se a arte só vier com os detalhes completos
+  const revealed = useRef<string | null>(null);
+  if (logoSettled) revealed.current = id;
+  const bodyReady = logoSettled || revealed.current === id;
 
   // Série: ↓ nos botões do topo vai direto ao episódio da vez (o em andamento,
   // ou o 1º da 1ª temporada), já com a temporada dele aberta, sem parar nas
@@ -260,7 +269,7 @@ export default function Details() {
       <ScrollArea key={id}>
         <div className="details__top" data-scroll-anchor="top">
           <Backdrop title={title} />
-          <div className="details__body">
+          <div className={`details__body${bodyReady ? '' : ' is-waiting'}`}>
             <KindTag title={title} />
             <TitleArt title={title} className="details__title" />
             {title.originalTitle && title.originalTitle !== title.title && (
