@@ -1,6 +1,6 @@
 import { fetchCached, fetchCatalog, fetchManifest, fetchMeta, getJson, type AddonMeta } from './addonClient';
 import { API_BASE } from './site';
-import { streamingServices } from '../settings';
+import { STREAMING_FALLBACK, streamingServices } from '../settings';
 import { CATALOG_NAMES_PT, GENRE_NAMES_PT, HIDDEN_CATALOGS, PARAMETERIZED_CATALOGS } from './catalogNames';
 import { read, write } from './storage';
 import { isSoap, type CatalogProvider, type Episode, type RowRef, type Season, type Title, type TitleType } from './types';
@@ -21,6 +21,10 @@ const PAGES = 4;
 const PAGE_SIZE = 20;
 /** novelas em português do catálogo: páginas de 20 lidas (o resto já não é novela) */
 const NOVELA_PAGES = 4;
+/** o addon de streamings (reserva) devolve 100 por vez; a fileira mostra de 20 em 20 */
+const STREAMING_BLOCK = 100;
+/** Globoplay */
+const GLOBOPLAY = 'gop';
 /** listas do api/justwatch.ts que vêm inteiras (as outras vêm de 20 em 20) */
 const WHOLE_LISTS = ['novelas', 'series-br'];
 /** fileiras de streaming entram depois desta lista (a última das de streaming do addon) */
@@ -259,6 +263,11 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
     );
   const plural = (type: TitleType) => (type === 'series' ? 'series' : 'movies');
 
+  const streamingBlock = (type: TitleType, service: string, skip: number) =>
+    fetchCatalog(STREAMING_FALLBACK.base, type, STREAMING_FALLBACK.idOf(service), skip ? { skip: String(skip) } : undefined).then(
+      (metas) => metas.map(toTitle).filter((t) => !!t.poster),
+    );
+
   /**
    * Streamings pelo site (api/justwatch.ts, dados do JustWatch): o catálogo
    * inteiro de cada um, em português e com páginas de verdade.
@@ -270,7 +279,8 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
 
   /**
    * País, nome e cartaz de cada novela no catálogo principal. A lista em
-   * português não traz o país (para deixar as de Portugal de fora). Só o /meta tem isso, e ele é
+   * português não traz o país (para deixar as de Portugal de fora) e a do
+   * addon de streamings vem com nome e cartaz em inglês. Só o /meta tem isso, e ele é
    * pesado (todos os capítulos), então cada novela é consultada uma vez e o
    * resumo fica guardado no aparelho.
    */
@@ -308,8 +318,14 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
   const loadNovelas = () => {
     if (!novelas) {
       const soap = (m: AddonMeta) => isSoap({ genres: m.genres ?? [] });
-      // as do Globoplay pelo site; sem ele, só as clássicas
-      const onGloboplay = justwatch('novelas').catch(() => [] as Title[]);
+      // as do Globoplay pelo site; sem ele, as poucas do addon de streamings
+      const fromAddon = () =>
+        fetchCatalog(STREAMING_FALLBACK.base, 'series', GLOBOPLAY)
+          .then((metas) => withInfo(metas.filter((m) => soap(m) && m.country === 'Brazil')))
+          // nome, cartaz e sinopse em português no lugar dos do addon de streamings
+          .then((list) => list.map(({ meta, info }) => toTitle({ ...meta, ...(info ?? {}), language: 'pt' })))
+          .catch(() => [] as Title[]);
+      const onGloboplay = justwatch('novelas').then((list) => (list.length ? list : fromAddon()), fromAddon);
       const classics = Promise.all(
         Array.from({ length: NOVELA_PAGES }, (_, i) =>
           fetchCatalog(base, 'series', 'series-by-language', {
@@ -479,8 +495,14 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
       }
       if (ref.kind === 'streaming') {
         // o catálogo inteiro do streaming pelo site, em ordem de popularidade, embaralhado dentro de cada página
-        const items = await justwatch(plural(ref.type), n, ref.catalogId);
-        return remember(shuffled(items, `items:${ref.id}:${n}`));
+        const items = await justwatch(plural(ref.type), n, ref.catalogId).catch(() => null);
+        if (items && (items.length || n)) return remember(shuffled(items, `items:${ref.id}:${n}`));
+        // JustWatch falhou: o addon de streamings, 100 por vez, embaralhado no bloco e entregue de 20 em 20
+        const offset = n * PAGE_SIZE;
+        const block = Math.floor(offset / STREAMING_BLOCK) * STREAMING_BLOCK;
+        const fallback = await streamingBlock(ref.type, ref.catalogId, block);
+        const mixed = shuffled(fallback, `items:${ref.id}:${block}`);
+        return remember(mixed.slice(offset - block, offset - block + PAGE_SIZE));
       }
       const skip = (ref.skip ?? 0) + n * PAGE_SIZE;
       const extra: Record<string, string> = {};

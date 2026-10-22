@@ -30,6 +30,17 @@ const STREAMING_SERVICES = [
   { id: 'cru', name: 'Crunchyroll' },
 ];
 
+// Reserva, se o JustWatch falhar: addon "Streaming Catalogs" (o mesmo dado, por
+// um servidor de terceiro: 100 títulos por streaming, nomes em inglês).
+// Configuração no endereço, em base64: "serviços::país:…". Lá a HBO Max é hbm.
+const STREAMING_ADDON = 'https://7a82163c306e-stremio-netflix-catalog-addon.baby-beamup.club';
+const STREAMING_ADDON_BR = 'aGJtLGF0cCxwbXAsZ29wLGNydTo6QlI6MTc2MDAwMDAwMDAwMDowOjA6'; // hbm,atp,pmp,gop,cru::BR
+export const STREAMING_FALLBACK = {
+  base: `${STREAMING_ADDON}/${STREAMING_ADDON_BR}`,
+  /** código do streaming no addon */
+  idOf: (service: string) => (service === 'mxx' ? 'hbm' : service),
+};
+
 /** Fileiras por streaming em Filmes e Séries, na ordem em que aparecem; o Crunchyroll só se ligado nas Configurações. */
 export function streamingServices() {
   const { crunchyroll } = getSettings();
