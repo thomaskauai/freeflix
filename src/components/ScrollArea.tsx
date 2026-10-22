@@ -3,6 +3,13 @@ import { isPointerFocus } from '../focus/FocusContext';
 import { useStage } from './Stage';
 import { useTouchScroll } from './useTouchScroll';
 
+/**
+ * Rolagem de cada página nesta abertura do app (pelo endereço). Ao voltar, a
+ * página abre já onde estava, em vez de abrir no topo e deslizar até o item
+ * quando o foco volta para ele.
+ */
+const positions: Record<string, number> = {};
+
 /** a esta distância do fim, avisa quem carrega conteúdo sob demanda */
 const NEAR_END_PX = 1400;
 export const NEAR_END_EVENT = 'freeflix:near-end';
@@ -16,12 +23,15 @@ export const NEAR_END_EVENT = 'freeflix:near-end';
 export function ScrollArea({ className, children }: { className?: string; children: ReactNode }) {
   const outer = useRef<HTMLDivElement>(null);
   const inner = useRef<HTMLDivElement>(null);
-  const [y, setY] = useState(0);
+  const [page] = useState(() => window.location.hash || '#/');
+  const [y, setY] = useState(() => positions[page] || 0);
   // posição atual fora do estado: vários eventos de roda chegam entre dois renders
   const position = useRef(0);
   position.current = y;
-  // rolagem livre acompanha a roda sem animação; a guiada por foco desliza
-  const [free, setFree] = useState(false);
+  positions[page] = y;
+  // rolagem livre acompanha a roda sem animação; a guiada por foco desliza.
+  // Voltando para uma página rolada, ela já abre na posição, sem deslizar.
+  const [free, setFree] = useState(() => !!positions[page]);
   const stage = useStage();
 
   const limit = () => {

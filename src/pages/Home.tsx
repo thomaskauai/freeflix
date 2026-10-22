@@ -10,7 +10,7 @@ import { catalog } from '../data/provider';
 import { getAllProgress, isFinished, rememberStill, titleFromSnapshot, type Progress } from '../data/storage';
 import { useSyncVersion } from '../data/sync';
 import type { Title } from '../data/types';
-import { focusElement } from '../focus/FocusContext';
+import { focusElement, rememberedFocus } from '../focus/FocusContext';
 import { useKeyHandler } from '../focus/keys';
 import { usePageFocus } from '../focus/useFocusable';
 import { titlePath, watchPath } from '../nav';
@@ -100,7 +100,8 @@ export default function Home() {
   const [data, setData] = useState<Loaded | null>(null);
   const [failed, setFailed] = useState(false);
   const [rowsReady, setRowsReady] = useState(false);
-  const [inRows, setInRows] = useState(false);
+  // voltando com o foco numa fileira (id "fileira|título"), o destaque já abre recolhido
+  const [inRows, setInRows] = useState(() => (rememberedFocus() ?? '').indexOf('|') >= 0);
   const version = useSyncVersion();
 
   const [cards, setCards] = useState<Record<string, EpisodeCard | 'done'>>({});
