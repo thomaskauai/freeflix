@@ -14,5 +14,9 @@
     {
         "name": "HdHub", 
         "url": "https://hdhub.thevolecitor.qzz.io/eyJ0b3Jib3giOiJ1bnNldCIsInF1YWxpdGllcyI6IjIxNjBwLDEwODBwLDcyMHAiLCJzb3J0IjoiZGVzYyIsImNvbnRlbnQiOiJwb3J0dWd1ZXNlIiwiY2F0YWxvZ3MiOiIifQ/manifest.json"
+    },
+    {
+        "name": "MagnetFlix", 
+        "url": "https://magnetflix.flixbr.online/qualities%3D4k%2C1080p%2C720p%2Csd%7Caudio%3Ddublado%2Clegendado%7Ccatalogs%3Dpopulares_movie%2Cpopulares_series%2Crecentes_servidor_movie%2Crecentes_servidor_series%2Cemalta_movie%2Cemalta_series/manifest.json"
     }
 ]
