@@ -41,6 +41,10 @@ export interface Episode {
   /** minutos */
   runtime?: number;
   thumbnail?: string;
+  /** resumo do episódio */
+  overview?: string;
+  /** data em que foi ao ar (ISO) */
+  released?: string;
 }
 
 export interface Season {

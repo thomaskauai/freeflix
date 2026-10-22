@@ -45,6 +45,9 @@ export interface AddonMeta {
     episode?: number;
     runtime?: string;
     thumbnail?: string;
+    overview?: string;
+    /** data em que foi ao ar (ISO) */
+    released?: string;
   }[];
 }
 

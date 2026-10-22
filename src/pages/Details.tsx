@@ -239,6 +239,13 @@ export default function Details() {
   // série já começada: Continuar, mesmo que o episódio da vez ainda não tenha sido aberto
   const started = Object.keys(episodes).length > 0 || !!saved;
   const current = seasons.filter((s) => s.number === season)[0] ?? seasons[0];
+  // série já começada: o texto do topo é o resumo do episódio da vez, quando o catálogo tem
+  const resumeOverview =
+    isSeries && (resuming || started)
+      ? seasons
+          .filter((s) => s.number === resume.season)
+          .map((s) => s.episodes.filter((e) => e.number === resume.episode)[0]?.overview)[0]
+      : undefined;
   const manySeasons = seasons.length > 1;
 
   const play = () => navigate(isSeries ? watchPath(title, resume.season, resume.episode) : watchPath(title));
@@ -266,7 +273,7 @@ export default function Details() {
                 Assistido
               </span>
             )}
-            <p className="details__synopsis">{title.synopsis}</p>
+            <p className="details__synopsis">{resumeOverview || title.synopsis}</p>
             <div className="details__actions">
               <Button icon="play" id="details-play" autoFocus onClick={play}>
                 {playLabel}

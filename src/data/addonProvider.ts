@@ -121,6 +121,19 @@ function toTitle(meta: AddonMeta): Title {
   };
 }
 
+/** "2026-06-11T00:00:00.000Z" → "11/06/2026" (a data é do dia, sem fuso) */
+function airDate(iso?: string): string | null {
+  const m = iso ? iso.match(/^(\d{4})-(\d{2})-(\d{2})/) : null;
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : null;
+}
+
+/** Novela não tem nome de capítulo, só o número; a data em que foi ao ar diz mais. */
+function episodeName(v: NonNullable<AddonMeta['videos']>[number]): string {
+  const name = v.title || v.name || `Episódio ${v.episode}`;
+  const date = airDate(v.released);
+  return date && /^cap[ií]tulo\s*\d+$/i.test(name.trim()) ? `Capítulo de ${date}` : name;
+}
+
 function toSeasons(meta: AddonMeta): Season[] {
   const bySeason = new Map<number, Episode[]>();
   (meta.videos ?? []).forEach((v) => {
@@ -129,9 +142,11 @@ function toSeasons(meta: AddonMeta): Season[] {
     const list = bySeason.get(v.season) ?? [];
     list.push({
       number: v.episode,
-      title: v.title || v.name || `Episódio ${v.episode}`,
+      title: episodeName(v),
       runtime: parseRuntime(v.runtime),
       thumbnail: v.thumbnail,
+      overview: v.overview || undefined,
+      released: v.released,
     });
     bySeason.set(v.season, list);
   });
@@ -197,6 +212,7 @@ export function fillFrom(meta: AddonMeta, other: AddonMeta | null): AddonMeta {
         title: (!name || GENERIC_EPISODE.test(name)) && otherName && !GENERIC_EPISODE.test(otherName) ? otherName : name,
         runtime: v.runtime || o.runtime,
         thumbnail: v.thumbnail || o.thumbnail,
+        overview: v.overview || o.overview,
       };
     }),
   };
