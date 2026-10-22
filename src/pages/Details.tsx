@@ -163,17 +163,10 @@ export default function Details() {
   usePageFocus(!!shown || failed, id);
   // título, sinopse e botões entram juntos com a arte, não com o espaço dela vazio
   const logoSettled = useLogoSettled(shown?.logo, LOGO_GATE_MS);
-  // prévia sem arte (cartões do Globoplay): a arte pode vir com os detalhes completos
-  const awaitingDetails = !data && !!shown && !shown.logo;
-  const [gateExpired, setGateExpired] = useState<string | null>(null);
-  useEffect(() => {
-    const timer = window.setTimeout(() => setGateExpired(id), LOGO_GATE_MS);
-    return () => window.clearTimeout(timer);
-  }, [id]);
   // já apareceu: não some de novo se a arte só vier com os detalhes completos
   const revealed = useRef<string | null>(null);
-  if ((logoSettled && !awaitingDetails) || gateExpired === id) revealed.current = id;
-  const bodyReady = revealed.current === id;
+  if (logoSettled) revealed.current = id;
+  const bodyReady = logoSettled || revealed.current === id;
 
   // Série: ↓ nos botões do topo vai direto ao episódio da vez (o em andamento,
   // ou o 1º da 1ª temporada), já com a temporada dele aberta, sem parar nas
