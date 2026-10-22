@@ -772,12 +772,24 @@
   left: var(--content-left);
   right: var(--content-left);
   max-width: 1100px;
+  -webkit-transition: opacity 0.25s ease-out;
+  transition: opacity 0.25s ease-out;
 }
 
-/* esperando a arte de título: o bloco entra inteiro, não sem o nome.
-   visibility, sem fade de opacity: na TV Tizen antiga a arte (camada própria
-   com sombra) escondida por opacity não reaparecia quando o bloco voltava. */
+/* esperando a arte de título: o bloco entra inteiro, não sem o nome */
 .details__body.is-waiting {
+  opacity: 0;
+}
+
+/* TV antiga: a arte (camada própria com sombra) escondida por opacity não
+   reaparecia quando o bloco voltava. Lá espera com visibility, sem fade. */
+.is-legacy-tv .details__body {
+  -webkit-transition: none;
+  transition: none;
+}
+
+.is-legacy-tv .details__body.is-waiting {
+  opacity: 1;
   visibility: hidden;
 }
 

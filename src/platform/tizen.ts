@@ -9,6 +9,16 @@ declare global {
 
 export const isTizen = (): boolean => typeof window !== 'undefined' && !!window.tizen;
 
+/**
+ * TV Tizen antiga (WebView Chromium < 76, ex.: sala 2019): camadas com sombra
+ * escondidas por opacity às vezes não voltam a ser desenhadas.
+ */
+export function isLegacyTizen(): boolean {
+  if (!isTizen()) return false;
+  const chrome = /Chrome\/(\d+)/.exec(navigator.userAgent);
+  return !chrome || Number(chrome[1]) < 76;
+}
+
 export function exitApp() {
   try {
     if (isTizen()) window.tizen.application.getCurrentApplication().exit();
