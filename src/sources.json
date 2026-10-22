@@ -10,5 +10,9 @@
     {
         "name": "FenixFlix", 
         "url": "https://fenixflix.fenixhub.online/qualities=4k,1080p,720p%7Caudio=dublado,legendado%7Ccatalogs=populares_movie,populares_series,recentes_movie,recentes_series/manifest.json"
+    },
+    {
+        "name": "HdHub", 
+        "url": "https://hdhub.thevolecitor.qzz.io/eyJ0b3Jib3giOiJ1bnNldCIsInF1YWxpdGllcyI6IjIxNjBwLDEwODBwLDcyMHAiLCJzb3J0IjoiZGVzYyIsImNvbnRlbnQiOiJwb3J0dWd1ZXNlIiwiY2F0YWxvZ3MiOiIifQ/manifest.json"
     }
 ]
