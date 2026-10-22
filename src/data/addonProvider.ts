@@ -1,4 +1,5 @@
-import { fetchCatalog, fetchManifest, fetchMeta, getJson, type AddonMeta } from './addonClient';
+import { fetchCached, fetchCatalog, fetchManifest, fetchMeta, getJson, type AddonMeta } from './addonClient';
+import { API_BASE } from './sync';
 import { STREAMING } from '../settings';
 import { CATALOG_NAMES_PT, GENRE_NAMES_PT, HIDDEN_CATALOGS, PARAMETERIZED_CATALOGS } from './catalogNames';
 import { read, write } from './storage';
@@ -24,6 +25,8 @@ const STREAMING_BLOCK = 100;
 const NOVELA_PAGES = 4;
 /** Globoplay no addon de streamings */
 const GLOBOPLAY = 'gop';
+/** listas do api/globoplay.ts que vêm inteiras (as outras vêm de 20 em 20) */
+const WHOLE_LISTS = ['novelas', 'series-br'];
 /** fileiras de streaming entram depois desta lista (a última das de streaming do addon) */
 const STREAMING_AFTER = 'prime-video-';
 
@@ -265,6 +268,16 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
   const plural = (type: TitleType) => (type === 'series' ? 'series' : 'movies');
 
   /**
+   * Globoplay pelo site (api/globoplay.ts, dados do JustWatch): o catálogo
+   * inteiro, em português e com páginas de verdade. O addon de streamings só
+   * tem os 100 primeiros, com nomes em inglês, e fica de reserva.
+   */
+  const globoplay = (list: string, page = 0) =>
+    fetchCached<{ metas?: AddonMeta[] }>(
+      `${API_BASE.replace(/\/$/, '')}/api/globoplay?list=${list}${WHOLE_LISTS.indexOf(list) < 0 ? `&page=${page}` : ''}`,
+    ).then((r) => (r.metas ?? []).map(toTitle).filter((t) => !!t.poster));
+
+  /**
    * País, nome e cartaz de cada novela no catálogo principal. A lista em
    * português não traz o país (para deixar as de Portugal de fora) e a do
    * Globoplay vem com nome e cartaz em inglês. Só o /meta tem isso, e ele é
@@ -305,11 +318,14 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
   const loadNovelas = () => {
     if (!novelas) {
       const soap = (m: AddonMeta) => isSoap({ genres: m.genres ?? [] });
-      const globoplay = fetchCatalog(STREAMING.base, 'series', GLOBOPLAY)
-        .then((metas) => withInfo(metas.filter((m) => soap(m) && m.country === 'Brazil')))
-        // nome, cartaz e sinopse em português no lugar dos do addon de streamings
-        .then((list) => list.map(({ meta, info }) => ({ ...meta, ...(info ?? {}), language: 'pt' })))
-        .catch(() => [] as AddonMeta[]);
+      // as do Globoplay pelo site; sem ele, as poucas do addon de streamings
+      const fromAddon = () =>
+        fetchCatalog(STREAMING.base, 'series', GLOBOPLAY)
+          .then((metas) => withInfo(metas.filter((m) => soap(m) && m.country === 'Brazil')))
+          // nome, cartaz e sinopse em português no lugar dos do addon de streamings
+          .then((list) => list.map(({ meta, info }) => toTitle({ ...meta, ...(info ?? {}), language: 'pt' })))
+          .catch(() => [] as Title[]);
+      const onGloboplay = globoplay('novelas').then((list) => (list.length ? list : fromAddon()), fromAddon);
       const classics = Promise.all(
         Array.from({ length: NOVELA_PAGES }, (_, i) =>
           fetchCatalog(base, 'series', 'series-by-language', {
@@ -318,16 +334,20 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
           }).catch(() => [] as AddonMeta[]),
         ),
       )
-        .then((pages) => withInfo(([] as AddonMeta[]).concat(...pages).filter(soap)))
+        // as que já vieram do Globoplay não precisam do resumo (nem da consulta dele)
+        .then((pages) =>
+          onGloboplay.then((now) => {
+            const known = now.map((t) => t.id);
+            return withInfo(([] as AddonMeta[]).concat(...pages).filter((m) => soap(m) && known.indexOf(m.id) < 0));
+          }),
+        )
         // sem resposta, fica: quase todas são brasileiras
         .then((list) => list.filter(({ info }) => !info?.country || info.country === 'BR').map(({ meta }) => ({ ...meta, language: 'pt' })));
-      novelas = Promise.all([globoplay, classics]).then(([now, old]) => {
+      novelas = Promise.all([onGloboplay, classics]).then(([now, old]) => {
         const seen: Record<string, boolean> = {};
-        const unique = (list: AddonMeta[]) =>
-          list
-            .map(toTitle)
-            .filter((t) => !!t.poster && !seen[t.id] && (seen[t.id] = true));
-        return remember(unique(now).concat(shuffled(unique(old), 'novelas')));
+        const unique = (list: Title[]) => list.filter((t) => !!t.poster && !seen[t.id] && (seen[t.id] = true));
+        // do Globoplay na ordem de audiência (as no ar primeiro); as de outras emissoras depois
+        return remember(unique(now).concat(shuffled(unique(old.map(toTitle)), 'novelas')));
       });
       // falhou ou veio vazia: a próxima abertura tenta de novo
       novelas.then(
@@ -431,10 +451,15 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
         }),
       );
       // novelas brasileiras logo depois dos streamings (só no catálogo em português, que tem o Globoplay)
-      const novelaRow: RowRef[] =
-        filter === 'series' && localized
-          ? [{ id: 'novelas', title: 'Novelas', style: 'poster', type: 'series', kind: 'novelas' }]
-          : [];
+      // e o que é brasileiro no Globoplay (as séries e os filmes)
+      const brazilianRows: RowRef[] = !localized
+        ? []
+        : filter === 'series'
+          ? [
+              { id: 'novelas', title: 'Novelas', style: 'poster', type: 'series', kind: 'novelas' },
+              { id: 'globoplay:series-br', title: 'Séries brasileiras', style: 'poster', type: 'series', kind: 'globoplay', catalogId: 'series-br' },
+            ]
+          : [{ id: 'globoplay:movies-br', title: 'Filmes brasileiros', style: 'poster', type: 'movie', kind: 'globoplay', catalogId: 'movies-br' }];
       const lastProvider = rest.map((r) => (r.catalogId ?? '').indexOf(STREAMING_AFTER) === 0).lastIndexOf(true);
       const at = lastProvider >= 0 ? lastProvider + 1 : rest.length;
       const popular = all.filter((c) => c.type === filter && c.id === `popular-${plural(filter)}`)[0];
@@ -453,7 +478,7 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
             shuffle: true,
           }),
         );
-      return [...pinned, topRow, ...rest.slice(0, at), ...streaming, ...novelaRow, ...rest.slice(at), ...genres].map((r, i) => ({
+      return [...pinned, topRow, ...rest.slice(0, at), ...streaming, ...brazilianRows, ...rest.slice(at), ...genres].map((r, i) => ({
         ...r,
         style: i === 0 ? 'tall' : r.style,
       }));
@@ -461,8 +486,19 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
 
     async loadRow(ref, n = 0) {
       if (ref.kind === 'top-rated') return n ? [] : topRated(ref.type);
-      if (ref.kind === 'novelas') return n ? [] : loadNovelas();
+      // listas inteiras entram de 20 em 20: uma fileira com centenas de cartões pesa na TV
+      if (ref.kind === 'novelas') return (await loadNovelas()).slice(n * PAGE_SIZE, (n + 1) * PAGE_SIZE);
       if (!ref.type || !ref.catalogId) return [];
+      if (ref.kind === 'globoplay') {
+        if (WHOLE_LISTS.indexOf(ref.catalogId) < 0) return remember(await globoplay(ref.catalogId, n));
+        return remember((await globoplay(ref.catalogId)).slice(n * PAGE_SIZE, (n + 1) * PAGE_SIZE));
+      }
+      if (ref.kind === 'streaming' && ref.catalogId === GLOBOPLAY) {
+        // o catálogo inteiro pelo site, embaralhado dentro de cada página; sem ele, o addon
+        const list = ref.type === 'series' ? 'series' : 'movies';
+        const items = await globoplay(list, n).catch(() => null);
+        if (items && (items.length || n)) return remember(shuffled(items, `items:${ref.id}:${n}`));
+      }
       if (ref.kind === 'streaming') {
         // em ordem de popularidade, 100 por vez: embaralha o bloco e entrega 20 por página
         const offset = n * PAGE_SIZE;

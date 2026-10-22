@@ -70,7 +70,8 @@ export interface RowRef {
   /** gênero do addon (filtro genre da lista) */
   genre?: string;
   /** fileira montada pelo app (top-rated) ou vinda do addon de streamings */
-  kind?: 'top-rated' | 'streaming' | 'novelas';
+  /** globoplay: lista do api/globoplay.ts, com o nome dela em catalogId */
+  kind?: 'top-rated' | 'streaming' | 'novelas' | 'globoplay';
   /** cards mostram a nota IMDb */
   showRating?: boolean;
 }

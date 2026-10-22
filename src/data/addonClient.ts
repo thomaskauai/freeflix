@@ -108,6 +108,9 @@ function cached<T>(url: string): Promise<T> {
   return request;
 }
 
+/** JSON de qualquer endereço, guardado como os do addon (falha não fica guardada). */
+export const fetchCached = <T>(url: string) => cached<T>(url);
+
 export const fetchManifest = (base: string) => cached<AddonManifest>(`${base}/manifest.json`);
 
 export function fetchCatalog(base: string, type: string, id: string, extra?: Record<string, string>) {
