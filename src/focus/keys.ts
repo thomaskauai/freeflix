@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { usePageActive } from '../pageActive';
 
 export type Action =
   | 'up'
@@ -62,8 +63,12 @@ export function dispatchAction(action: Action): boolean {
 export function useKeyHandler(handler: Handler, priority = 0) {
   const latest = useRef(handler);
   latest.current = handler;
+  // página guardada por baixo de outra não reage ao controle
+  const active = usePageActive();
+  const isActive = useRef(active);
+  isActive.current = active;
   useEffect(() => {
-    const entry: Entry = { handler: (a) => latest.current(a), priority };
+    const entry: Entry = { handler: (a) => isActive.current && latest.current(a), priority };
     entries.push(entry);
     return () => {
       const i = entries.indexOf(entry);

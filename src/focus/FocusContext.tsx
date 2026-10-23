@@ -46,14 +46,24 @@ export function focusElement(el: HTMLElement | null | undefined): boolean {
 }
 
 /** Foca o elemento lembrado desta página, ou o [data-autofocus], ou o primeiro focável. */
+/** Página guardada por baixo de outra (App.tsx): escondida, fora do alcance do foco. */
+const isHidden = (el: Element) => !!el.closest('[data-page-hidden]');
+
+/** O primeiro que casa com o seletor fora das páginas escondidas. */
+function firstVisible(root: HTMLElement, selector: string): HTMLElement | null {
+  const all = root.querySelectorAll<HTMLElement>(selector);
+  for (let i = 0; i < all.length; i++) if (!isHidden(all[i])) return all[i];
+  return null;
+}
+
 export function focusPageDefault(): boolean {
   const root = layerRoot();
   const id = pageMemory[pageKey()];
-  const remembered = id ? root.querySelector<HTMLElement>(`[data-focus-id="${id}"]`) : null;
+  const remembered = id ? firstVisible(root, `[data-focus-id="${id}"]`) : null;
   return (
     focusElement(remembered) ||
-    focusElement(root.querySelector<HTMLElement>('[data-autofocus]')) ||
-    focusElement(root.querySelector<HTMLElement>(`[data-focus-main] ${SELECTOR}`))
+    focusElement(firstVisible(root, '[data-autofocus]')) ||
+    focusElement(firstVisible(root, `[data-focus-main] ${SELECTOR}`))
   );
 }
 
@@ -85,6 +95,7 @@ function move(dir: Direction) {
   const currentGroup = groupOf(current);
   const locked = allows(currentGroup?.getAttribute('data-focus-lock'), dir);
   const candidates = Array.from(root.querySelectorAll<HTMLElement>(SELECTOR)).filter((el) => {
+    if (isHidden(el)) return false;
     const group = groupOf(el);
     if (group === currentGroup) return true;
     if (locked) return false;

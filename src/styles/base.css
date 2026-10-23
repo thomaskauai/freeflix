@@ -64,6 +64,8 @@ img {
   transform-origin: 0 0;
 }
 
+/* página-base guardada por baixo de detalhes e player (App.tsx) */
+.page-layer,
 .page {
   position: absolute;
   top: 0;

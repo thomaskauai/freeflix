@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RowStyle, Title } from '../data/types';
 import { rememberedFocus } from '../focus/FocusContext';
+import { usePageActive } from '../pageActive';
 import { Card } from './Card';
 import { Row } from './Row';
 import { NEAR_END_EVENT } from './ScrollArea';
@@ -197,12 +198,15 @@ export function Rows({ rows, autoFocusFirst, keepHeader, onFocus, onReady }: Row
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows.length]);
 
-  // Rolando com o mouse o foco não desce; quem pede mais fileiras é a rolagem.
+  // Rolando com o mouse o foco não desce; quem pede mais fileiras é a rolagem
+  // (da própria página: guardada por baixo de outra, não responde).
+  const active = usePageActive();
   useEffect(() => {
+    if (!active) return;
     const more = () => setReach((prev) => Math.min(rows.length, prev + 2));
     window.addEventListener(NEAR_END_EVENT, more);
     return () => window.removeEventListener(NEAR_END_EVENT, more);
-  }, [rows.length]);
+  }, [rows.length, active]);
 
   return (
     <div

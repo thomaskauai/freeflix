@@ -14,7 +14,8 @@ import MyList from './pages/MyList';
 import Search from './pages/Search';
 import Settings from './pages/Settings';
 import Watch from './pages/Watch';
-import { exitApp, registerMediaKeys } from './platform/tizen';
+import { PageActiveContext } from './pageActive';
+import { exitApp, isLegacyTizen, registerMediaKeys } from './platform/tizen';
 import { installDefaultSources } from './streams/sources';
 import { startSync } from './data/sync';
 
@@ -29,6 +30,25 @@ const NESTED = ['/title/', '/watch/', '/settings/'];
 const LEAVE_MS = 150;
 const ARRIVE_MS = 250;
 let leaving = false;
+
+/** Voltar para a página guardada por baixo: ela já está pronta, só reaparece (com fade, fora da TV antiga). */
+function backToKept(goBack: () => void) {
+  const root = document.documentElement;
+  goBack();
+  if (isLegacyTizen()) return;
+  root.classList.add('is-arriving');
+  window.setTimeout(() => root.classList.remove('is-arriving'), ARRIVE_MS);
+}
+
+/**
+ * Páginas-base (Início, Filmes, Séries, Minha lista): ao abrir detalhes ou o
+ * player, a base continua montada por baixo, escondida (display: none não
+ * pinta nem ocupa a placa de vídeo). Voltar só a mostra de novo, como no app
+ * da Netflix e do YouTube, sem remontar fileiras e imagens.
+ */
+const isBase = (path: string) => path === '/' || path.indexOf('/browse/') === 0 || path === '/list';
+/** telas que abrem por cima da base sem desmontá-la */
+const OVER_BASE = ['/title/', '/watch/'];
 
 function backWithFade(goBack: () => void) {
   if (leaving) return;
@@ -49,6 +69,16 @@ export default function App() {
   const navigate = useNavigate();
   const goBack = useGoBack();
   const [opening, setOpening] = useState(true);
+  // última página-base aberta; segue montada enquanto detalhes ou player estão por cima
+  const [kept, setKept] = useState<string | null>(isBase(pathname) ? pathname : null);
+  useEffect(() => {
+    if (isBase(pathname)) setKept(pathname);
+    else if (!OVER_BASE.some((prefix) => pathname.indexOf(prefix) === 0)) setKept(null);
+  }, [pathname]);
+  const inPlayer = pathname.indexOf('/watch/') === 0;
+  const onBase = isBase(pathname);
+  // TV antiga: no player a base sai da memória, para sobrar para o vídeo
+  const base = onBase ? pathname : kept && !(inPlayer && isLegacyTizen()) ? kept : null;
   const endOpening = useCallback(() => setOpening(false), []);
 
   useEffect(() => {
@@ -61,23 +91,36 @@ export default function App() {
   useKeyHandler((action) => {
     if (action !== 'back') return false;
     if (pathname === '/') exitApp();
-    else if (pathname.indexOf('/title/') === 0) backWithFade(goBack);
+    else if (pathname.indexOf('/title/') === 0) (base ? backToKept : backWithFade)(goBack);
     else if (NESTED.some((prefix) => pathname.indexOf(prefix) === 0)) goBack();
     else navigate('/');
     return true;
   }, -1);
 
-  const inPlayer = pathname.indexOf('/watch/') === 0;
-
   return (
     <FocusProvider>
       <Stage>
+        {base && (
+          <PageActiveContext.Provider value={onBase}>
+            <div
+              className="page-layer"
+              data-page-hidden={onBase ? undefined : ''}
+              style={onBase ? undefined : { display: 'none' }}
+            >
+              <Routes location={base}>
+                <Route path="/" element={<Home />} />
+                <Route path="/browse/:kind" element={<Browse />} />
+                <Route path="/list" element={<MyList />} />
+              </Routes>
+            </div>
+          </PageActiveContext.Provider>
+        )}
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/browse/:kind" element={<Browse />} />
+          <Route path="/" element={null} />
+          <Route path="/browse/:kind" element={null} />
+          <Route path="/list" element={null} />
           <Route path="/title/:type/:id" element={<Details />} />
           <Route path="/search" element={<Search />} />
-          <Route path="/list" element={<MyList />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/settings/add-source" element={<AddSource />} />
           <Route path="/watch/:type/:id" element={<Watch />} />

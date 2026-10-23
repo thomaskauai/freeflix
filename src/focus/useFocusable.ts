@@ -1,4 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react';
+import { usePageActive } from '../pageActive';
 import { focusPageDefault } from './FocusContext';
 import type { Direction } from './spatial';
 
@@ -23,11 +24,15 @@ export function useFocusable(options: FocusableOptions = {}) {
   };
 }
 
-/** Quando a página fica pronta, devolve o foco ao último item usado nela ou ao padrão. */
+/**
+ * Quando a página fica pronta, devolve o foco ao último item usado nela ou ao
+ * padrão. Página guardada por baixo de outra espera reaparecer.
+ */
 export function usePageFocus(ready: boolean, key?: string) {
+  const active = usePageActive();
   useEffect(() => {
-    if (ready) focusPageDefault();
-  }, [ready, key]);
+    if (ready && active) focusPageDefault();
+  }, [ready, key, active]);
 }
 
 /** Intercepta o movimento de foco a partir de `ref`; devolver true cancela o movimento padrão. */
