@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { ScrollArea } from '../components/ScrollArea';
 import { Icon, type IconName } from '../components/Icon';
+import { forgetLoadedRows } from '../components/Rows';
 import { SyncSection } from '../components/SyncSection';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
 import { AUDIO_LANGUAGES, getSettings, saveSettings, type AudioLanguage } from '../settings';
@@ -78,7 +79,11 @@ export default function Settings() {
   }, []);
 
   const chooseAudio = (audio: AudioLanguage) => setSettings(saveSettings({ audio }));
-  const toggleCrunchyroll = () => setSettings(saveSettings({ crunchyroll: !settings.crunchyroll }));
+  const toggleAnimes = () => {
+    setSettings(saveSettings({ animes: !settings.animes }));
+    // as fileiras guardadas foram montadas com a opção antiga
+    forgetLoadedRows();
+  };
 
   const remove = (base: string) => {
     removeSource(base);
@@ -180,16 +185,19 @@ export default function Settings() {
 
         <section className="settings__block" data-scroll-anchor="200">
           <h2 className="settings__title">Catálogo</h2>
-          <p className="settings__note">Fileiras de animes do Crunchyroll em Filmes e Séries.</p>
+          <p className="settings__note">
+            Animes nas fileiras, nos destaques e nos semelhantes, e as fileiras do Crunchyroll. Na busca eles sempre
+            aparecem.
+          </p>
           <div className="settings__options">
             <Button
               variant="pill"
-              id="catalog:crunchyroll"
-              icon={settings.crunchyroll ? 'check' : undefined}
-              selected={settings.crunchyroll}
-              onClick={toggleCrunchyroll}
+              id="catalog:animes"
+              icon={settings.animes ? 'check' : undefined}
+              selected={settings.animes}
+              onClick={toggleAnimes}
             >
-              Incluir Crunchyroll
+              Incluir animes
             </Button>
           </div>
         </section>

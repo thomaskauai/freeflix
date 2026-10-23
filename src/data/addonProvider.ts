@@ -1,6 +1,7 @@
 import { fetchCached, fetchCatalog, fetchManifest, fetchMeta, getJson, type AddonMeta } from './addonClient';
+import { withoutAnime } from './anime';
 import { API_BASE } from './site';
-import { STREAMING_FALLBACK, streamingServices } from '../settings';
+import { getSettings, STREAMING_FALLBACK, streamingServices } from '../settings';
 import { CATALOG_NAMES_PT, GENRE_NAMES_PT, HIDDEN_CATALOGS, PARAMETERIZED_CATALOGS } from './catalogNames';
 import { read, write } from './storage';
 import { isSoap, type CatalogProvider, type Episode, type RowRef, type Season, type Title, type TitleType } from './types';
@@ -258,9 +259,9 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
   };
 
   const page = (type: TitleType, catalogId: string, skip?: number) =>
-    fetchCatalog(base, type, catalogId, skip ? { skip: String(skip) } : undefined).then((metas) =>
-      remember(metas.map(toTitle)),
-    );
+    fetchCatalog(base, type, catalogId, skip ? { skip: String(skip) } : undefined)
+      .then((metas) => remember(metas.map(toTitle)))
+      .then(withoutAnime);
   const plural = (type: TitleType) => (type === 'series' ? 'series' : 'movies');
 
   const streamingBlock = (type: TitleType, service: string, skip: number) =>
@@ -381,11 +382,46 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
       }),
     ).then((lists) => alternate(lists).slice(0, TOP_RATED_LIMIT));
 
+  /** Itens de uma fileira, antes do filtro de animes. */
+  const loadRow = async (ref: RowRef, n: number): Promise<Title[]> => {
+    if (ref.kind === 'top-rated') return n ? [] : topRated(ref.type);
+    // listas inteiras entram de 20 em 20: uma fileira com centenas de cartões pesa na TV
+    if (ref.kind === 'novelas') return (await loadNovelas()).slice(n * PAGE_SIZE, (n + 1) * PAGE_SIZE);
+    if (!ref.type || !ref.catalogId) return [];
+    if (ref.kind === 'globoplay') {
+      if (WHOLE_LISTS.indexOf(ref.catalogId) < 0) return remember(await justwatch(ref.catalogId, n));
+      return remember((await justwatch(ref.catalogId)).slice(n * PAGE_SIZE, (n + 1) * PAGE_SIZE));
+    }
+    if (ref.kind === 'streaming') {
+      // o catálogo inteiro do streaming pelo site, em ordem de popularidade, embaralhado dentro de cada página
+      const items = await justwatch(plural(ref.type), n, ref.catalogId).catch(() => null);
+      if (items && (items.length || n)) return remember(shuffled(items, `items:${ref.id}:${n}`));
+      // JustWatch falhou: o addon de streamings, 100 por vez, embaralhado no bloco e entregue de 20 em 20
+      const offset = n * PAGE_SIZE;
+      const block = Math.floor(offset / STREAMING_BLOCK) * STREAMING_BLOCK;
+      const fallback = await streamingBlock(ref.type, ref.catalogId, block);
+      const mixed = shuffled(fallback, `items:${ref.id}:${block}`);
+      return remember(mixed.slice(offset - block, offset - block + PAGE_SIZE));
+    }
+    const skip = (ref.skip ?? 0) + n * PAGE_SIZE;
+    const extra: Record<string, string> = {};
+    if (ref.genre) extra.genre = ref.genre;
+    if (skip) extra.skip = String(skip);
+    const items = remember((await fetchCatalog(base, ref.type, ref.catalogId, extra)).map(toTitle));
+    return ref.shuffle ? shuffled(items, `items:${ref.id}:${n}`) : items;
+  };
+
   let featured: Promise<Title[]> | null = null;
+  /** com ou sem animes: mudou a opção, os destaques são escolhidos de novo */
+  let featuredAnimes = getSettings().animes;
 
   return {
     getFeatured() {
       // dois filmes e duas séries em alta, intercalados, do mais forte para o mais fraco
+      if (featuredAnimes !== getSettings().animes) {
+        featured = null;
+        featuredAnimes = getSettings().animes;
+      }
       if (!featured) {
         featured = Promise.all(
           (['movie', 'series'] as TitleType[]).map((t) =>
@@ -485,32 +521,9 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
       }));
     },
 
-    async loadRow(ref, n = 0) {
-      if (ref.kind === 'top-rated') return n ? [] : topRated(ref.type);
-      // listas inteiras entram de 20 em 20: uma fileira com centenas de cartões pesa na TV
-      if (ref.kind === 'novelas') return (await loadNovelas()).slice(n * PAGE_SIZE, (n + 1) * PAGE_SIZE);
-      if (!ref.type || !ref.catalogId) return [];
-      if (ref.kind === 'globoplay') {
-        if (WHOLE_LISTS.indexOf(ref.catalogId) < 0) return remember(await justwatch(ref.catalogId, n));
-        return remember((await justwatch(ref.catalogId)).slice(n * PAGE_SIZE, (n + 1) * PAGE_SIZE));
-      }
-      if (ref.kind === 'streaming') {
-        // o catálogo inteiro do streaming pelo site, em ordem de popularidade, embaralhado dentro de cada página
-        const items = await justwatch(plural(ref.type), n, ref.catalogId).catch(() => null);
-        if (items && (items.length || n)) return remember(shuffled(items, `items:${ref.id}:${n}`));
-        // JustWatch falhou: o addon de streamings, 100 por vez, embaralhado no bloco e entregue de 20 em 20
-        const offset = n * PAGE_SIZE;
-        const block = Math.floor(offset / STREAMING_BLOCK) * STREAMING_BLOCK;
-        const fallback = await streamingBlock(ref.type, ref.catalogId, block);
-        const mixed = shuffled(fallback, `items:${ref.id}:${block}`);
-        return remember(mixed.slice(offset - block, offset - block + PAGE_SIZE));
-      }
-      const skip = (ref.skip ?? 0) + n * PAGE_SIZE;
-      const extra: Record<string, string> = {};
-      if (ref.genre) extra.genre = ref.genre;
-      if (skip) extra.skip = String(skip);
-      const items = remember((await fetchCatalog(base, ref.type, ref.catalogId, extra)).map(toTitle));
-      return ref.shuffle ? shuffled(items, `items:${ref.id}:${n}`) : items;
+    loadRow(ref, n = 0) {
+      // Crunchyroll é todo anime e só existe com a opção ligada
+      return ref.kind === 'streaming' && ref.catalogId === 'cru' ? loadRow(ref, n) : loadRow(ref, n).then(withoutAnime);
     },
 
     peekTitle(type, id) {
@@ -550,12 +563,10 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
       const genre = isSoap(title) && genres.indexOf('Soap') >= 0 ? 'Soap' : title.genres.filter((g) => genres.indexOf(g) >= 0)[0];
       if (!popular || !genre) return [];
       const items = await fetchCatalog(base, popular.type, popular.id, { genre }).catch(() => []);
-      return remember(
-        items
-          .map(toTitle)
-          .filter((t) => t.id !== title.id)
-          .slice(0, SIMILAR_LIMIT),
-      );
+      // anime aberto pela busca: os semelhantes também são animes
+      const list = remember(items.map(toTitle).filter((t) => t.id !== title.id));
+      const shown = (await withoutAnime([title])).length ? await withoutAnime(list) : list;
+      return shown.slice(0, SIMILAR_LIMIT);
     },
 
     async search(q) {

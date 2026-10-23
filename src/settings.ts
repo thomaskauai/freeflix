@@ -41,10 +41,10 @@ export const STREAMING_FALLBACK = {
   idOf: (service: string) => (service === 'mxx' ? 'hbm' : service),
 };
 
-/** Fileiras por streaming em Filmes e Séries, na ordem em que aparecem; o Crunchyroll só se ligado nas Configurações. */
+/** Fileiras por streaming em Filmes e Séries, na ordem em que aparecem; o Crunchyroll só com "Incluir animes". */
 export function streamingServices() {
-  const { crunchyroll } = getSettings();
-  return STREAMING_SERVICES.filter((s) => s.id !== 'cru' || crunchyroll);
+  const { animes } = getSettings();
+  return STREAMING_SERVICES.filter((s) => s.id !== 'cru' || animes);
 }
 
 export const AUDIO_LANGUAGES: { id: AudioLanguage; label: string }[] = [
@@ -56,18 +56,19 @@ export const AUDIO_LANGUAGES: { id: AudioLanguage; label: string }[] = [
 
 export interface Settings {
   audio: AudioLanguage;
-  /** fileiras do Crunchyroll em Filmes e Séries */
-  crunchyroll: boolean;
+  /** animes no catálogo (fileiras, destaques, semelhantes) e as fileiras do Crunchyroll */
+  animes: boolean;
 }
 
 const KEY = 'freeflix.settings';
-const DEFAULTS: Settings = { audio: 'original', crunchyroll: false };
+const DEFAULTS: Settings = { audio: 'original', animes: false };
 
 export function getSettings(): Settings {
   try {
-    const saved = JSON.parse(window.localStorage.getItem(KEY) || '{}') as Partial<Settings>;
+    // "crunchyroll" era o nome da opção antes de valer para todos os animes
+    const saved = JSON.parse(window.localStorage.getItem(KEY) || '{}') as Partial<Settings> & { crunchyroll?: boolean };
     const audio = AUDIO_LANGUAGES.some((a) => a.id === saved.audio) ? (saved.audio as AudioLanguage) : DEFAULTS.audio;
-    return { audio, crunchyroll: saved.crunchyroll === true };
+    return { audio, animes: saved.animes != null ? saved.animes === true : saved.crunchyroll === true };
   } catch {
     return DEFAULTS;
   }

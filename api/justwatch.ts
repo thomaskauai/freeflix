@@ -6,6 +6,7 @@
 //   GET ?list=novelas      -> novelas brasileiras do Globoplay (todas, das mais vistas para as menos)
 //   GET ?list=series-br    -> séries brasileiras do Globoplay que não são novela (todas)
 //   GET ?list=movies-br&page= -> filmes brasileiros do Globoplay, 20 por página
+//   GET ?list=anime-ids    -> ids IMDb de todos os animes (séries e filmes), para o app esconder
 // service: mxx (HBO Max), atp (Apple TV+), pmp (Paramount+), gop (Globoplay, o padrão), cru (Crunchyroll).
 // A API do JustWatch só libera CORS para localhost; o servidor busca por elas.
 import { json, preflight } from './_lib.js';
@@ -81,6 +82,68 @@ interface Node {
    * ("Brazil Avenue").
    */
   brazilian?: { title: string | null; shortDescription: string | null };
+}
+
+/**
+ * Anime: animação do Japão, da China ou da Coreia, sem os EUA na produção
+ * (Super Mario e Batman coproduzidos lá são de fora; Cyberpunk, Japão e
+ * Polônia, é anime). O JustWatch não passa de ~1900 por filtro, então as
+ * séries vêm fatiadas por ano.
+ */
+const ANIME_COUNTRIES = ['JP', 'CN', 'KR', 'TW'];
+const ANIME_SLICES: { kind: 'SHOW' | 'MOVIE'; years?: { min?: number; max?: number } }[] = [
+  { kind: 'SHOW', years: { max: 2009 } },
+  { kind: 'SHOW', years: { min: 2010, max: 2017 } },
+  { kind: 'SHOW', years: { min: 2018, max: 2021 } },
+  { kind: 'SHOW', years: { min: 2022 } },
+  { kind: 'MOVIE' },
+];
+const ANIME_QUERY = `query Anime($first: Int!, $after: String, $filter: TitleFilter) {
+  popularTitles(country: BR, first: $first, after: $after, filter: $filter) {
+    edges { node { content(country: BR, language: "pt") { productionCountries externalIds { imdbId } } } }
+  }
+}`;
+
+interface AnimeNode {
+  content: { productionCountries: string[] | null; externalIds: { imdbId: string | null } };
+}
+
+async function animePage(slice: (typeof ANIME_SLICES)[number], offset: number): Promise<AnimeNode[]> {
+  const filter = {
+    objectTypes: [slice.kind],
+    genres: ['ani'],
+    productionCountries: ANIME_COUNTRIES,
+    ...(slice.years ? { releaseYear: slice.years } : {}),
+  };
+  const after = offset ? Buffer.from(String(offset)).toString('base64') : '';
+  const res = await fetch(JUSTWATCH, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: ANIME_QUERY, variables: { first: BATCH, after, filter } }),
+  });
+  if (!res.ok) throw new Error(`justwatch ${res.status}`);
+  const body = (await res.json()) as { data?: { popularTitles: { edges: { node: AnimeNode }[] } } };
+  return body.data ? body.data.popularTitles.edges.map((e) => e.node) : [];
+}
+
+/** Todos os animes: cada fatia em pedidos de 100, quatro por vez, até acabar. */
+async function animeIds(): Promise<string[]> {
+  const ids: Record<string, boolean> = {};
+  await Promise.all(
+    ANIME_SLICES.map(async (slice) => {
+      for (let start = 0; start < 2000; start += 4 * BATCH) {
+        const chunk = await Promise.all([0, 1, 2, 3].map((i) => animePage(slice, start + i * BATCH)));
+        chunk.forEach((nodes) =>
+          nodes.forEach((n) => {
+            const id = n.content.externalIds.imdbId;
+            if (id && (n.content.productionCountries ?? []).indexOf('US') < 0) ids[id] = true;
+          }),
+        );
+        if (chunk[chunk.length - 1].length < BATCH) break;
+      }
+    }),
+  );
+  return Object.keys(ids);
 }
 
 const image = (path: string | null | undefined, profile: string) =>
@@ -162,6 +225,12 @@ export async function GET(req: Request) {
   try {
     let nodes: Node[];
     let brazilian = true;
+    if (list === 'anime-ids') {
+      // muda devagar: um dia no CDN, e mais uma semana servindo a antiga enquanto renova
+      return json({ ids: await animeIds() }, 200, {
+        'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800',
+      });
+    }
     if (list === 'novelas' || list === 'series-br') {
       const shows = await allBrazilianShows();
       nodes = shows.filter((n) => isNovela(n) === (list === 'novelas'));

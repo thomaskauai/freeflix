@@ -112,7 +112,7 @@ export default function Search() {
     <div className="page search" data-focus-main="">
       <div className="search__panel">
         <div className={`search__query${query ? '' : ' search__query--empty'}`}>
-          {query || 'Título ou gênero'}
+          {query || 'Título'}
           {query && <span className="search__caret" />}
         </div>
         <div className="keys">
@@ -144,7 +144,7 @@ export default function Search() {
         ) : searching && results && results.length === 0 ? (
           <div className="empty">
             <p className="empty__title">Nenhum título com “{query.trim()}”</p>
-            <p className="empty__text">Tente o título original ou um gênero, como terror ou comédia.</p>
+            <p className="empty__text">Tente o título original, ou só o começo do nome.</p>
           </div>
         ) : (
           <div className="grid">

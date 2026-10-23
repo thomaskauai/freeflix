@@ -31,6 +31,10 @@ export interface RowSource {
  * pelo esqueleto. As listas vêm do mesmo cache do catálogo, então não mudam.
  */
 const loadedRows: Record<string, { items: Title[]; nextPage: number }> = {};
+/** Esquece os cards guardados (ex.: mudou uma opção que filtra o catálogo). */
+export function forgetLoadedRows() {
+  Object.keys(loadedRows).forEach((k) => delete loadedRows[k]);
+}
 const rowKey = (id: string) => `${window.location.hash || '#/'}${SEP}${id}`;
 
 /** quantas fileiras além da focada ficam carregadas */
