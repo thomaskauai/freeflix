@@ -435,7 +435,8 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
         showRating: true,
       };
       const rest = refs.filter((r) => pinned.indexOf(r) < 0);
-      if (!filter) return [...pinned, topRow, ...rest].map((r, i) => ({ ...r, style: i === 0 ? 'tall' : r.style }));
+      // todas as fileiras com o cartaz grande
+      if (!filter) return [...pinned, topRow, ...rest].map((r) => ({ ...r, style: 'tall' as const }));
 
       // Filmes e Séries: mais streamings logo depois dos do addon, e uma fileira por gênero no fim.
       const name = filter === 'series' ? 'Séries' : 'Filmes';
@@ -478,9 +479,9 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
             shuffle: true,
           }),
         );
-      return [...pinned, topRow, ...rest.slice(0, at), ...streaming, ...brazilianRows, ...rest.slice(at), ...genres].map((r, i) => ({
+      return [...pinned, topRow, ...rest.slice(0, at), ...streaming, ...brazilianRows, ...rest.slice(at), ...genres].map((r) => ({
         ...r,
-        style: i === 0 ? 'tall' : r.style,
+        style: 'tall' as const,
       }));
     },
 
