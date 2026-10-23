@@ -1882,6 +1882,37 @@
   }
 }
 
+/* ---------- Voltar dos detalhes (App.tsx) ---------- */
+
+.is-leaving .page {
+  opacity: 0;
+  -webkit-transition: opacity 150ms linear;
+  transition: opacity 150ms linear;
+}
+
+.is-arriving .page {
+  -webkit-animation: page-in 250ms ease-out both;
+  animation: page-in 250ms ease-out both;
+}
+
+/* TV antiga: conteúdo que volta de opacity 0 pode ficar sem desenhar; lá só o fade de saída */
+.is-legacy-tv.is-arriving .page {
+  -webkit-animation: none;
+  animation: none;
+}
+
+@-webkit-keyframes page-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+  }
+}
+
 /* ---------- Mouse ---------- */
 
 .is-pointer [data-focusable],
