@@ -357,6 +357,17 @@
   transform: translateZ(0);
 }
 
+/* TV antiga (Chrome 63): a arte com sombra numa camada própria não era desenhada
+   (o elemento carregava, visível e no tamanho, e a tela ficava vazia). Lá ela é
+   uma imagem simples, sem sombra nem camada. */
+.is-legacy-tv .hero__title--logo img,
+.is-legacy-tv .details__title--logo img {
+  -webkit-filter: none;
+  filter: none;
+  -webkit-transform: none;
+  transform: none;
+}
+
 .hero__title--logo,
 .details__title--logo {
   width: 620px;
@@ -785,16 +796,10 @@
   opacity: 0;
 }
 
-/* TV antiga: a arte (camada própria com sombra) escondida por opacity não
-   reaparecia quando o bloco voltava. Lá espera com visibility, sem fade. */
+/* TV antiga (Chrome 63): o bloco não espera a arte (ver Details.tsx) */
 .is-legacy-tv .details__body {
   -webkit-transition: none;
   transition: none;
-}
-
-.is-legacy-tv .details__body.is-waiting {
-  opacity: 1;
-  visibility: hidden;
 }
 
 .details__title {

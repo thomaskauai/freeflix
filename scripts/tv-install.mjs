@@ -41,7 +41,7 @@ const require = createRequire(import.meta.url);
 const adbhost = require('adbhost');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TVS = {
-  sala: { ip: '192.168.18.30', model: 'UN55RU7100GXZD', wgt: 'Freeflix-tv-antiga.wgt' },
+  sala: { ip: '192.168.18.50', model: 'UN55RU7100GXZD', wgt: 'Freeflix-tv-antiga.wgt' },
   quarto: { ip: '192.168.18.45', model: 'QN43QEF1AGXZD', wgt: 'Freeflix-tv-nova.wgt' },
 };
 const Events = { InstallPackage: 1, Error: 3, InstallationStatus: 4, DeleteConfiguration: 5, ConnectToTV: 6, InstallFile: 7 };

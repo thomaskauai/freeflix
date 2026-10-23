@@ -28,6 +28,7 @@ import type { Episode, Season, Title, TitleType } from '../data/types';
 import { focusElement, forgetPage } from '../focus/FocusContext';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
 import { watchPath } from '../nav';
+import { isLegacyTizen } from '../platform/tizen';
 import { planFor, preloadPlayback, releasePreload } from '../streams/playback';
 import { ROW_ANCHOR } from '../styles/tokens';
 
@@ -173,7 +174,8 @@ export default function Details() {
   // já apareceu: não some de novo se a arte só vier com os detalhes completos
   const revealed = useRef<string | null>(null);
   if ((logoSettled && !awaitingDetails) || gateExpired === id) revealed.current = id;
-  const bodyReady = revealed.current === id;
+  // TV antiga: sem espera; esconder e mostrar o bloco deixava a arte sem desenhar
+  const bodyReady = isLegacyTizen() || revealed.current === id;
 
   // Série: ↓ nos botões do topo vai direto ao episódio da vez (o em andamento,
   // ou o 1º da 1ª temporada), já com a temporada dele aberta, sem parar nas
