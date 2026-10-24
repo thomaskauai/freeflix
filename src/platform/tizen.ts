@@ -10,11 +10,15 @@ declare global {
 export const isTizen = (): boolean => typeof window !== 'undefined' && !!window.tizen;
 
 /**
- * TV Tizen antiga (WebView Chromium < 76, ex.: sala 2019): camadas com sombra
- * escondidas por opacity às vezes não voltam a ser desenhadas.
+ * TV Tizen antiga (Tizen 5.x, WebView Chromium 63; ex.: sala 2019): camadas
+ * com sombra e conteúdo que volta de opacity 0 às vezes não são desenhados.
+ * O navegador do Tizen não diz a versão do Chrome no user agent, só a do
+ * Tizen ("Tizen 5.0" na sala, "Tizen 9.0" no quarto); o Tizen 6 já usa o 76.
  */
 export function isLegacyTizen(): boolean {
   if (!isTizen()) return false;
+  const tizen = /Tizen (\d+)/.exec(navigator.userAgent);
+  if (tizen) return Number(tizen[1]) < 6;
   const chrome = /Chrome\/(\d+)/.exec(navigator.userAgent);
   return !chrome || Number(chrome[1]) < 76;
 }
