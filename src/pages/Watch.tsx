@@ -7,7 +7,7 @@ import { PlayerShell } from '../components/PlayerShell';
 import { EmbedPlayer, VideoPlayer } from '../components/VideoPlayer';
 import { findEpisode, followingEpisode } from '../data/episodes';
 import { catalog, previewTitle } from '../data/provider';
-import { rememberSource, saveProgress } from '../data/storage';
+import { clearPlayerSession, markPlayerSession, rememberSource, saveProgress } from '../data/storage';
 import { syncProgress, syncStarted } from '../data/sync';
 import type { Season, Title, TitleType } from '../data/types';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
@@ -94,6 +94,14 @@ export default function Watch() {
 
   const key = `${type}/${id}/${season}/${episode}`;
   const isEpisode = season != null && episode != null;
+
+  // Player aberto fica anotado: TV desligada ou app fechado aqui, a próxima
+  // abertura volta para ele. Sair do player (ou trocar de episódio) apaga.
+  const path = watchPath({ type, id }, season, episode);
+  useEffect(() => {
+    markPlayerSession(path);
+    return () => clearPlayerSession();
+  }, [path]);
 
   useEffect(() => {
     let alive = true;
@@ -332,6 +340,7 @@ export default function Watch() {
         }}
         onProgress={(time, length, moment) => {
           saveProgress(title, { season, episode, time, duration: length }, thumb);
+          markPlayerSession(path);
           syncProgress(title, season, episode, moment);
           // perto do fim, as fontes do próximo episódio já vão sendo procuradas
           if (following && length > 0 && length - time < WARM_NEXT_S && warmed.current !== key) {

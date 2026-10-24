@@ -365,6 +365,25 @@ export function PlayerShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, media, wake, goNext]);
 
+  // TV desligada ou app em segundo plano sem fechar: guarda onde parou e, na
+  // volta, continua tocando se estava tocando.
+  useEffect(() => {
+    if (mode !== 'video' || !media) return;
+    let wasPlaying = false;
+    const onVisibility = () => {
+      if (document.hidden) {
+        wasPlaying = !media.paused;
+        if (timeRef.current > 0) progressRef.current(timeRef.current, lengthRef.current, 'pause');
+      } else if (wasPlaying) {
+        wasPlaying = false;
+        const started = media.play();
+        if (started) started.catch(() => undefined);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [mode, media]);
+
   useEffect(() => {
     if (mode !== 'video') return;
     const save = window.setInterval(

@@ -200,3 +200,17 @@ export function toggleMyList(title: Title): boolean {
   write('mylist', kept);
   return added;
 }
+
+/**
+ * Player aberto agora: a rota dele (/watch/…) e quando foi visto ativo. Sai
+ * quando o espectador deixa o player; se a TV desliga ou o app fecha com ele
+ * aberto, fica, e a próxima abertura do app volta para ele.
+ */
+export interface PlayerSession {
+  path: string;
+  at: number;
+}
+
+export const getPlayerSession = () => read<PlayerSession | null>('player-session', null);
+export const markPlayerSession = (path: string) => write('player-session', { path, at: Date.now() });
+export const clearPlayerSession = () => write('player-session', null);

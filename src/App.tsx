@@ -5,6 +5,7 @@ import { Splash } from './components/Splash';
 import { Stage } from './components/Stage';
 import { FocusProvider } from './focus/FocusContext';
 import { useKeyHandler } from './focus/keys';
+import { getPlayerSession } from './data/storage';
 import { useGoBack } from './nav';
 import AddSource from './pages/AddSource';
 import Browse from './pages/Browse';
@@ -18,6 +19,9 @@ import { PageActiveContext } from './pageActive';
 import { exitApp, isLegacyTizen, registerMediaKeys } from './platform/tizen';
 import { installDefaultSources } from './streams/sources';
 import { startSync } from './data/sync';
+
+/** player aberto há mais tempo que isso quando o app fechou não é retomado */
+const RESUME_PLAYER_WITHIN_MS = 24 * 60 * 60 * 1000;
 
 /** telas abertas a partir de outra: Voltar retorna a ela, não ao Início */
 const NESTED = ['/title/', '/watch/', '/settings/'];
@@ -85,6 +89,16 @@ export default function App() {
     registerMediaKeys();
     installDefaultSources();
     startSync();
+    // O app fechou (ou a TV desligou) com o player aberto: volta para ele, do
+    // ponto salvo. Detalhes e Início ficam por baixo, para o Voltar de sempre.
+    const session = getPlayerSession();
+    const match = session && pathname === '/' ? session.path.match(/^\/watch\/(movie|series)\/([^/]+)/) : null;
+    if (session && match && Date.now() - session.at < RESUME_PLAYER_WITHIN_MS) {
+      navigate(`/title/${match[1]}/${match[2]}`);
+      navigate(session.path);
+    }
+    // só na abertura do app
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Voltar: título e player retornam uma tela, seções vão ao Início, o Início sai do app.
