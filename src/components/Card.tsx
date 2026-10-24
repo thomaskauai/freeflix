@@ -30,7 +30,7 @@ interface CardProps {
 }
 
 /** foco parado por este tempo conta como interesse no card (onDwell) */
-const DWELL_MS = 700;
+const DWELL_MS = 500;
 
 /**
  * Imagens já mostradas nesta abertura do app: voltando a uma página, o cartão
