@@ -364,6 +364,7 @@ export default function Watch() {
         upNext={upNext}
         onNext={playNext}
         onPlaying={onPlaying}
+        burnedSubtitles={candidate.hardSubs}
         onExit={goBack}
       />
     </div>

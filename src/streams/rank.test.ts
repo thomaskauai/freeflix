@@ -227,3 +227,29 @@ describe('foreignOnly', () => {
     expect(foreignOnly(stream('Anime.1080p.Japanese'), { audio: 'original', originalLanguage: 'ja' })).toBe(false);
   });
 });
+
+describe('legenda gravada e FenixFlix', () => {
+  const fenix = (title: string) => parseStream(stream('FenixFlix 1080p', title), 'FenixFlix');
+  const other = (title: string) => parseStream(stream('Outra 1080p', title), 'Outra');
+
+  it('marca "Legendado" como legenda gravada', () => {
+    expect(fenix('Moana\n🇺🇸 Legendado').hardSubs).toBe(true);
+    expect(fenix('Moana\n🇧🇷 Dublado').hardSubs).toBe(false);
+  });
+
+  it('fora do português, FenixFlix fica por último, mesmo melhor no resto', () => {
+    const list = [fenix('Moana\n🇺🇸 Legendado'), other('Moana.2026.720p')];
+    expect(rankStreams(list, ctx()).map((s) => s.addon)).toEqual(['Outra', 'FenixFlix']);
+  });
+
+  it('em português, FenixFlix concorre normalmente', () => {
+    const list = [fenix('Moana\n🇧🇷 Dublado'), other('Moana.2026.1080p')];
+    expect(rankStreams(list, ctx({ audio: 'pt' }))[0].addon).toBe('FenixFlix');
+  });
+
+  it('legenda gravada fica atrás da limpa no mesmo áudio', () => {
+    const list = [other('Moana.2026.1080p Legendado'), other('Moana.2026.1080p')];
+    expect(rankStreams(list, ctx())[0].hardSubs).toBe(false);
+  });
+});
+

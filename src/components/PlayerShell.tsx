@@ -179,6 +179,8 @@ interface PlayerShellProps {
   onNext?: () => void;
   /** a fonte começou a tocar */
   onStart?: () => void;
+  /** a legenda já vem gravada no vídeo: a lembrada não é ligada sozinha */
+  burnedSubtitles?: boolean;
   /** o vídeo passou a tocar (true) ou parou (false: pausa, fim) */
   onPlaying?: (playing: boolean) => void;
 }
@@ -204,6 +206,7 @@ export function PlayerShell({
   onNext,
   onStart,
   onPlaying,
+  burnedSubtitles,
 }: PlayerShellProps) {
   const [time, setTime] = useState(startAt);
   const [length, setLength] = useState(duration);
@@ -576,6 +579,8 @@ export function PlayerShell({
       (found) => {
         if (!alive) return;
         setSubtitles(found);
+        // legenda gravada no vídeo: ligar a do app deixaria duas, uma sobre a outra
+        if (burnedSubtitles) return;
         const wanted = rememberedSubtitle();
         const match = found.filter((o) => o.language === wanted)[0];
         if (match) applySubtitle(match, false);

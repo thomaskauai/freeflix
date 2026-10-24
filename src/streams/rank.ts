@@ -105,6 +105,18 @@ function preferenceTier(s: ParsedStream, p?: SourceProfile): number {
   return sameAudio(s, p) ? 1 : 0;
 }
 
+/**
+ * FenixFlix: muitas fontes dela vêm com a legenda gravada no vídeo. Fora do
+ * português, ela só entra quando nenhuma outra fonte tem o filme.
+ */
+const LAST_RESORT = /fenixflix/i;
+function lastResortTier(s: ParsedStream, ctx: RankContext): number {
+  return ctx.audio !== 'pt' && LAST_RESORT.test(`${s.base ?? ''} ${s.addon}`) ? 0 : 1;
+}
+
+/** Legenda gravada fica atrás das limpas, fora do português (a do app ficaria por cima). */
+const cleanTier = (s: ParsedStream, ctx: RankContext) => (ctx.audio !== 'pt' && s.hardSubs ? 0 : 1);
+
 /** 1080p é o alvo; acima dele só quando é o que há. */
 function resolutionTier(resolution: number): number {
   if (resolution === 1080) return 6;
@@ -136,9 +148,11 @@ export function rankStreams(streams: ParsedStream[], ctx: RankContext): ParsedSt
   const key = (s: ParsedStream) => {
     const fits = fitsNetwork(s, ctx);
     return [
+      lastResortTier(s, ctx),
       preferenceTier(s, ctx.prefer),
       fits ? 1 : 0,
       languageTier(s, ctx),
+      cleanTier(s, ctx),
       -(s.priority ?? 0),
       // fora do que a rede aguenta, quanto menor a resolução, menos engasga
       fits ? resolutionTier(s.resolution) : -s.resolution,

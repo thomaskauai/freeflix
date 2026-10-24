@@ -13,6 +13,8 @@ export interface Candidate {
   label: string;
   /** de onde veio e que áudio tem: o próximo episódio procura igual */
   profile: SourceProfile;
+  /** a legenda já vem gravada no vídeo: o app não liga a dele sozinho */
+  hardSubs?: boolean;
 }
 
 export interface ResolveOptions {
@@ -120,6 +122,7 @@ export async function resolvePlayback(
       hls: s.container === 'hls',
       label,
       profile: { base: s.base ?? '', label, languages: s.languages, multiAudio: s.multiAudio },
+      hardSubs: !!s.hardSubs,
     };
   };
 

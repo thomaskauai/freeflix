@@ -29,6 +29,11 @@ export interface ParsedStream {
   container: Container;
   /** o addon avisou que pode não tocar direto num navegador */
   notWebReady: boolean;
+  /**
+   * Legenda gravada na imagem ("Legendado", "hardsub"): o vídeo já mostra a
+   * legenda, e a do app ficaria por cima dela.
+   */
+  hardSubs?: boolean;
 }
 
 const RESOLUTIONS: [RegExp, number][] = [
@@ -131,5 +136,6 @@ export function parseStream(stream: AddonStream, addon: string): ParsedStream {
     hdr: /\b(hdr10\+?|hdr|dolby\s*vision|dovi|dv)\b/i.test(text),
     container: containerOf(stream.url, filename, text),
     notWebReady: !!hints.notWebReady,
+    hardSubs: /\blegendad[oa]s?\b|\bhard[- ]?sub(s|bed)?\b|\blegendas?\s+embutidas?\b/i.test(text),
   };
 }
