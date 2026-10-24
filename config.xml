@@ -3,7 +3,7 @@
      tratar como outro app (instala ao lado, sem herdar dados). A versão vem do
      package.json: npm run build:tizen a copia para cá. -->
 <widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
-        id="http://freeflix.local/app" version="0.5.22" viewmodes="maximized">
+        id="http://freeflix.local/app" version="0.5.23" viewmodes="maximized">
   <tizen:application id="FreeFlixTV.Freeflix" package="FreeFlixTV" required_version="5.0"/>
   <tizen:profile name="tv-samsung"/>
   <name>Freeflix</name>
