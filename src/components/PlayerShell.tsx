@@ -179,6 +179,8 @@ interface PlayerShellProps {
   onNext?: () => void;
   /** a fonte começou a tocar */
   onStart?: () => void;
+  /** o vídeo passou a tocar (true) ou parou (false: pausa, fim) */
+  onPlaying?: (playing: boolean) => void;
 }
 
 export function PlayerShell({
@@ -201,6 +203,7 @@ export function PlayerShell({
   upNext,
   onNext,
   onStart,
+  onPlaying,
 }: PlayerShellProps) {
   const [time, setTime] = useState(startAt);
   const [length, setLength] = useState(duration);
@@ -237,8 +240,10 @@ export function PlayerShell({
   const advanced = useRef(false);
   const nextRef = useRef(onNext);
   const startRef = useRef(onStart);
+  const playingCb = useRef(onPlaying);
   nextRef.current = upNext ? onNext : undefined;
   startRef.current = onStart;
+  playingCb.current = onPlaying;
   const playingRef = useRef(playing);
   const timeRef = useRef(time);
   const lengthRef = useRef(length);
@@ -314,14 +319,17 @@ export function PlayerShell({
     };
     const onPlay = () => {
       setPlaying(true);
+      if (playingCb.current) playingCb.current(true);
       wake();
     };
     const onPause = () => {
       setPlaying(false);
+      if (playingCb.current) playingCb.current(false);
       if (media.currentTime > 0 && !media.ended) progressRef.current(media.currentTime, lengthRef.current, 'pause');
     };
     const onEnded = () => {
       setPlaying(false);
+      if (playingCb.current) playingCb.current(false);
       goNext();
     };
     const onWaiting = () => setBuffering(true);
@@ -373,6 +381,8 @@ export function PlayerShell({
     const onVisibility = () => {
       if (document.hidden) {
         wasPlaying = !media.paused;
+        // tocando quando a TV desligou: a anotação do player fica (e é renovada)
+        if (wasPlaying && playingCb.current) playingCb.current(true);
         if (timeRef.current > 0) progressRef.current(timeRef.current, lengthRef.current, 'pause');
       } else if (wasPlaying) {
         wasPlaying = false;

@@ -53,6 +53,9 @@ const MESSAGES: Record<NoSourceReason | 'all-failed', { title: string; text: str
 const WARM_NEXT_S = 120;
 
 /** Enquanto a fonte é procurada: a mesma cara do player, com o título no alto e só o Voltar. */
+/** pausa que dura isso com o app à vista apaga a anotação do player (ver onPlaying) */
+const PAUSE_CLEARS_AFTER_MS = 1500;
+
 function Waiting({ title, subtitle, onExit }: { title: string; subtitle?: string; onExit: () => void }) {
   const back = useFocusable({ autoFocus: true });
   return (
@@ -95,13 +98,24 @@ export default function Watch() {
   const key = `${type}/${id}/${season}/${episode}`;
   const isEpisode = season != null && episode != null;
 
-  // Player aberto fica anotado: TV desligada ou app fechado aqui, a próxima
-  // abertura volta para ele. Sair do player (ou trocar de episódio) apaga.
+  // Vídeo tocando fica anotado: TV desligada ou app fechado com ele tocando,
+  // a próxima abertura volta para o player. Pausado, parado ou fora do player,
+  // não. A pausa só apaga depois de um instante e com o app à vista: ao desligar
+  // a TV o próprio sistema pausa o vídeo, e essa pausa não conta.
   const path = watchPath({ type, id }, season, episode);
-  useEffect(() => {
-    markPlayerSession(path);
-    return () => clearPlayerSession();
-  }, [path]);
+  const pauseTimer = useRef(0);
+  const onPlaying = (playing: boolean) => {
+    window.clearTimeout(pauseTimer.current);
+    if (playing) markPlayerSession(path);
+    else pauseTimer.current = window.setTimeout(() => !document.hidden && clearPlayerSession(), PAUSE_CLEARS_AFTER_MS);
+  };
+  useEffect(
+    () => () => {
+      window.clearTimeout(pauseTimer.current);
+      clearPlayerSession();
+    },
+    [path],
+  );
 
   useEffect(() => {
     let alive = true;
@@ -340,7 +354,6 @@ export default function Watch() {
         }}
         onProgress={(time, length, moment) => {
           saveProgress(title, { season, episode, time, duration: length }, thumb);
-          markPlayerSession(path);
           syncProgress(title, season, episode, moment);
           // perto do fim, as fontes do próximo episódio já vão sendo procuradas
           if (following && length > 0 && length - time < WARM_NEXT_S && warmed.current !== key) {
@@ -350,6 +363,7 @@ export default function Watch() {
         }}
         upNext={upNext}
         onNext={playNext}
+        onPlaying={onPlaying}
         onExit={goBack}
       />
     </div>

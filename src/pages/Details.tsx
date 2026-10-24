@@ -337,6 +337,12 @@ export default function Details() {
               title={manySeasons ? `Episódios da temporada ${current.number}` : 'Episódios'}
               variant="episode"
               anchor={manySeasons ? ROW_ANCHOR + SEASONS_ROW : ROW_ANCHOR}
+              // série já começada: a lista abre mostrando o episódio da vez
+              startIndex={
+                started && current.number === resume.season
+                  ? current.episodes.map((e) => e.number).indexOf(resume.episode)
+                  : undefined
+              }
             >
               {current.episodes.map((episode) => (
                 <EpisodeCard

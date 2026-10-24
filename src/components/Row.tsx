@@ -1,4 +1,4 @@
-import { useRef, useState, type FocusEvent, type ReactNode, type WheelEvent } from 'react';
+import { useLayoutEffect, useRef, useState, type FocusEvent, type ReactNode, type WheelEvent } from 'react';
 import { focusElement, isPointerFocus } from '../focus/FocusContext';
 import { ROW_ANCHOR, ROW_CLIP_PAD, ROW_END_GAP } from '../styles/tokens';
 import { Icon } from './Icon';
@@ -20,11 +20,13 @@ interface RowProps {
   onActivate?: () => void;
   /** foco ou rolagem perto do último card: hora de trazer mais */
   onNearEnd?: () => void;
+  /** abre já mostrando este item na primeira posição (ex.: o episódio da vez) */
+  startIndex?: number;
   children: ReactNode;
 }
 
 /** Fileira horizontal: o item focado estaciona na primeira posição. */
-export function Row({ title, variant, anchor = ROW_ANCHOR, passed, onActivate, onNearEnd, children }: RowProps) {
+export function Row({ title, variant, anchor = ROW_ANCHOR, passed, onActivate, onNearEnd, startIndex, children }: RowProps) {
   const viewport = useRef<HTMLDivElement>(null);
   const track = useRef<HTMLDivElement>(null);
   const [x, setX] = useState(0);
@@ -46,7 +48,22 @@ export function Row({ title, variant, anchor = ROW_ANCHOR, passed, onActivate, o
     return Math.max(0, last.offsetLeft + last.offsetWidth - visible);
   };
 
+  // Posição inicial: o item pedido já à vista, sem deslizar até ele. Vale até o
+  // foco entrar na fileira; daí em diante quem manda é o foco.
+  const touched = useRef(false);
+  const count = Array.isArray(children) ? children.length : 0;
+  useLayoutEffect(() => {
+    const t = track.current;
+    if (touched.current || !t || !startIndex || startIndex < 0 || startIndex >= t.children.length) return;
+    const max = limit();
+    setMaxX(max);
+    setFree(true);
+    setX(Math.min((t.children[startIndex] as HTMLElement).offsetLeft, max));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startIndex, count]);
+
   const onFocus = (e: FocusEvent<HTMLElement>) => {
+    touched.current = true;
     setActive(true);
     if (onActivate) onActivate();
     const max = limit();
