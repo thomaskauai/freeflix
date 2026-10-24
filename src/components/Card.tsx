@@ -23,7 +23,14 @@ interface CardProps {
   info?: string;
   /** escolher o card; sem isso, abre os detalhes */
   onSelect?: () => void;
+  /** foco parado no card por DWELL_MS (ex.: já preparar o vídeo) */
+  onDwell?: () => void;
+  /** o foco saiu do card */
+  onLeave?: () => void;
 }
+
+/** foco parado por este tempo conta como interesse no card (onDwell) */
+const DWELL_MS = 700;
 
 /**
  * Imagens já mostradas nesta abertura do app: voltando a uma página, o cartão
@@ -59,6 +66,8 @@ export function Card({
   image,
   info,
   onSelect,
+  onDwell,
+  onLeave,
 }: CardProps) {
   const navigate = useNavigate();
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
@@ -71,9 +80,18 @@ export function Card({
   // Foco parado no cartão: os detalhes deste título já começam a ser buscados,
   // porque o servidor do catálogo leva segundos. Passando direto, nada é pedido.
   const prefetch = useRef(0);
-  useEffect(() => () => window.clearTimeout(prefetch.current), []);
+  const dwell = useRef(0);
+  useEffect(
+    () => () => {
+      window.clearTimeout(prefetch.current);
+      window.clearTimeout(dwell.current);
+    },
+    [],
+  );
   const onFocus = () => {
     window.clearTimeout(prefetch.current);
+    window.clearTimeout(dwell.current);
+    if (onDwell) dwell.current = window.setTimeout(onDwell, DWELL_MS);
     prefetch.current = window.setTimeout(() => {
       catalog.getTitle(title.type, title.id).catch(() => undefined);
       // a arte de título também: os detalhes abrem com ela pronta
@@ -88,7 +106,11 @@ export function Card({
       aria-label={title.title}
       data-scroll-anchor={anchor}
       onFocus={onFocus}
-      onBlur={() => window.clearTimeout(prefetch.current)}
+      onBlur={() => {
+        window.clearTimeout(prefetch.current);
+        window.clearTimeout(dwell.current);
+        if (onLeave) onLeave();
+      }}
       onClick={
         onSelect ??
         (() => {

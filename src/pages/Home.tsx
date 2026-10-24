@@ -14,6 +14,7 @@ import { focusElement, rememberedFocus } from '../focus/FocusContext';
 import { useKeyHandler } from '../focus/keys';
 import { usePageFocus } from '../focus/useFocusable';
 import { titlePath, watchPath } from '../nav';
+import { preloadPlayback, releasePreload } from '../streams/playback';
 
 /** Episódio que o card de uma série mostra, depois de consultar a lista de episódios. */
 interface EpisodeCard {
@@ -82,13 +83,35 @@ function continueWatchingRow(
     images,
     infos,
     onSelect: (title) => {
-      const card = cards[title.id];
-      const p = saved[title.id];
-      if (card && card !== 'done') open(title, card.season, card.episode);
-      else open(title, p.season, p.episode);
+      const { season, episode } = episodeOf(title);
+      open(title, season, episode);
+    },
+    // Foco parado no card: fonte procurada e vídeo baixando do ponto salvo,
+    // como o Assistir dos detalhes. O player adota o vídeo e começa na hora.
+    onDwell: (title) => {
+      const { season, episode } = episodeOf(title);
+      warming = title.id;
+      // o título completo (idioma, ids) escolhe a mesma fonte que o player vai escolher
+      catalog.getTitle(title.type, title.id).then(
+        (full) => full && warming === title.id && preloadPlayback(full, season, episode),
+        () => undefined,
+      );
+    },
+    onLeave: () => {
+      warming = null;
+      releasePreload();
     },
   };
+
+  function episodeOf(title: Title) {
+    const card = cards[title.id];
+    const p = saved[title.id];
+    return card && card !== 'done' ? { season: card.season, episode: card.episode } : { season: p.season, episode: p.episode };
+  }
 }
+
+/** card de Continuar assistindo com o vídeo sendo preparado */
+let warming: string | null = null;
 
 interface Loaded {
   featured: Title[];

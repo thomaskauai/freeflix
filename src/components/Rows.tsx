@@ -24,6 +24,10 @@ export interface RowSource {
   infos?: Record<string, string>;
   /** o que fazer ao escolher o card; sem isso, abre os detalhes */
   onSelect?: (title: Title) => void;
+  /** foco parado num card da fileira */
+  onDwell?: (title: Title) => void;
+  /** o foco saiu de um card da fileira */
+  onLeave?: (title: Title) => void;
 }
 
 /**
@@ -140,6 +144,8 @@ function LazyRow({ source, wanted, anchor, passed, autoFocusFirst, onActivate, o
               image={source.images ? source.images[title.id] : undefined}
               info={source.infos ? source.infos[title.id] : undefined}
               onSelect={source.onSelect ? () => source.onSelect && source.onSelect(title) : undefined}
+              onDwell={source.onDwell ? () => source.onDwell && source.onDwell(title) : undefined}
+              onLeave={source.onLeave ? () => source.onLeave && source.onLeave(title) : undefined}
             />
           ))
         : Array.from({ length: SKELETONS }, (_, i) => (
