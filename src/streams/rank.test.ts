@@ -273,6 +273,15 @@ describe('gravação de cinema e arquivos que não são vídeo', () => {
     expect(file('segmento.ts').unplayable).toBeUndefined();
   });
 
+  it('nome de filme com "cam" ou "screener" não é gravação de cinema', () => {
+    expect(file('', '🍿 Cam Girl (2025) / 1080p WEB-DL').unplayable).toBeUndefined();
+    expect(file('', '🍿 Cam (2018) / 1080p').unplayable).toBeUndefined();
+    expect(file('', 'The Screener 2020 1080p').unplayable).toBeUndefined();
+    expect(file('Telecine.Pipoca.2020.1080p.mkv').unplayable).toBeUndefined();
+    expect(file('Cam.Girl.2025.1080p.WEB-DL.mkv').unplayable).toBeUndefined();
+    expect(file('Cam.Girl.2025.HDCAM.mkv').unplayable).toBe('cam');
+  });
+
   it('exclui arquivo que não é vídeo', () => {
     expect(file('ShowBox_2024-06-04-19-27_11.7_131_webRelease_sign.apk|^|ORGMKV').unplayable).toBe('not-video');
   });

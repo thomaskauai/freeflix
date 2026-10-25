@@ -12,12 +12,16 @@ export type Container = 'mp4' | 'mkv' | 'webm' | 'hls' | '';
 export type Unplayable = 'torrent' | 'external' | 'headers' | 'cam' | 'not-video';
 
 /**
- * Gravação de cinema (câmera na sala ou áudio puxado do som da sala): CAM,
- * HDCAM, TS, HDTS, TELESYNC, TC, TELECINE, SCREENER. "TS" e "TC" só valem
- * como etiqueta solta do nome do lançamento (".TS.", " TS "), não como
- * extensão de segmento HLS (".ts" no fim).
+ * Gravação de cinema (câmera na sala ou áudio puxado do som da sala). Nos nomes
+ * de lançamento as etiquetas vêm em maiúsculas (HDCAM, CAMRip, .TS., HDTS, TC,
+ * TELECINE, DVDSCR, SCREENER), e só assim contam: nome de filme como "Cam
+ * Girl", "The Screener" ou o canal Telecine fica de fora do filtro. "TS" e
+ * "TC" só como etiqueta solta (".TS.", " TS "), não como extensão ".ts".
+ * TELESYNC vale de qualquer jeito: não é palavra de título.
  */
-const CAM = /\b(hd-?)?cam(-?rip)?\b|\btele-?sync\b|\btele-?cine\b|\b(dvd-?)?scr(eener)?\b|(^|[ ._\-[(])(hd-?)?(ts|tc)(?=[ ._\-\])])/i;
+const CAM_TAGS = /\b(HD-?)?CAM(-?R[Ii][Pp])?\b|\bCamRip\b|\bTELECINE\b|\b(DVD-?)?SCR(EENER)?\b|(^|[ ._\-[(])(HD-?)?(TS|TC)(?=[ ._\-\])])/;
+const TELESYNC = /\btele-?sync\b/i;
+const isCam = (text: string) => CAM_TAGS.test(text) || TELESYNC.test(text);
 
 /** arquivo que não é vídeo (aplicativo, compactado) */
 const NOT_VIDEO = /\.(apk|exe|msi|dmg|zip|rar|7z|iso)(\b|$)/i;
@@ -118,7 +122,7 @@ export function parseStream(stream: AddonStream, addon: string): ParsedStream {
   else if (hints.proxyHeaders && hints.proxyHeaders.request && Object.keys(hints.proxyHeaders.request).length > 0) {
     unplayable = 'headers';
   } else if (NOT_VIDEO.test(filename)) unplayable = 'not-video';
-  else if (CAM.test(text)) unplayable = 'cam';
+  else if (isCam(text)) unplayable = 'cam';
 
   const languages: string[] = [];
   const add = (code: string) => languages.indexOf(code) < 0 && languages.push(code);
