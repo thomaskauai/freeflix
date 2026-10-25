@@ -5,7 +5,22 @@ import type { AddonStream } from '../data/addonClient';
 
 export type Codec = 'h264' | 'hevc' | 'av1' | '';
 export type Container = 'mp4' | 'mkv' | 'webm' | 'hls' | '';
-export type Unplayable = 'torrent' | 'external' | 'headers';
+/**
+ * Por que a fonte fica de fora: torrent, link externo, cabeçalhos próprios,
+ * gravação de cinema (não é exibida de jeito nenhum) ou arquivo que nem é vídeo.
+ */
+export type Unplayable = 'torrent' | 'external' | 'headers' | 'cam' | 'not-video';
+
+/**
+ * Gravação de cinema (câmera na sala ou áudio puxado do som da sala): CAM,
+ * HDCAM, TS, HDTS, TELESYNC, TC, TELECINE, SCREENER. "TS" e "TC" só valem
+ * como etiqueta solta do nome do lançamento (".TS.", " TS "), não como
+ * extensão de segmento HLS (".ts" no fim).
+ */
+const CAM = /\b(hd-?)?cam(-?rip)?\b|\btele-?sync\b|\btele-?cine\b|\b(dvd-?)?scr(eener)?\b|(^|[ ._\-[(])(hd-?)?(ts|tc)(?=[ ._\-\])])/i;
+
+/** arquivo que não é vídeo (aplicativo, compactado) */
+const NOT_VIDEO = /\.(apk|exe|msi|dmg|zip|rar|7z|iso)(\b|$)/i;
 
 export interface ParsedStream {
   addon: string;
@@ -102,7 +117,8 @@ export function parseStream(stream: AddonStream, addon: string): ParsedStream {
   // <video> não deixa mandar cabeçalhos próprios na requisição
   else if (hints.proxyHeaders && hints.proxyHeaders.request && Object.keys(hints.proxyHeaders.request).length > 0) {
     unplayable = 'headers';
-  }
+  } else if (NOT_VIDEO.test(filename)) unplayable = 'not-video';
+  else if (CAM.test(text)) unplayable = 'cam';
 
   const languages: string[] = [];
   const add = (code: string) => languages.indexOf(code) < 0 && languages.push(code);

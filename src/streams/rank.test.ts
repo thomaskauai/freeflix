@@ -253,3 +253,35 @@ describe('legenda gravada e FenixFlix', () => {
   });
 });
 
+describe('gravação de cinema e arquivos que não são vídeo', () => {
+  const file = (filename: string, title = '') =>
+    parseStream(stream('PenguPlay 1080p', title, { behaviorHints: { filename } }), 'PenguPlay');
+
+  it('exclui TELESYNC, HDTS, CAM, TC e SCREENER', () => {
+    expect(file('Spider-Man.Brand.New.Day.2026.1080p.TELESYNC.x264-DKS.mkv').unplayable).toBe('cam');
+    expect(file('Filme.2026.HDTS.x264.mkv').unplayable).toBe('cam');
+    expect(file('Filme 2026 1080p TS x264.mkv').unplayable).toBe('cam');
+    expect(file('Filme.2026.HDCAM.x264.mp4').unplayable).toBe('cam');
+    expect(file('Filme.2026.CAMRip.mp4').unplayable).toBe('cam');
+    expect(file('Filme.2026.TC.x264.mkv').unplayable).toBe('cam');
+    expect(file('Filme.2026.DVDSCR.x264.mkv').unplayable).toBe('cam');
+  });
+
+  it('mantém WEB-DL, DTS e segmentos .ts', () => {
+    expect(file('Filme.2026.1080p.AMZN.WEB-DL.DDP5.1.H.264.mkv').unplayable).toBeUndefined();
+    expect(file('Filme.2026.1080p.BluRay.DTS-HD.MA.5.1.x264.mkv').unplayable).toBeUndefined();
+    expect(file('segmento.ts').unplayable).toBeUndefined();
+  });
+
+  it('exclui arquivo que não é vídeo', () => {
+    expect(file('ShowBox_2024-06-04-19-27_11.7_131_webRelease_sign.apk|^|ORGMKV').unplayable).toBe('not-video');
+  });
+
+  it('nenhuma gravação de cinema entra no ranking', () => {
+    const list = [file('Filme.2026.1080p.TELESYNC.x264.mkv'), file('Filme.2026.720p.WEB-DL.mkv')];
+    const ranked = rankStreams(list, ctx());
+    expect(ranked).toHaveLength(1);
+    expect(ranked[0].unplayable).toBeUndefined();
+  });
+});
+
