@@ -10,6 +10,7 @@ import type { Title } from '../data/types';
 import { loadHls } from './loadHls';
 import type { SourceProfile } from './rank';
 import { resolvePlayback, type Candidate, type NoSourceReason, type Resolution } from './resolve';
+import { noStreamingInBrazil, torrentAvailable, torrentCandidate } from './torrent';
 
 /** fontes encontradas valem por este tempo; links de streaming costumam expirar */
 const PLAN_TTL_MS = 10 * 60 * 1000;
@@ -120,7 +121,7 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
   // em paralelo e entram como reserva, sem atrasar o play.
   const prefer: SourceProfile | undefined = season != null ? preferredSource(title.id) : undefined;
   const full = resolvePlayback(title, season, episode, { prefer }).then(toPlan, unreachable);
-  const plan = prefer
+  const httpPlan = prefer
     ? resolvePlayback(title, season, episode, { prefer, only: prefer.base })
         .then(toPlan, unreachable)
         .then(
@@ -130,6 +131,26 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
               : full,
         )
     : full;
+  // Sem streaming no Brasil (lançamento recente, título fora dos catálogos), as
+  // fontes HTTP costumam ser fracas: com o motor no ar, o torrent vem primeiro e
+  // as fontes HTTP ficam de reserva. Episódio com fonte escolhida antes segue ela.
+  const torrentFirst = prefer
+    ? Promise.resolve(null)
+    : torrentAvailable()
+        .then((ok) => ok && noStreamingInBrazil(title))
+        .then((yes) => (yes ? torrentCandidate(title, season, episode) : null))
+        .catch(() => null);
+  const plan = torrentFirst.then(
+    (torrent): Plan | Promise<Plan> =>
+      torrent
+        ? {
+            status: 'play',
+            candidates: [torrent],
+            index: 0,
+            more: httpPlan.then((p) => (p.status === 'play' ? p.candidates : [])),
+          }
+        : httpPlan,
+  );
   plans[key] = { at: Date.now(), plan };
   // sem fonte, a próxima tentativa pergunta de novo
   plan.then((p) => p.status === 'none' && plans[key] && plans[key].plan === plan && delete plans[key]);

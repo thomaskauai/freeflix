@@ -80,6 +80,31 @@ function toTorrent(s: TorrentioStream): TorrentStream | null {
   };
 }
 
+/**
+ * O título não está em nenhum streaming no Brasil (assinatura ou grátis)? Aí as
+ * fontes HTTP costumam ser fracas ou nem existir, e o torrent vem primeiro. O
+ * motor pergunta ao JustWatch; sem resposta, fica como antes (false).
+ */
+export async function noStreamingInBrazil(title: Title): Promise<boolean> {
+  const imdb = title.imdbId ?? (/^tt\d+$/.test(title.id) ? title.id : null);
+  if (!imdb) return false;
+  const ask = async (q: string) =>
+    (
+      await getJson<{ streaming: boolean | null }>(
+        `${ENGINE}/streaming-br?imdb=${imdb}&type=${title.type}&q=${encodeURIComponent(q)}`,
+      )
+    ).streaming;
+  try {
+    let streaming = await ask(title.title);
+    if (streaming === null && title.originalTitle && title.originalTitle !== title.title) {
+      streaming = await ask(title.originalTitle);
+    }
+    return streaming === false;
+  } catch {
+    return false;
+  }
+}
+
 /** Os torrents do título, do melhor para o pior, sem gravação de cinema. */
 export async function findTorrents(title: Title, season?: number, episode?: number): Promise<TorrentStream[]> {
   const imdb = title.imdbId ?? (/^tt\d+$/.test(title.id) ? title.id : null);

@@ -13,12 +13,14 @@
  *   GET /<hash>/<idx>/stats.json        -> peers, velocidade, quanto baixou
  *   GET /<hash>/remove                  -> para e apaga o que baixou
  *   GET /removeAll
+ *   GET /streaming-br?imdb=tt..&q=nome&type=movie|series -> { streaming: true|false|null }
  *
  * Uso no Mac: cd torrent-engine && npm start   (PORT=2710 por padrão)
  */
 'use strict';
 
 var http = require('http');
+var https = require('https');
 var os = require('os');
 var path = require('path');
 var url = require('url');
@@ -279,6 +281,72 @@ function serveFile(req, res, entry, idx) {
   });
 }
 
+/**
+ * O título está em algum streaming no Brasil (assinatura ou grátis)? Aluguel e
+ * compra não contam. Daqui, e não do app, porque o JustWatch só libera CORS
+ * para localhost. Busca pelo nome e confere o IMDb; não achou: null.
+ */
+var STREAMING = ['FLATRATE', 'FLATRATE_AND_BUY', 'FREE', 'ADS'];
+var STREAMING_TTL_MS = 6 * 60 * 60 * 1000;
+var streamingCache = {};
+var STREAMING_QUERY =
+  'query S($q: String!, $types: [ObjectType!]) { popularTitles(country: BR, first: 10, filter: { searchQuery: $q, objectTypes: $types }) {' +
+  ' edges { node { content(country: BR, language: "pt") { externalIds { imdbId } } offers(country: BR, platform: WEB) { monetizationType } } } } }';
+
+function streamingInBrazil(imdb, q, type, back) {
+  var cached = streamingCache[imdb];
+  if (cached && now() - cached.at < STREAMING_TTL_MS) return back(cached.value);
+  var body = JSON.stringify({
+    query: STREAMING_QUERY,
+    variables: { q: q, types: [type === 'series' ? 'SHOW' : 'MOVIE'] },
+  });
+  var done = false;
+  var finish = function (value) {
+    if (done) return;
+    done = true;
+    if (value !== null) streamingCache[imdb] = { at: now(), value: value };
+    back(value);
+  };
+  var req = https.request(
+    {
+      host: 'apis.justwatch.com',
+      path: '/graphql',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+    },
+    function (res) {
+      var chunks = [];
+      res.on('data', function (c) {
+        chunks.push(c);
+      });
+      res.on('end', function () {
+        try {
+          var edges = JSON.parse(Buffer.concat(chunks).toString()).data.popularTitles.edges;
+          var match = edges.filter(function (e) {
+            return e.node.content && e.node.content.externalIds && e.node.content.externalIds.imdbId === imdb;
+          })[0];
+          if (!match) return finish(null);
+          finish(
+            (match.node.offers || []).some(function (o) {
+              return STREAMING.indexOf(o.monetizationType) >= 0;
+            }),
+          );
+        } catch (e) {
+          finish(null);
+        }
+      });
+    },
+  );
+  req.setTimeout(5000, function () {
+    req.abort();
+    finish(null);
+  });
+  req.on('error', function () {
+    finish(null);
+  });
+  req.end(body);
+}
+
 function handle(req, res) {
   if (req.method === 'OPTIONS') return send(res, 204, '');
   var parsed = url.parse(req.url, true);
@@ -291,6 +359,13 @@ function handle(req, res) {
   if (parts[0] === 'removeAll') {
     Object.keys(engines).forEach(remove);
     return send(res, 200, { ok: true });
+  }
+
+  if (parts[0] === 'streaming-br') {
+    if (!/^tt\d+$/.test(String(query.imdb)) || !query.q) return send(res, 400, { error: 'imdb-e-q' });
+    return streamingInBrazil(String(query.imdb), String(query.q), String(query.type || 'movie'), function (value) {
+      send(res, 200, { streaming: value });
+    });
   }
 
   var hash = String(parts[0]).toLowerCase();
