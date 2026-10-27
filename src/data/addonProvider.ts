@@ -1,5 +1,5 @@
 import { fetchCached, fetchCatalog, fetchManifest, fetchMeta, getJson, type AddonMeta } from './addonClient';
-import { withoutAnime } from './anime';
+import { withoutAnime, withoutCinema, withoutHidden } from './hidden';
 import { API_BASE } from './site';
 import { getSettings, STREAMING_FALLBACK, streamingServices } from '../settings';
 import { CATALOG_NAMES_PT, GENRE_NAMES_PT, HIDDEN_CATALOGS, PARAMETERIZED_CATALOGS } from './catalogNames';
@@ -261,7 +261,7 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
   const page = (type: TitleType, catalogId: string, skip?: number) =>
     fetchCatalog(base, type, catalogId, skip ? { skip: String(skip) } : undefined)
       .then((metas) => remember(metas.map(toTitle)))
-      .then(withoutAnime);
+      .then(withoutHidden);
   const plural = (type: TitleType) => (type === 'series' ? 'series' : 'movies');
 
   const streamingBlock = (type: TitleType, service: string, skip: number) =>
@@ -523,7 +523,9 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
 
     loadRow(ref, n = 0) {
       // Crunchyroll é todo anime e só existe com a opção ligada
-      return ref.kind === 'streaming' && ref.catalogId === 'cru' ? loadRow(ref, n) : loadRow(ref, n).then(withoutAnime);
+      return ref.kind === 'streaming' && ref.catalogId === 'cru'
+        ? loadRow(ref, n).then(withoutCinema)
+        : loadRow(ref, n).then(withoutHidden);
     },
 
     peekTitle(type, id) {
@@ -566,7 +568,7 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
       // anime aberto pela busca: os semelhantes também são animes
       const list = remember(items.map(toTitle).filter((t) => t.id !== title.id));
       const shown = (await withoutAnime([title])).length ? await withoutAnime(list) : list;
-      return shown.slice(0, SIMILAR_LIMIT);
+      return (await withoutCinema(shown)).slice(0, SIMILAR_LIMIT);
     },
 
     async search(q) {
@@ -587,7 +589,8 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
       }
       // quem começa com o que foi digitado vem antes; empate mantém a ordem do addon
       const wanted = foldForSearch(query);
-      return merged
+      // anime aparece na busca (foi procurado); filme só de cinema não: só abriria em gravação
+      return (await withoutCinema(merged))
         .map((title, i) => ({ title, i, tier: searchTier(title, wanted) }))
         .sort((a, b) => a.tier - b.tier || a.i - b.i)
         .map((entry) => entry.title);

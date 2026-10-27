@@ -7,6 +7,7 @@
 //   GET ?list=series-br    -> séries brasileiras do Globoplay que não são novela (todas)
 //   GET ?list=movies-br&page= -> filmes brasileiros do Globoplay, 20 por página
 //   GET ?list=anime-ids    -> ids IMDb de todos os animes (séries e filmes), para o app esconder
+//   GET ?list=cinema-ids   -> ids IMDb dos filmes recentes que ainda só passam no cinema, para o app esconder
 // service: mxx (HBO Max), atp (Apple TV+), pmp (Paramount+), gop (Globoplay, o padrão), cru (Crunchyroll).
 // A API do JustWatch só libera CORS para localhost; o servidor busca por elas.
 import { json, preflight } from './_lib.js';
@@ -146,6 +147,60 @@ async function animeIds(): Promise<string[]> {
   return Object.keys(ids);
 }
 
+const CINEMA_QUERY = `query Cinema($first: Int!, $after: String, $filter: TitleFilter) {
+  popularTitles(country: BR, first: $first, after: $after, filter: $filter) {
+    edges { node {
+      content(country: BR, language: "pt") { originalReleaseYear originalReleaseDate externalIds { imdbId } }
+      offers(country: BR, platform: WEB) { monetizationType }
+    } }
+  }
+}`;
+
+interface CinemaNode {
+  content: { originalReleaseYear: number | null; originalReleaseDate: string | null; externalIds: { imdbId: string | null } };
+  offers: { monetizationType: string }[];
+}
+
+/** lançado há mais que isso, o filme já costuma ter cópia digital em algum lugar */
+const CINEMA_DAYS = 90;
+
+/**
+ * Filmes em cartaz no Brasil sem nenhuma outra oferta (assinatura, aluguel,
+ * compra, grátis): só existem em gravação de cinema. Clássico ou show que
+ * volta ao cinema tem cópia boa, então só contam os do ano atual lançados há
+ * menos de CINEMA_DAYS. Os que ainda vão estrear também saem: não há o que exibir.
+ */
+async function cinemaIds(): Promise<string[]> {
+  const now = new Date();
+  const since = new Date(now.getTime() - CINEMA_DAYS * 86400000).toISOString().slice(0, 10);
+  const recent = (n: CinemaNode) =>
+    n.content.originalReleaseYear === now.getFullYear() &&
+    !!n.content.originalReleaseDate &&
+    n.content.originalReleaseDate >= since;
+  const ids: string[] = [];
+  for (let offset = 0; offset < 2000; offset += BATCH) {
+    const after = offset ? Buffer.from(String(offset)).toString('base64') : '';
+    const res = await fetch(JUSTWATCH, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: CINEMA_QUERY,
+        variables: { first: BATCH, after, filter: { objectTypes: ['MOVIE'], monetizationTypes: ['CINEMA'] } },
+      }),
+    });
+    if (!res.ok) throw new Error(`justwatch ${res.status}`);
+    const body = (await res.json()) as { data?: { popularTitles: { edges: { node: CinemaNode }[] } } };
+    const nodes = body.data ? body.data.popularTitles.edges.map((e) => e.node) : [];
+    nodes.forEach((n) => {
+      const id = n.content.externalIds.imdbId;
+      const onlyCinema = n.offers.length > 0 && n.offers.every((o) => o.monetizationType === 'CINEMA');
+      if (id && onlyCinema && recent(n)) ids.push(id);
+    });
+    if (nodes.length < BATCH) break;
+  }
+  return ids;
+}
+
 const image = (path: string | null | undefined, profile: string) =>
   path ? IMAGES + path.replace('{profile}', profile).replace('{format}', 'jpg') : undefined;
 
@@ -229,6 +284,12 @@ export async function GET(req: Request) {
       // muda devagar: um dia no CDN, e mais uma semana servindo a antiga enquanto renova
       return json({ ids: await animeIds() }, 200, {
         'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800',
+      });
+    }
+    if (list === 'cinema-ids') {
+      // sai do cinema para o streaming de um dia para o outro: seis horas no CDN
+      return json({ ids: await cinemaIds() }, 200, {
+        'Cache-Control': 'public, s-maxage=21600, stale-while-revalidate=86400',
       });
     }
     if (list === 'novelas' || list === 'series-br') {
