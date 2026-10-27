@@ -36,192 +36,85 @@ quer modificar o app.
 
 ## Instalar na TV Samsung
 
-A Samsung não deixa instalar apps fora da loja pelo jeito normal. O caminho é o
-**TizenBrew Installer**, um programa que roda no computador, conecta na TV pela rede (no
-modo de desenvolvedor dela) e instala o arquivo do app (`.wgt`).
+Serve para TV Samsung de 2017 em diante. Você vai precisar de um computador (Windows, Mac
+ou Linux) na **mesma rede** da TV. A instalação é feita pelo **TizenBrew Installer**, um
+programa que roda no computador e manda o app para a TV.
 
-Você vai precisar de:
+TVs mais novas (Tizen 7+, em geral 2023 em diante) pedem também login numa **conta
+Samsung** (grátis). Não precisa descobrir a versão: o Installer vê sozinho e só pede se
+for preciso.
 
-- uma TV Samsung de **2017 ou mais nova** (Tizen 3.0+);
-- um computador (Windows, macOS ou Linux) **na mesma rede Wi-Fi/cabo** da TV;
-- em TVs **Tizen 7 ou mais novo** (em geral, 2023 em diante): uma **conta Samsung**
-  (grátis). Veja [Qual é o Tizen da minha TV?](#qual-é-o-tizen-da-minha-tv).
+### 1. Baixar os dois arquivos
 
-O processo leva uns 15 minutos na primeira vez.
+- O app: **[Freeflix.wgt](https://github.com/thomaskauai/freeflix/releases/latest/download/Freeflix.wgt)**
+- O [TizenBrew Installer](https://github.com/reisxd/TizenBrewInstaller/releases/latest)
+  do seu sistema: `TizenBrewInstaller-win-x64.exe` (Windows),
+  `TizenBrewInstaller-macos-arm64` (Mac M1/M2…), `TizenBrewInstaller-macos-x64` (Mac
+  Intel) ou `TizenBrewInstaller-linux-x64` (Linux).
 
-### Qual é o Tizen da minha TV?
+### 2. Ligar o modo de desenvolvedor na TV
 
-O jeito de instalar muda num ponto só: **a partir do Tizen 7**, a TV só aceita apps
-assinados com um certificado ligado a uma conta Samsung. Abaixo disso, não precisa de
-conta.
+1. Descubra o IP do computador. Windows: `ipconfig` no Prompt de Comando, "Endereço
+   IPv4". Mac: `ipconfig getifaddr en0` no Terminal. Algo como `192.168.0.10`.
+2. Na TV, abra **Apps** e digite **`1 2 3 4 5`** no controle (controle sem números:
+   aperte o botão **`123`** para abrir o teclado na tela).
+3. Na janela **Developer Mode**: ligue (**On**), digite o IP do computador em **Host PC
+   IP** e confirme.
+4. **Reinicie a TV segurando o botão liga/desliga** até aparecer o logo da Samsung (só
+   desligar e ligar não serve).
 
-Você não precisa descobrir o número exato: o TizenBrew Installer lê a versão da TV quando
-conecta e, se for Tizen 7+, pede o login da Samsung sozinho. Mas dá para saber antes pelo
-**ano do modelo**:
+Anote o **IP da TV**: Configurações → Geral → Rede → Status da rede → Config. IP.
 
-| Ano da TV | Tizen de fábrica | Precisa de conta Samsung? |
-|---|---|---|
-| 2017 | 3.0 | não |
-| 2018 | 4.0 | não |
-| 2019 | 5.0 | não |
-| 2020 | 5.5 | não |
-| 2021 | 6.0 | não |
-| 2022 | 6.5 | não |
-| 2023 | 7.0 | **sim** |
-| 2024 | 8.0 | **sim** |
-| 2025 em diante | 9.0+ | **sim** |
+### 3. Abrir o Installer e conectar
 
-Cuidado: a Samsung tem atualizado o sistema de algumas TVs para um Tizen mais novo. Se a
-sua recebeu essa atualização, vale a versão atual, não a de fábrica. Na dúvida, siga o
-passo a passo: o Installer avisa.
-
-**Como achar o ano da TV:** o código do modelo está na etiqueta atrás da TV e em
-**Configurações → Suporte → Sobre esta TV**. Uma letra do código indica o ano:
-
-| Letra | M | N | R | T | A | B | C | D | F |
-|---|---|---|---|---|---|---|---|---|---|
-| Ano | 2017 | 2018 | 2019 | 2020 | 2021 | 2022 | 2023 | 2024 | 2025 |
-
-Exemplos: `UN55`**`R`**`U7100` é 2019 (Tizen 5); `QN55Q60`**`C`** é 2023 (Tizen 7);
-`QN43QE`**`F`**`1A` é 2025 (Tizen 9). Nas TVs LED a letra vem logo depois do tamanho; nas
-QLED, no fim do nome da série.
-
-### O arquivo do app
-
-Baixe o **[Freeflix.wgt](https://github.com/thomaskauai/freeflix/releases/latest/download/Freeflix.wgt)**
-(página de [Releases](https://github.com/thomaskauai/freeflix/releases/latest)). É o mesmo
-arquivo para qualquer TV.
-
-### Passo 1: anotar o IP do computador
-
-A TV precisa saber qual computador pode instalar apps nela.
-
-- **Windows**: abra o Prompt de Comando, digite `ipconfig` e anote o "Endereço IPv4"
-  (algo como `192.168.0.10`).
-- **macOS**: Ajustes do Sistema → Wi-Fi → Detalhes da rede conectada → Endereço IP. Ou no
-  Terminal: `ipconfig getifaddr en0`.
-- **Linux**: `hostname -I` (o primeiro número).
-
-### Passo 2: ligar o modo de desenvolvedor na TV
-
-1. Na TV, abra **Apps** (na tela inicial).
-2. Com a tela de Apps aberta, digite **`1 2 3 4 5`** no controle. Se o controle não tem
-   números (o controle fino, com bateria solar), aperte o botão **`123`** ou segure o de
-   cor/número para abrir o teclado numérico na tela.
-3. Aparece a janela **Developer Mode**. Mude para **On**.
-4. Em **Host PC IP**, digite o IP do computador do passo 1. Confirme com **OK**.
-5. **Reinicie a TV de verdade**: segure o botão liga/desliga do controle até aparecer o
-   logo da Samsung (só desligar e ligar não basta: a TV fica em espera).
-6. Depois de reiniciar, a tela de Apps mostra "Developer Mode" no topo.
-
-Anote também o **IP da TV**: Configurações → Geral → Rede → Status da rede → Config. IP.
-
-### Passo 3: baixar o TizenBrew Installer no computador
-
-Baixe da página de releases do
-[TizenBrew Installer](https://github.com/reisxd/TizenBrewInstaller/releases/latest) o
-arquivo do seu sistema:
-
-| Sistema | Arquivo |
-|---|---|
-| Windows | `TizenBrewInstaller-win-x64.exe` |
-| Mac com chip Apple (M1, M2…) | `TizenBrewInstaller-macos-arm64` |
-| Mac com Intel | `TizenBrewInstaller-macos-x64` |
-| Linux | `TizenBrewInstaller-linux-x64` |
-
-Baixe também o [Freeflix.wgt](#o-arquivo-do-app).
-
-Para abrir:
-
-- **Windows**: dois cliques. Se aparecer "O Windows protegeu o computador", clique em
-  **Mais informações → Executar assim mesmo**. Se o firewall perguntar, permita acesso à
-  rede privada.
-- **macOS / Linux**: pelo Terminal, na pasta do download:
+- **Windows**: dois cliques no `.exe`. Se o Windows bloquear: **Mais informações →
+  Executar assim mesmo**.
+- **Mac / Linux**: no Terminal, na pasta do download:
 
   ```bash
   chmod +x TizenBrewInstaller-macos-arm64
-  xattr -d com.apple.quarantine TizenBrewInstaller-macos-arm64   # só no macOS
+  xattr -d com.apple.quarantine TizenBrewInstaller-macos-arm64   # só no Mac
   ./TizenBrewInstaller-macos-arm64
   ```
 
-O Installer abre uma página no navegador (`http://localhost:8091`). Se não abrir,
-abra esse endereço à mão. **Deixe o programa (a janela do terminal) aberto** enquanto
-instala.
+Abre uma página no navegador (se não abrir: `http://localhost:8091`). Deixe o programa
+aberto até o fim. Em **Connect to TV**, digite o **IP da TV** e aperte Enter:
 
-### Passo 4: conectar na TV
+![Connect to TV com o IP da TV digitado](docs/instalacao/1-conectar.png)
 
-Com a TV ligada, na página do Installer, clique em **Connect to TV**, digite o **IP da
-TV** e aperte Enter (ou clique fora da caixa). Em alguns segundos aparecem os botões de
-instalação.
+### 4. Instalar
 
-Se der erro, veja [Problemas comuns](#problemas-comuns).
+Conectado, aparecem quatro botões. Clique em **Select file to install** (o último) e
+escolha o `Freeflix.wgt`:
 
-### Passo 5 (só Tizen 7+): entrar na conta Samsung
+![Botões depois de conectar; o último é Select file to install](docs/instalacao/3-instalar.png)
 
-Em TV Tizen 7 ou mais nova, o Installer mostra **"Resigning required"**:
+**Se aparecer "Resigning required"** (TVs Tizen 7+): clique em **Sign in to Samsung
+Account**, entre na sua conta Samsung na página que abrir, volte ao Installer e clique de
+novo em **Select file to install**.
 
-1. Clique em **Sign in to Samsung Account**. Abre a página de login da Samsung.
-2. Entre com sua conta (ou crie uma, é grátis).
-3. Volte para a página do Installer. Ele cria um certificado ligado à sua conta e à TV.
-   Isso leva alguns segundos.
+![Aviso Resigning required com o botão Sign in to Samsung Account](docs/instalacao/2-conta-samsung.png)
 
-Em TV abaixo do Tizen 7 esse passo não aparece. Siga adiante.
+Quando aparecer **Package installed**, está pronto: o Freeflix fica em **Apps** na TV.
+Para pô-lo na tela inicial, selecione o ícone, segure OK e escolha **Adicionar à Início**.
 
-### Passo 6: instalar o Freeflix
+Não precisa clicar em **Install TizenBrew**: é outro app, não é necessário para o
+Freeflix.
 
-1. Clique em **Select file to install**.
-2. Escolha o `Freeflix.wgt` que você baixou.
-3. Acompanhe o status: *Resigning* (só Tizen 7+), *Installing*, e por fim **Package
-   installed**.
+### Atualizar
 
-Pronto. O Freeflix aparece em **Apps** na TV (às vezes no fim da lista). Para colocá-lo na
-tela inicial, selecione o ícone, segure OK e escolha **Adicionar à Início**.
+Baixe o `Freeflix.wgt` novo e repita os passos 3 e 4. Nada do que você assistiu se perde.
+Deixe o modo de desenvolvedor ligado na TV para isso. Em TV Tizen 7+, entre sempre com a
+**mesma conta Samsung** (o Installer pede o login a cada instalação; é normal).
 
-Você não precisa instalar o "TizenBrew" em si (o botão **Install TizenBrew**): ele é outro
-app, para módulos. Para o Freeflix basta o Installer.
+### Deu erro?
 
-Deixe o modo de desenvolvedor ligado: ele é necessário para instalar atualizações.
-
-### Atualizar para uma versão nova
-
-Repita os passos 3 a 6 com o `Freeflix.wgt` novo da página de Releases. A TV troca o app sem
-perder o que você assistiu e o código da casa.
-
-A TV só aceita o arquivo como atualização se ele foi assinado com o mesmo certificado do
-app instalado. Em Tizen 7+, o certificado vem da conta Samsung: use **sempre a mesma
-conta**. O Installer v1.1.3 apaga o certificado salvo depois de cada instalação, então ele
-pede o login de novo a cada vez; é normal.
-
-### Problemas comuns
-
-**"Could not connect to the SDB Daemon. Make sure that the TV is on and that the IP is
-correct."**
-O IP da TV está errado ou a TV está desligada/em espera. Confira o IP da TV (passo 2) e
-se os dois aparelhos estão na mesma rede (Wi-Fi de visitantes e redes "5G" separadas às
-vezes isolam os aparelhos).
-
-**"Either you haven't set the Host PC IP to this device's IP, or you didn't restart the
-TV properly."**
-O Host PC IP na TV não é o do computador, ou a TV não reiniciou de verdade. Refaça o
-passo 2 e reinicie segurando o botão liga/desliga até o logo da Samsung. O IP do
-computador pode mudar de um dia para o outro (DHCP): confira de novo.
-
-**Conectou uma vez, mas a segunda tentativa falha.**
-A TV aceita uma conexão por vez. Feche o Installer (Ctrl+C no terminal ou feche a
-janela), abra de novo e reconecte.
-
-**"Author certificate not match" / falha ao atualizar.**
-O app na TV foi instalado com outro certificado (outra conta Samsung, ou um `.wgt` de
-outra origem). Desinstale o Freeflix na TV (Apps → selecione o ícone → segure OK →
-Excluir) e instale de novo. Isso apaga os dados locais do app; se a TV estava numa casa
-sincronizada, ela volta sozinha para a casa e recupera o histórico.
-
-**Tizen 7+: erro ao assinar (Resigning).**
-Saia e entre na conta Samsung de novo (botão de login). Confira se o computador tem
-internet: o certificado é criado nos servidores da Samsung.
-
-**O app instalou mas não abre / tela preta.**
-Confira se a TV tem internet. O catálogo e as fontes vêm da rede.
+| Mensagem | O que fazer |
+|---|---|
+| *Make sure that the TV is on and that the IP is correct* | IP da TV errado, TV desligada, ou TV e computador em redes diferentes (ex.: Wi-Fi de visitantes). |
+| *Either you haven't set the Host PC IP… or you didn't restart the TV properly* | Refaça o passo 2: confira o IP do computador (pode mudar de um dia para o outro) e reinicie segurando o botão liga/desliga. |
+| Conectou uma vez e depois não conecta mais | Feche o Installer, abra de novo e reconecte. |
+| *Author certificate not match* | O app foi instalado antes com outra conta Samsung. Desinstale o Freeflix na TV (segure OK no ícone → Excluir) e instale de novo. |
 
 ## Rodar no computador (para modificar)
 
