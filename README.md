@@ -22,55 +22,17 @@ Além disso:
 - Legendas em português, inglês e espanhol (OpenSubtitles).
 - Em séries, lembra qual fonte tocou e começa o próximo episódio por ela.
 
+**Para usar não precisa baixar o código nem rodar nada.** Baixe o app pronto (`.wgt`) na
+página de [Releases](https://github.com/thomaskauai/freeflix/releases/latest) e siga
+[Instalar na TV Samsung](#instalar-na-tv-samsung). Rodar no computador só serve para quem
+quer modificar o app.
+
 ## Sumário
 
-- [Rodar no computador](#rodar-no-computador)
 - [Instalar na TV Samsung](#instalar-na-tv-samsung)
+- [Rodar no computador (para modificar)](#rodar-no-computador-para-modificar)
 - [Gerar o app da TV (para quem desenvolve)](#gerar-o-app-da-tv-para-quem-desenvolve)
 - [Como funciona por dentro](#como-funciona-por-dentro)
-
-## Rodar no computador
-
-Precisa de [Node.js](https://nodejs.org/) 20 ou mais novo.
-
-```bash
-git clone https://github.com/thomaskauai/freeflix.git
-cd freeflix
-npm install
-npm run dev        # abre em http://localhost:5173
-```
-
-Nada mais é obrigatório: sem configuração, o app usa o catálogo e a lista de fontes
-padrão. As variáveis opcionais estão em [.env.example](.env.example) (copie para
-`.env.local`).
-
-Outros comandos:
-
-```bash
-npm test               # testes do parser e do ranking das fontes
-npm run build          # build do site (pasta dist/)
-npm run preview        # serve o build, para conferir antes de publicar
-npm run mock-addon     # addon falso em http://localhost:7077, para testar sem terceiros
-```
-
-A sincronização entre TVs usa funções da Vercel (pasta `api/`) e um Postgres Neon. Para
-rodar com elas localmente: `vercel env pull .env.local` e `vercel dev`. Sem isso o app
-funciona, só não sincroniza.
-
-### Controles
-
-O app desenha numa tela de TV (1920×1080) e se ajusta a qualquer janela. No celular em pé,
-o menu vira uma barra no pé da tela.
-
-| Ação | Teclado | Controle da TV |
-|---|---|---|
-| Mover | setas | setas |
-| Selecionar | Enter | OK |
-| Voltar | Esc ou Backspace | Back |
-| Reproduzir / pausar | Espaço | Play/Pause |
-| Avançar / voltar (segurar acelera) | → / ← na linha do tempo | FF / RW |
-
-Mouse e toque também funcionam: passar por cima foca, clicar seleciona, arrastar rola.
 
 ## Instalar na TV Samsung
 
@@ -267,6 +229,52 @@ internet: o certificado é criado nos servidores da Samsung.
 
 **O app instalou mas não abre / tela preta.**
 Confira se a TV tem internet. O catálogo e as fontes vêm da rede.
+
+## Rodar no computador (para modificar)
+
+Só é preciso para mexer no código. Para usar na TV, basta
+[instalar o `.wgt` pronto](#instalar-na-tv-samsung).
+
+Precisa de [Node.js](https://nodejs.org/) 20 ou mais novo.
+
+```bash
+git clone https://github.com/thomaskauai/freeflix.git
+cd freeflix
+npm install
+npm run dev        # abre em http://localhost:5173
+```
+
+Nada mais é obrigatório: sem configuração, o app usa o catálogo e a lista de fontes
+padrão. As variáveis opcionais estão em [.env.example](.env.example) (copie para
+`.env.local`).
+
+Outros comandos:
+
+```bash
+npm test               # testes do parser e do ranking das fontes
+npm run build          # build do site (pasta dist/)
+npm run preview        # serve o build, para conferir antes de publicar
+npm run mock-addon     # addon falso em http://localhost:7077, para testar sem terceiros
+```
+
+A sincronização entre TVs usa funções da Vercel (pasta `api/`) e um Postgres Neon. Para
+rodar com elas localmente: `vercel env pull .env.local` e `vercel dev`. Sem isso o app
+funciona, só não sincroniza.
+
+### Controles
+
+O app desenha numa tela de TV (1920×1080) e se ajusta a qualquer janela. No celular em pé,
+o menu vira uma barra no pé da tela.
+
+| Ação | Teclado | Controle da TV |
+|---|---|---|
+| Mover | setas | setas |
+| Selecionar | Enter | OK |
+| Voltar | Esc ou Backspace | Back |
+| Reproduzir / pausar | Espaço | Play/Pause |
+| Avançar / voltar (segurar acelera) | → / ← na linha do tempo | FF / RW |
+
+Mouse e toque também funcionam: passar por cima foca, clicar seleciona, arrastar rola.
 
 ## Gerar o app da TV (para quem desenvolve)
 
