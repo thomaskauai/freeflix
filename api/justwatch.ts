@@ -7,7 +7,7 @@
 //   GET ?list=series-br    -> séries brasileiras do Globoplay que não são novela (todas)
 //   GET ?list=movies-br&page= -> filmes brasileiros do Globoplay, 20 por página
 //   GET ?list=anime-ids    -> ids IMDb de todos os animes (séries e filmes), para o app esconder
-//   GET ?list=cinema-ids   -> ids IMDb dos filmes que só passam no cinema, para o app esconder
+//   GET ?list=cinema-ids   -> ids IMDb dos filmes que só passam no cinema (no mundo), para o app esconder
 // service: mxx (HBO Max), atp (Apple TV+), pmp (Paramount+), gop (Globoplay, o padrão), cru (Crunchyroll).
 // A API do JustWatch só libera CORS para localhost; o servidor busca por elas.
 import { json, preflight } from './_lib.js';
@@ -147,47 +147,84 @@ async function animeIds(): Promise<string[]> {
   return Object.keys(ids);
 }
 
-const CINEMA_QUERY = `query Cinema($first: Int!, $after: String, $filter: TitleFilter) {
-  popularTitles(country: BR, first: $first, after: $after, filter: $filter) {
+/**
+ * Países onde as cópias digitais costumam sair primeiro. "Só no cinema" vale
+ * para o mundo: estreou aqui, mas já está à venda nos EUA, existe WEB-DL.
+ */
+const CINEMA_COUNTRIES = ['BR', 'US', 'GB', 'CA', 'AU', 'IN', 'DE', 'FR', 'ES', 'IT', 'MX', 'JP', 'KR', 'NL'];
+/** os filmes em cartaz saem destas listas */
+const CINEMA_FROM = ['BR', 'US'];
+const DISC = ['DVD', 'BLURAY', 'BLURAY_4K'];
+
+const CINEMA_QUERY = `query Cinema($country: Country!, $first: Int!, $after: String, $filter: TitleFilter) {
+  popularTitles(country: $country, first: $first, after: $after, filter: $filter) {
     edges { node {
       content(country: BR, language: "pt") { externalIds { imdbId } }
-      offers(country: BR, platform: WEB) { monetizationType }
+      ${CINEMA_COUNTRIES.map((c) => `${c}: offers(country: ${c}, platform: WEB) { monetizationType presentationType availableFromTime }`).join('\n      ')}
     } }
   }
 }`;
 
-interface CinemaNode {
-  content: { externalIds: { imdbId: string | null } };
-  offers: { monetizationType: string }[];
+interface CinemaOffer {
+  monetizationType: string;
+  presentationType: string;
+  availableFromTime: string | null;
+}
+
+type CinemaNode = { content: { externalIds: { imdbId: string | null } } } & Record<string, CinemaOffer[]>;
+
+/**
+ * Oferta que é cópia digital já disponível: assinatura ou grátis; aluguel ou
+ * compra só com data de início já passada (sem data é pré-venda, como a do
+ * Fandango na semana da estreia). DVD e Blu-ray não contam: são pré-venda de disco.
+ */
+const isDigital = (o: CinemaOffer, now: string) =>
+  o.monetizationType !== 'CINEMA' &&
+  DISC.indexOf(o.presentationType) < 0 &&
+  ((o.monetizationType !== 'RENT' && o.monetizationType !== 'BUY') ||
+    (!!o.availableFromTime && o.availableFromTime <= now));
+
+async function cinemaPage(country: string, offset: number): Promise<CinemaNode[]> {
+  const after = offset ? Buffer.from(String(offset)).toString('base64') : '';
+  const res = await fetch(JUSTWATCH, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query: CINEMA_QUERY,
+      variables: { country, first: BATCH, after, filter: { objectTypes: ['MOVIE'], monetizationTypes: ['CINEMA'] } },
+    }),
+  });
+  if (!res.ok) throw new Error(`justwatch ${res.status}`);
+  const body = (await res.json()) as { data?: { popularTitles: { edges: { node: CinemaNode }[] } } };
+  return body.data ? body.data.popularTitles.edges.map((e) => e.node) : [];
 }
 
 /**
- * Filmes em cartaz no Brasil sem nenhuma outra oferta (assinatura, aluguel,
- * compra, grátis): o que existe deles é gravação de cinema.
+ * Filmes em cartaz (no Brasil ou nos EUA) sem cópia digital disponível em
+ * nenhum dos países: o que existe deles é gravação de cinema. Pedidos de 100,
+ * cinco por vez, até acabar.
  */
 async function cinemaIds(): Promise<string[]> {
-  const ids: string[] = [];
-  for (let offset = 0; offset < 2000; offset += BATCH) {
-    const after = offset ? Buffer.from(String(offset)).toString('base64') : '';
-    const res = await fetch(JUSTWATCH, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: CINEMA_QUERY,
-        variables: { first: BATCH, after, filter: { objectTypes: ['MOVIE'], monetizationTypes: ['CINEMA'] } },
-      }),
-    });
-    if (!res.ok) throw new Error(`justwatch ${res.status}`);
-    const body = (await res.json()) as { data?: { popularTitles: { edges: { node: CinemaNode }[] } } };
-    const nodes = body.data ? body.data.popularTitles.edges.map((e) => e.node) : [];
-    nodes.forEach((n) => {
-      const id = n.content.externalIds.imdbId;
-      const onlyCinema = n.offers.length > 0 && n.offers.every((o) => o.monetizationType === 'CINEMA');
-      if (id && onlyCinema) ids.push(id);
-    });
-    if (nodes.length < BATCH) break;
-  }
-  return ids;
+  const now = new Date().toISOString();
+  const ids: Record<string, boolean> = {};
+  const digital: Record<string, boolean> = {};
+  await Promise.all(
+    CINEMA_FROM.map(async (country) => {
+      for (let start = 0; start < 3000; start += 5 * BATCH) {
+        const chunk = await Promise.all([0, 1, 2, 3, 4].map((i) => cinemaPage(country, start + i * BATCH)));
+        chunk.forEach((nodes) =>
+          nodes.forEach((n) => {
+            const id = n.content.externalIds.imdbId;
+            if (!id) return;
+            ids[id] = true;
+            if (CINEMA_COUNTRIES.some((c) => (n[c] || []).some((o) => isDigital(o, now)))) digital[id] = true;
+          }),
+        );
+        if (chunk[chunk.length - 1].length < BATCH) break;
+      }
+    }),
+  );
+  return Object.keys(ids).filter((id) => !digital[id]);
 }
 
 const image = (path: string | null | undefined, profile: string) =>
