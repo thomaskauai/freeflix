@@ -39,8 +39,8 @@ npm run build:tizen
 ```
 
 Gera `tizen-build/app/` e dois `.wgt` assinados em `tizen-build/` (fora do git), iguais a
-não ser pelo ícone: `Freeflix-tv-nova.wgt` (quadrado, o publicado) e
-`Freeflix-tv-antiga.wgt` (16:9, para a barra de apps das TVs antigas).
+não ser pelo ícone: `Freeflix-tizen7.wgt` (quadrado, Tizen 7 ou mais novo; o publicado) e
+`Freeflix-tizen5.wgt` (16:9, para a barra de apps do Tizen 5 e 6).
 
 - A versão do `package.json` vai para o `config.xml` e aparece no fim de Configurações.
 - O bundle da TV é um script clássico (sem módulos ES) em es2015: o `.wgt` abre por
@@ -53,7 +53,7 @@ não ser pelo ícone: `Freeflix-tv-nova.wgt` (quadrado, o publicado) e
 - `npm run tv:install` instala direto nas TVs da casa do autor (IPs e modelos fixos em
   `scripts/tv-install.mjs`).
 
-**Publicar:** suba a versão, rode `npm run build:tizen` e anexe `Freeflix-tv-nova.wgt`,
+**Publicar:** suba a versão, rode `npm run build:tizen` e anexe `Freeflix-tizen7.wgt`,
 renomeado para `Freeflix.wgt`, a uma release `vX.Y.Z`. O nome fixo mantém o link de
 download do README.
 

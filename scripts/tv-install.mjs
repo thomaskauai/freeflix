@@ -1,8 +1,8 @@
 // Instala os .wgt de tizen-build/ nas TVs da casa pelo TizenBrew Installer
 // Desktop, sem passar pela interface: fala direto com o WebSocket do serviço
 // (ws://localhost:8091), como a página /ui/dist/index.html/desktop faz.
-//   sala    UN55RU7100 (2019)  Tizen antigo  Freeflix-tv-antiga.wgt
-//   quarto  QN43QEF1A (2025)   Tizen 7+      Freeflix-tv-nova.wgt (reassinado)
+//   sala    UN55RU7100 (2019)  Tizen 5       Freeflix-tizen5.wgt
+//   quarto  QN43QEF1A (2025)   Tizen 9       Freeflix-tizen7.wgt (reassinado)
 // O IP é só o último conhecido: se lá não estiver a TV desse modelo, ela é
 // procurada na rede pela API da Samsung (porta 8001), já que o DHCP muda o IP.
 //
@@ -42,8 +42,8 @@ const require = createRequire(import.meta.url);
 const adbhost = require('adbhost');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TVS = {
-  sala: { ip: '192.168.18.50', model: 'UN55RU7100GXZD', wgt: 'Freeflix-tv-antiga.wgt' },
-  quarto: { ip: '192.168.18.45', model: 'QN43QEF1AGXZD', wgt: 'Freeflix-tv-nova.wgt' },
+  sala: { ip: '192.168.18.50', model: 'UN55RU7100GXZD', wgt: 'Freeflix-tizen5.wgt' },
+  quarto: { ip: '192.168.18.45', model: 'QN43QEF1AGXZD', wgt: 'Freeflix-tizen7.wgt' },
 };
 const Events = { InstallPackage: 1, Error: 3, InstallationStatus: 4, DeleteConfiguration: 5, ConnectToTV: 6, InstallFile: 7 };
 const RELEASE = 'v1.1.3';

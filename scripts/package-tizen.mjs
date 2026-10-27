@@ -1,7 +1,7 @@
 // Completa o app da TV gerado por `vite build --mode tizen` e gera os .wgt
 // assinados em tizen-build/, um por formato de ícone:
-//   Freeflix-tv-nova.wgt     ícone quadrado (telas iniciais mais recentes)
-//   Freeflix-tv-antiga.wgt   ícone 16:9 (telas iniciais antigas, barra de blocos largos)
+//   Freeflix-tizen7.wgt   ícone quadrado: Tizen 7 ou mais novo (quarto, 2025: Tizen 9)
+//   Freeflix-tizen5.wgt   ícone 16:9: Tizen 5 e 6, barra de blocos largos (sala, 2019: Tizen 5)
 // O app, a versão e o certificado são os mesmos; a TV lê o ícone na
 // instalação, então cada aparelho recebe o pacote com o formato da sua tela.
 //
@@ -140,8 +140,8 @@ async function listFiles(dir, prefix = '') {
 }
 
 const VARIANTS = [
-  { file: 'Freeflix-tv-nova.wgt', icon: 'tizen/icon-quadrado.png' },
-  { file: 'Freeflix-tv-antiga.wgt', icon: 'tizen/icon-retangular.png' },
+  { file: 'Freeflix-tizen7.wgt', icon: 'tizen/icon-quadrado.png' },
+  { file: 'Freeflix-tizen5.wgt', icon: 'tizen/icon-retangular.png' },
 ];
 
 for (const name of await readdir(out)) {
