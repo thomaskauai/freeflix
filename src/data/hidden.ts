@@ -53,7 +53,7 @@ function idList(name: string) {
 const animeFilter = idList('anime-ids');
 export const withoutAnime = (list: Title[]) => (getSettings().animes ? Promise.resolve(list) : animeFilter(list));
 
-/** Filmes recentes que ainda só passam no cinema: o que existe deles é gravação de cinema. */
+/** Filmes que só passam no cinema: o que existe deles é gravação de cinema. */
 export const withoutCinema = idList('cinema-ids');
 
 /** Tudo o que o catálogo esconde. */
