@@ -12,6 +12,7 @@ import { syncProgress, syncStarted } from '../data/sync';
 import type { Season, Title, TitleType } from '../data/types';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
 import { useGoBack, watchPath } from '../nav';
+import { isTizen } from '../platform/tizen';
 import {
   firstWorking,
   markFailed,
@@ -53,6 +54,46 @@ const MESSAGES: Record<NoSourceReason | 'all-failed', { title: string; text: str
 const WARM_NEXT_S = 120;
 
 /** Enquanto a fonte é procurada: a mesma cara do player, com o título no alto e só o Voltar. */
+type FullscreenDoc = Document & { webkitFullscreenElement?: Element; webkitExitFullscreen?: () => void };
+type FullscreenEl = HTMLElement & { webkitRequestFullscreen?: () => void };
+type LockableOrientation = ScreenOrientation & { lock?: (o: string) => Promise<void> };
+
+/**
+ * Fora da TV (celular, computador), o player abre em tela cheia e, no celular,
+ * deitado. O navegador só aceita logo depois de um toque ou clique, que é como
+ * se chega ao player; aberto sem isso (retomada ao abrir o app), segue normal.
+ * No iPhone o Safari não põe a página em tela cheia, só o vídeo nativo.
+ */
+function useFullscreenPlayer() {
+  useEffect(() => {
+    if (isTizen()) return;
+    const doc = document as FullscreenDoc;
+    const root = document.documentElement as FullscreenEl;
+    try {
+      let asked: Promise<void> | undefined;
+      if (root.requestFullscreen) asked = root.requestFullscreen({ navigationUI: 'hide' });
+      else if (root.webkitRequestFullscreen) root.webkitRequestFullscreen();
+      Promise.resolve(asked)
+        .then(() => {
+          const orientation = screen.orientation as LockableOrientation | undefined;
+          if (orientation && orientation.lock) return orientation.lock('landscape');
+        })
+        .catch(() => undefined);
+    } catch {
+      /* sem tela cheia neste navegador */
+    }
+    return () => {
+      try {
+        if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+        if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
+        else if (doc.webkitFullscreenElement && doc.webkitExitFullscreen) doc.webkitExitFullscreen();
+      } catch {
+        /* já saiu */
+      }
+    };
+  }, []);
+}
+
 /** pausa que dura isso com o app à vista apaga a anotação do player (ver onPlaying) */
 const PAUSE_CLEARS_AFTER_MS = 1500;
 
@@ -75,6 +116,7 @@ function Waiting({ title, subtitle, onExit }: { title: string; subtitle?: string
 }
 
 export default function Watch() {
+  useFullscreenPlayer();
   const params = useParams();
   const id = params.id ?? '';
   const type: TitleType = params.type === 'series' ? 'series' : 'movie';

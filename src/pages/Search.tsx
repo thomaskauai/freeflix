@@ -6,6 +6,7 @@ import { ScrollArea } from '../components/ScrollArea';
 import { catalog } from '../data/provider';
 import type { Title } from '../data/types';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
+import { isTizen } from '../platform/tizen';
 import { SEARCH_GRID_ANCHOR } from '../styles/tokens';
 
 const LETTERS = 'abcdefghijklmnopqrstuvwxyz0123456789'.split('');
@@ -13,6 +14,9 @@ const DEBOUNCE_MS = 300;
 const MAX_QUERY = 30;
 /** com menos letras que isso a busca não roda: os resultados seriam quase aleatórios */
 const MIN_QUERY = 3;
+
+/** Só a TV usa o teclado da tela; celular e computador digitam num campo de texto. */
+const SCREEN_KEYBOARD = isTizen();
 
 // A busca sobrevive à ida e volta de um título.
 let lastQuery = '';
@@ -35,6 +39,28 @@ function Key({
     <div {...focus} className={`key${wide ? ' key--wide' : ''}`} aria-label={label} onClick={onPress}>
       {children}
     </div>
+  );
+}
+
+/** Campo de texto da busca fora da TV: o teclado do aparelho digita nele. */
+function SearchInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const focus = useFocusable({ id: 'search-input', autoFocus: true });
+  return (
+    <input
+      {...focus}
+      role="searchbox"
+      className="search__query search__input"
+      type="search"
+      inputMode="search"
+      enterKeyHint="search"
+      autoComplete="off"
+      autoCorrect="off"
+      spellCheck={false}
+      placeholder="Título"
+      aria-label="Buscar título"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
   );
 }
 
@@ -88,8 +114,9 @@ export default function Search() {
   const type = (char: string) => setQuery((q) => (q.length < MAX_QUERY ? q + char : q));
   const erase = () => setQuery((q) => q.slice(0, -1));
 
-  // No computador dá para digitar direto; na TV só existe o teclado da tela.
+  // TV com teclado físico ligado: digita direto, sem o teclado da tela.
   useEffect(() => {
+    if (!SCREEN_KEYBOARD) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key.length === 1 && /[a-z0-9]/i.test(e.key) && !e.metaKey && !e.ctrlKey) type(e.key.toLowerCase());
     };
@@ -111,26 +138,32 @@ export default function Search() {
   return (
     <div className="page search" data-focus-main="">
       <div className="search__panel">
-        <div className={`search__query${query ? '' : ' search__query--empty'}`}>
-          {query || 'Título'}
-          {query && <span className="search__caret" />}
-        </div>
-        <div className="keys">
-          <Key label="espaço" wide onPress={() => type(' ')}>
-            Espaço
-          </Key>
-          <Key label="apagar" wide onPress={erase}>
-            <Icon name="erase" />
-          </Key>
-          <Key label="limpar" wide onPress={() => setQuery('')}>
-            Limpar
-          </Key>
-          {LETTERS.map((char, i) => (
-            <Key key={char} label={char} autoFocus={i === 0} onPress={() => type(char)}>
-              {char}
-            </Key>
-          ))}
-        </div>
+        {SCREEN_KEYBOARD ? (
+          <>
+            <div className={`search__query${query ? '' : ' search__query--empty'}`}>
+              {query || 'Título'}
+              {query && <span className="search__caret" />}
+            </div>
+            <div className="keys">
+              <Key label="espaço" wide onPress={() => type(' ')}>
+                Espaço
+              </Key>
+              <Key label="apagar" wide onPress={erase}>
+                <Icon name="erase" />
+              </Key>
+              <Key label="limpar" wide onPress={() => setQuery('')}>
+                Limpar
+              </Key>
+              {LETTERS.map((char, i) => (
+                <Key key={char} label={char} autoFocus={i === 0} onPress={() => type(char)}>
+                  {char}
+                </Key>
+              ))}
+            </div>
+          </>
+        ) : (
+          <SearchInput value={query} onChange={(v) => setQuery(v.slice(0, MAX_QUERY))} />
+        )}
       </div>
 
       <ScrollArea className="search__results">
