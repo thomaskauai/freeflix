@@ -198,6 +198,11 @@ export interface TorrentStream extends ParsedStream {
 
 /** com menos seeds que isso o torrent quase não baixa: só entra se não houver outro */
 const MIN_SEEDS = 5;
+/**
+ * Torrent baixa bem menos que a banda medida (que é a das fontes HTTP): na
+ * sala, ~3 Mbps com 11 peers. Acima disso, um arquivo de 15 GB nunca começa.
+ */
+const TORRENT_MAX_MBPS = 8;
 
 /**
  * Ordena os torrents: o que o aparelho toca, na qualidade que a rede aguenta
@@ -205,8 +210,10 @@ const MIN_SEEDS = 5;
  * esses, o que tem mais seeds. Gravação de cinema e o que não toca ficam fora.
  */
 export function rankTorrents(list: TorrentStream[], ctx: RankContext): TorrentStream[] {
+  // resolução pela banda medida; tamanho pelo que um torrent costuma baixar
+  const swarm = { ...ctx, mbps: Math.min(ctx.mbps, TORRENT_MAX_MBPS) };
   const key = (s: TorrentStream) => {
-    const fits = fitsNetwork(s, ctx);
+    const fits = s.resolution <= resolutionCap(ctx.mbps) && fitsNetwork({ ...s, resolution: 0 }, swarm);
     return [
       compatTier(s, ctx),
       fits ? 1 : 0,

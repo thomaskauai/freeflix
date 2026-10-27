@@ -354,6 +354,13 @@ describe('rankTorrents', () => {
     );
   });
 
+  it('arquivo grande demais para torrent fica atrás, mesmo com rede rápida', () => {
+    const big = { ...torrent('Filme.2026.1080p.iT.WEB-DL.H264 A', 50), sizeBytes: 15e9 };
+    const small = { ...torrent('Filme.2026.1080p.WEB-DL.x264 B', 20), sizeBytes: 3e9 };
+    const ranked = rankTorrents([big, small], ctx({ mbps: 100, runtime: 135 })).map((t) => t.infoHash);
+    expect(ranked[0]).toBe('Filme.2026.1080p.WEB-DL.x264 B');
+  });
+
   it('quase sem seeds só entra se não houver outro', () => {
     expect(names([torrent('Filme.2026.1080p.WEB-DL.x264', 2), torrent('Filme.2026.720p.WEB-DL.x264', 60)])[0]).toBe(
       'Filme.2026.720p.WEB-DL.x264',

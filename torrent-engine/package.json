@@ -5,9 +5,15 @@
   "description": "Motor de torrent local do Freeflix: baixa e serve o vídeo por HTTP em 127.0.0.1:2710",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "node build.mjs"
   },
   "dependencies": {
     "torrent-stream": "1.2.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.26.0",
+    "@babel/preset-env": "^7.26.0",
+    "esbuild": "^0.25.0"
   }
 }

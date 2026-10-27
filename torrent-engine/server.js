@@ -4,8 +4,8 @@
  * player pede (dá para tocar enquanto baixa e pular trechos). O app (TV ou
  * localhost) só fala HTTP com ele; quem fala BitTorrent (TCP/UDP) é este Node.
  *
- * Escrito em JavaScript antigo (var, function, sem class nem =>) para rodar
- * também no Node do serviço da TV Tizen, que pode ser bem velho.
+ * Escrito em JavaScript antigo (var, function, sem class nem =>); na TV vai
+ * convertido por build.mjs, junto com as dependências, para o Node 4.4 da sala.
  *
  *   GET /health                         -> { ok, engines }
  *   GET /<hash>/create?tr=..&s=1&e=2    -> abre o torrent; { infoHash, name, files, fileIdx }

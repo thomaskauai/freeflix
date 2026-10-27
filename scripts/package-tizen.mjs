@@ -14,10 +14,11 @@
 // certificado da instalação anterior; sem ele, é preciso desinstalar antes.
 //
 // Uso: npm run build:tizen
+import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
-import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,17 +56,17 @@ await writeFile(path.join(root, 'config.xml'), config);
 // hls.js fica fora do bundle da TV; src/streams/loadHls.ts o injeta quando preciso
 await mkdir(path.join(app, 'vendor'), { recursive: true });
 await copyFile(path.join(root, 'node_modules/hls.js/dist/hls.min.js'), path.join(app, 'vendor/hls.min.js'));
-// motor de torrent: o serviço Node do app (config.xml), com as dependências dele
+// motor de torrent: o serviço Node do app (config.xml), num arquivo só que o
+// Node 4.4 da TV antiga entende (torrent-engine/build.mjs)
 const engineDir = path.join(root, 'torrent-engine');
 if (!existsSync(path.join(engineDir, 'node_modules'))) {
   throw new Error('torrent-engine/node_modules não existe (rode npm --prefix torrent-engine install)');
 }
+execFileSync('node', ['build.mjs'], { cwd: engineDir, stdio: 'inherit' });
 const service = path.join(app, 'service');
 await rm(service, { recursive: true, force: true });
 await mkdir(service, { recursive: true });
-for (const name of ['server.js', 'tizen-service.js', 'package.json', 'node_modules']) {
-  await cp(path.join(engineDir, name), path.join(service, name), { recursive: true });
-}
+await copyFile(path.join(engineDir, 'dist/tizen-service.js'), path.join(service, 'tizen-service.js'));
 console.log(`app da TV pronto em ${path.relative(root, app)}/`);
 
 const creator = new TizenCertificateCreator();
