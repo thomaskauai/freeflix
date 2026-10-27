@@ -2,7 +2,18 @@ import { describe, expect, it } from 'vitest';
 import type { AddonStream } from '../data/addonClient';
 import { parseStream } from './parse';
 import { srtToVtt } from './subtitles';
-import { audioChoice, describeStream, foreignOnly, offersAudio, hasOriginalAudio, rankStreams, resolutionCap, type RankContext } from './rank';
+import {
+  audioChoice,
+  describeStream,
+  foreignOnly,
+  hasOriginalAudio,
+  offersAudio,
+  rankStreams,
+  rankTorrents,
+  resolutionCap,
+  type RankContext,
+  type TorrentStream,
+} from './rank';
 
 const stream = (name: string, title: string, extra: Partial<AddonStream> = {}): AddonStream => ({
   name,
@@ -281,6 +292,8 @@ describe('gravação de cinema e arquivos que não são vídeo', () => {
     expect(file('Filme.2026.CAMRip.mp4').unplayable).toBe('cam');
     expect(file('Filme.2026.TC.x264.mkv').unplayable).toBe('cam');
     expect(file('Filme.2026.DVDSCR.x264.mkv').unplayable).toBe('cam');
+    expect(file('Spider-Man- Brand New Day 2026.1080p.HQ Pre.Multi.AAC 2.0.x264.mkv').unplayable).toBe('cam');
+    expect(file('Filme.2026.PreDVDRip.x264.mkv').unplayable).toBe('cam');
   });
 
   it('depois do ano no nome do arquivo, a etiqueta vale em qualquer caixa', () => {
@@ -315,6 +328,42 @@ describe('gravação de cinema e arquivos que não são vídeo', () => {
     const ranked = rankStreams(list, ctx());
     expect(ranked).toHaveLength(1);
     expect(ranked[0].unplayable).toBeUndefined();
+  });
+});
+
+describe('rankTorrents', () => {
+  const torrent = (title: string, seeds: number): TorrentStream => ({
+    ...parseStream(stream('Torrentio', title), 'Torrent'),
+    infoHash: title,
+    trackers: [],
+    seeds,
+  });
+  const names = (list: TorrentStream[]) => rankTorrents(list, ctx({ mbps: 20 })).map((t) => t.infoHash);
+
+  it('na mesma qualidade, mais seeds primeiro', () => {
+    expect(names([torrent('Filme.2026.1080p.WEB-DL.x264 A', 40), torrent('Filme.2026.1080p.WEB-DL.x264 B', 900)])).toEqual([
+      'Filme.2026.1080p.WEB-DL.x264 B',
+      'Filme.2026.1080p.WEB-DL.x264 A',
+    ]);
+  });
+
+  it('a qualidade que a rede aguenta ganha de mais seeds em 4K', () => {
+    // 20 Mbps: até 1080p
+    expect(names([torrent('Filme.2026.2160p.WEB-DL.x264', 5000), torrent('Filme.2026.1080p.WEB-DL.x264', 300)])[0]).toBe(
+      'Filme.2026.1080p.WEB-DL.x264',
+    );
+  });
+
+  it('quase sem seeds só entra se não houver outro', () => {
+    expect(names([torrent('Filme.2026.1080p.WEB-DL.x264', 2), torrent('Filme.2026.720p.WEB-DL.x264', 60)])[0]).toBe(
+      'Filme.2026.720p.WEB-DL.x264',
+    );
+  });
+
+  it('gravação de cinema não entra, mesmo com muitos seeds', () => {
+    expect(names([torrent('Filme.2026.1080p.HQ Pre.x264', 9000), torrent('Filme.2026.1080p.TELESYNC', 8000), torrent('Filme.2026.720p.WEBRip', 10)])).toEqual([
+      'Filme.2026.720p.WEBRip',
+    ]);
   });
 });
 

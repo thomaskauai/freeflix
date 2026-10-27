@@ -25,6 +25,7 @@
 //      npm run tv:install -- --check              (só testa a conexão)
 //      npm run tv:install -- quarto --login       (login Samsung + instalação, uma vez)
 //      npm run tv:install -- quarto --reinstall   (desinstala antes; apaga os dados do app na TV)
+//      npm run tv:install -- quarto --wgt=arquivo.wgt (outro pacote, ex.: um app de teste)
 //
 // "Author certificate not match": o app na TV foi assinado com outro
 // certificado (ex.: o Samsung perdido). Só sai com --reinstall.
@@ -41,7 +42,7 @@ const require = createRequire(import.meta.url);
 const adbhost = require('adbhost');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TVS = {
-  sala: { ip: '192.168.18.50', model: 'UN55RU7100GXZD', wgt: 'Freeflix-tv-antiga.wgt' },
+  sala: { ip: '192.168.18.34', model: 'UN55RU7100GXZD', wgt: 'Freeflix-tv-antiga.wgt' },
   quarto: { ip: '192.168.18.45', model: 'QN43QEF1AGXZD', wgt: 'Freeflix-tv-nova.wgt' },
 };
 const Events = { InstallPackage: 1, Error: 3, InstallationStatus: 4, DeleteConfiguration: 5, ConnectToTV: 6, InstallFile: 7 };
@@ -56,6 +57,8 @@ const args = process.argv.slice(2);
 const checkOnly = args.includes('--check');
 const login = args.includes('--login');
 const reinstall = args.includes('--reinstall');
+/** --wgt=arquivo: instala esse pacote em vez do Freeflix de tizen-build/ */
+const customWgt = (args.filter((a) => a.indexOf('--wgt=') === 0)[0] || '').slice('--wgt='.length);
 const PACKAGE_ID = 'FreeFlixTV'; // tizen:application package do config.xml
 const names = args.filter((a) => !a.startsWith('--'));
 const targets = names.length ? names : Object.keys(TVS);
@@ -242,7 +245,7 @@ async function install(name) {
     await sleep(1500);
     if (login) await samsungLogin(session);
 
-    const wgt = path.join(root, 'tizen-build', tv.wgt);
+    const wgt = customWgt ? path.resolve(customWgt) : path.join(root, 'tizen-build', tv.wgt);
     if (!existsSync(wgt)) throw new Error(`${path.relative(root, wgt)} não existe (rode npm run build:tizen)`);
     await restoreSamsungCertificate();
     session.send(Events.InstallFile, (await readFile(wgt)).toString('base64'));
@@ -256,7 +259,7 @@ async function install(name) {
     }
     const result = String(done.payload.result ?? '').trim();
     if (/fail|error/i.test(result)) throw new Error(`a TV recusou o pacote:\n${result}`);
-    console.log(`  instalado ${tv.wgt} (${result.match(/install completed|spend time[^\n]*/)?.[0] ?? 'sem saída da TV'})`);
+    console.log(`  instalado ${path.basename(wgt)} (${result.match(/install completed|spend time[^\n]*/)?.[0] ?? 'sem saída da TV'})`);
   } finally {
     session.close();
     await stopInstaller();

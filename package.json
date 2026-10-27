@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "mock-addon": "node scripts/mock-addon.mjs",
-    "tv:install": "node --experimental-websocket scripts/tv-install.mjs"
+    "tv:install": "node --experimental-websocket scripts/tv-install.mjs",
+    "torrent": "npm --prefix torrent-engine start"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",

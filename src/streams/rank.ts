@@ -187,6 +187,47 @@ export function rankStreams(streams: ParsedStream[], ctx: RankContext): ParsedSt
     .map((entry) => entry.s);
 }
 
+/** Um torrent do Torrentio, já lido pelo parse. */
+export interface TorrentStream extends ParsedStream {
+  infoHash: string;
+  /** arquivo dentro do torrent (pacote de temporada); sem ele, o motor escolhe */
+  fileIdx?: number;
+  trackers: string[];
+  seeds: number;
+}
+
+/** com menos seeds que isso o torrent quase não baixa: só entra se não houver outro */
+const MIN_SEEDS = 5;
+
+/**
+ * Ordena os torrents: o que o aparelho toca, na qualidade que a rede aguenta
+ * (1080p é o alvo), no idioma preferido, com seeds suficientes e, entre
+ * esses, o que tem mais seeds. Gravação de cinema e o que não toca ficam fora.
+ */
+export function rankTorrents(list: TorrentStream[], ctx: RankContext): TorrentStream[] {
+  const key = (s: TorrentStream) => {
+    const fits = fitsNetwork(s, ctx);
+    return [
+      compatTier(s, ctx),
+      fits ? 1 : 0,
+      languageTier(s, ctx),
+      s.seeds >= MIN_SEEDS ? 1 : 0,
+      fits ? resolutionTier(s.resolution) : -s.resolution,
+      s.seeds,
+    ];
+  };
+  return list
+    .filter((s) => !s.unplayable)
+    .map((s, i) => ({ s, i, k: key(s) }))
+    .sort((a, b) => {
+      for (let n = 0; n < a.k.length; n++) {
+        if (a.k[n] !== b.k[n]) return b.k[n] - a.k[n];
+      }
+      return a.i - b.i;
+    })
+    .map((entry) => entry.s);
+}
+
 const LANGUAGE_LABELS: Record<string, string> = {
   pt: 'português',
   en: 'inglês',

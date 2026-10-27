@@ -15,6 +15,8 @@ export interface Candidate {
   profile: SourceProfile;
   /** a legenda já vem gravada no vídeo: o app não liga a dele sozinho */
   hardSubs?: boolean;
+  /** fonte "Torrent": o vídeo sai do motor local (streams/torrent.ts) */
+  torrent?: { infoHash: string; seeds: number; resolution: number };
 }
 
 export interface ResolveOptions {
@@ -51,7 +53,8 @@ const accepts = (addon: SourceAddon, type: string, id: string) =>
   (addon.types.length === 0 || addon.types.indexOf(type) >= 0) &&
   (addon.idPrefixes.length === 0 || addon.idPrefixes.some((prefix) => id.indexOf(prefix) === 0));
 
-function deviceCanPlay(what: 'hevc' | 'av1' | 'mkv'): boolean {
+/** O <video> deste aparelho toca esse codec ou contêiner? */
+export function deviceCanPlay(what: 'hevc' | 'av1' | 'mkv'): boolean {
   const probe = document.createElement('video');
   const mime =
     what === 'hevc'

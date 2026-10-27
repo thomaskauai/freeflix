@@ -12,6 +12,7 @@ import { syncProgress, syncStarted } from '../data/sync';
 import type { Season, Title, TitleType } from '../data/types';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
 import { useGoBack, watchPath } from '../nav';
+import { TORRENT_LABEL, torrentAvailable, torrentCandidate } from '../streams/torrent';
 import {
   firstWorking,
   markFailed,
@@ -100,6 +101,20 @@ export default function Watch() {
 
   const key = `${type}/${id}/${season}/${episode}`;
   const isEpisode = season != null && episode != null;
+
+  // Torrent: opção do menu de fontes, só com o motor local no ar (nunca escolhida sozinha).
+  const [torrentOk, setTorrentOk] = useState(false);
+  const [preparingTorrent, setPreparingTorrent] = useState(false);
+  const [notice, setNotice] = useState<{ text: string; at: number } | null>(null);
+  const say = (text: string) => setNotice({ text, at: Date.now() });
+  useEffect(() => {
+    let alive = true;
+    torrentAvailable().then((ok) => alive && setTorrentOk(ok));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  useEffect(() => setPreparingTorrent(false), [key]);
 
   // Vídeo tocando fica anotado: TV desligada ou app fechado com ele tocando,
   // a próxima abertura volta para o player. Pausado, parado ou fora do player,
@@ -330,7 +345,31 @@ export default function Watch() {
   const hasNext = plan.index + 1 < plan.candidates.length;
   // A lista mostra uma linha por opção distinta. Espelhos da mesma opção não
   // aparecem: são a reserva que o player usa sozinho se o primeiro falhar.
-  const options = plan.candidates.map((c) => c.label).filter((label, i, all) => all.indexOf(label) === i);
+  const labels = plan.candidates.map((c) => c.label).filter((label, i, all) => all.indexOf(label) === i);
+  // "Torrent" no fim da lista enquanto não foi escolhido; escolhido, vira uma fonte como as outras
+  const hasTorrent = plan.candidates.some((c) => !!c.torrent);
+  const options = torrentOk && !hasTorrent ? labels.concat(TORRENT_LABEL) : labels;
+  // O vídeo atual segue tocando enquanto o torrent abre no motor; pronto, troca.
+  const pickTorrent = () => {
+    if (preparingTorrent) return say('Preparando o torrent…');
+    setPreparingTorrent(true);
+    say('Preparando o torrent… o vídeo atual segue até ele abrir.');
+    const forKey = key;
+    torrentCandidate(title, season, episode).then(
+      (found) => {
+        if (forKey !== key) return;
+        setPreparingTorrent(false);
+        if (!found) return say('Nenhum torrent abriu. Continua na fonte atual.');
+        setPlan((p) =>
+          p && p.status === 'play' ? { ...p, candidates: p.candidates.concat(found), index: p.candidates.length } : p,
+        );
+      },
+      () => {
+        setPreparingTorrent(false);
+        say('O torrent não abriu. Continua na fonte atual.');
+      },
+    );
+  };
   // Fonte ruim fica marcada: a próxima abertura deste título já começa pela
   // seguinte. Acabou a lista e as outras fontes ainda vão chegar: espera por elas.
   const next = () => {
@@ -390,13 +429,16 @@ export default function Watch() {
         audioIndex={audioKeys.indexOf(audioOf[plan.index].key)}
         onPickAudio={(i) => setPlan({ ...plan, index: audioOf.map((a) => a.key).indexOf(audioKeys[i]) })}
         onPickSource={(option) =>
-          setPlan({ ...plan, index: plan.candidates.map((c) => c.label).indexOf(options[option]) })
+          options[option] === TORRENT_LABEL && !hasTorrent
+            ? pickTorrent()
+            : setPlan({ ...plan, index: plan.candidates.map((c) => c.label).indexOf(options[option]) })
         }
         // fonte ruim: passa para a próxima sem perguntar
         onFail={plan.candidates.length > 1 || plan.more ? next : undefined}
         // a fonte que tocou vale para os outros episódios: mesmo addon, mesmo áudio
         onStart={() => {
-          if (isEpisode) rememberSource(title.id, candidate.profile);
+          // torrent não vira a fonte padrão dos próximos episódios
+          if (isEpisode && !candidate.torrent) rememberSource(title.id, candidate.profile);
           syncStarted(title, season, episode);
         }}
         onProgress={(time, length, moment) => {
@@ -412,6 +454,7 @@ export default function Watch() {
         onNext={playNext}
         onPlaying={onPlaying}
         burnedSubtitles={candidate.hardSubs}
+        notice={notice}
         onExit={goBack}
       />
     </div>

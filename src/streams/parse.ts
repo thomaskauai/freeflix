@@ -30,8 +30,10 @@ const afterYear = (filename: string) => {
   const m = filename.match(/(^|[ ._(\-])(19|20)\d\d(?=[ ._)\-])/);
   return m ? filename.slice((m.index ?? 0) + m[0].length) : '';
 };
+/** "PreDVD"/"HQ Pre": lançamento de antes do filme sair em vídeo, gravado no cinema */
+const PRE_RELEASE = /\bpre-?dvd(-?rip)?\b|\bhq[ ._-]?pre\b/i;
 const isCam = (text: string, filename: string) =>
-  CAM_TAGS.test(text) || TELESYNC.test(text) || CAM_AFTER_YEAR.test(afterYear(filename));
+  CAM_TAGS.test(text) || TELESYNC.test(text) || PRE_RELEASE.test(text) || CAM_AFTER_YEAR.test(afterYear(filename));
 
 /** arquivo que não é vídeo (aplicativo, compactado) */
 const NOT_VIDEO = /\.(apk|exe|msi|dmg|zip|rar|7z|iso)(\b|$)/i;

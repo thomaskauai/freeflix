@@ -1,0 +1,13 @@
+{
+  "name": "freeflix-torrent-engine",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Motor de torrent local do Freeflix: baixa e serve o vídeo por HTTP em 127.0.0.1:2710",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "torrent-stream": "1.2.1"
+  }
+}

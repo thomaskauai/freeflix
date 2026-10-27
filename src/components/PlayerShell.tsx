@@ -179,6 +179,8 @@ interface PlayerShellProps {
   onNext?: () => void;
   /** a fonte começou a tocar */
   onStart?: () => void;
+  /** aviso de quem usa o player (ex.: preparando o torrent); muda o `at` para repetir */
+  notice?: { text: string; at: number } | null;
   /** a legenda já vem gravada no vídeo: a lembrada não é ligada sozinha */
   burnedSubtitles?: boolean;
   /** o vídeo passou a tocar (true) ou parou (false: pausa, fim) */
@@ -207,6 +209,7 @@ export function PlayerShell({
   onStart,
   onPlaying,
   burnedSubtitles,
+  notice,
 }: PlayerShellProps) {
   const [time, setTime] = useState(startAt);
   const [length, setLength] = useState(duration);
@@ -522,6 +525,11 @@ export function PlayerShell({
     window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(''), 4500);
   };
+
+  useEffect(() => {
+    if (notice) showToast(notice.text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notice && notice.at]);
 
   // Tira a legenda em uso: a faixa que este shell pôs no <video> e o arquivo dela.
   const clearSubtitle = () => {
