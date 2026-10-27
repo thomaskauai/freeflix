@@ -23,6 +23,29 @@ export function isLegacyTizen(): boolean {
   return !chrome || Number(chrome[1]) < 76;
 }
 
+/** serviço do motor de torrent no config.xml */
+const TORRENT_SERVICE = 'FreeFlixTV.Torrent';
+
+/**
+ * Sobe o motor de torrent (serviço Node do app). Na TV, ao abrir o app; fora
+ * dela, nada. Resolve quando o sistema aceitou (ou recusou) o pedido.
+ */
+export function startTorrentService(): Promise<boolean> {
+  if (!isTizen()) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    try {
+      window.tizen.application.launchAppControl(
+        new window.tizen.ApplicationControl('http://tizen.org/appcontrol/operation/default', null, null, null, null),
+        TORRENT_SERVICE,
+        () => resolve(true),
+        () => resolve(false),
+      );
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
 export function exitApp() {
   try {
     if (isTizen()) window.tizen.application.getCurrentApplication().exit();

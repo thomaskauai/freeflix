@@ -2,14 +2,16 @@
 //
 // O app não fala BitTorrent: quem baixa é o motor local (torrent-engine/), um
 // Node que serve o vídeo por HTTP em 127.0.0.1:2710 enquanto baixa. No Mac ele
-// roda com `npm start` em torrent-engine/; na TV, como serviço do app. Sem o
-// motor no ar (site em https, celular), a opção nem aparece.
+// roda com `npm start` em torrent-engine/; na TV, como serviço do app, que o
+// app sobe ao abrir (torrentAvailable). Sem o motor no ar (site em https,
+// celular), a opção nem aparece.
 //
 // Os torrents vêm do Torrentio, já ordenados por seeds e sem CAM/screener. Daqui
 // sai um só: o que o aparelho toca, na qualidade que a rede aguenta, no idioma
 // preferido e com mais seeds. Gravação de cinema fica de fora de qualquer jeito.
 import { fetchStreams, getJson, type AddonStream } from '../data/addonClient';
 import type { Title } from '../data/types';
+import { isTizen, startTorrentService } from '../platform/tizen';
 import { getSettings } from '../settings';
 import { getSpeed } from './network';
 import { parseStream } from './parse';
@@ -18,6 +20,8 @@ import { deviceCanPlay, type Candidate } from './resolve';
 
 export const ENGINE = 'http://127.0.0.1:2710';
 export const TORRENT_LABEL = 'Torrent';
+/** o torrent precisa achar peers e baixar o começo (e, em mp4, o índice no fim) antes de tocar */
+export const TORRENT_START_MS = 60000;
 
 /** Torrentio: provedores gerais e os brasileiros (dublados), por seeds, sem 3D, CAM, screener e sem qualidade */
 const TORRENTIO =
@@ -27,17 +31,17 @@ const TORRENTIO =
 const HEALTH_TIMEOUT_MS = 1200;
 /** a resposta do motor vale por esse tempo */
 const HEALTH_TTL_MS = 30000;
+/** na TV, o serviço do motor tem esse tempo para responder depois de subir */
+const SERVICE_START_MS = 12000;
 /** torrents tentados antes de desistir (um sem peers trava a lista de arquivos) */
 const TRIES = 3;
 
 let health: { at: number; ok: Promise<boolean> } | null = null;
+/** na TV, o pedido para subir o serviço do motor (uma vez por abertura do app) */
+let service: Promise<boolean> | null = null;
 
-/** O motor local está no ar? (resposta guardada por alguns segundos) */
-export function torrentAvailable(): Promise<boolean> {
-  // site em https não pode chamar http://127.0.0.1 (conteúdo misto)
-  if (window.location.protocol === 'https:') return Promise.resolve(false);
-  if (health && Date.now() - health.at < HEALTH_TTL_MS) return health.ok;
-  const ok = new Promise<boolean>((resolve) => {
+function probe(): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
     const timer = window.setTimeout(() => resolve(false), HEALTH_TIMEOUT_MS);
     fetch(`${ENGINE}/health`, { cache: 'no-store' })
       .then((r) => r.json())
@@ -51,6 +55,35 @@ export function torrentAvailable(): Promise<boolean> {
           resolve(false);
         },
       );
+  });
+}
+
+/** Na TV o motor é um serviço do app: sobe e espera ele responder. */
+async function startOnTv(): Promise<boolean> {
+  if (!(await startTorrentService())) return false;
+  const until = Date.now() + SERVICE_START_MS;
+  while (Date.now() < until) {
+    if (await probe()) return true;
+    await new Promise((r) => window.setTimeout(r, 450));
+  }
+  return false;
+}
+
+/** O motor local está no ar? (resposta guardada por alguns segundos) */
+export function torrentAvailable(): Promise<boolean> {
+  // site em https não pode chamar http://127.0.0.1 (conteúdo misto)
+  if (window.location.protocol === 'https:') return Promise.resolve(false);
+  if (health && Date.now() - health.at < HEALTH_TTL_MS) return health.ok;
+  const ok = probe().then((up) => {
+    if (up || !isTizen()) return up;
+    // serviço fora do ar (primeira vez ou caiu): pede para subir de novo
+    if (!service) {
+      service = startOnTv().then((started) => {
+        service = null;
+        return started;
+      });
+    }
+    return service;
   });
   health = { at: Date.now(), ok };
   return ok;

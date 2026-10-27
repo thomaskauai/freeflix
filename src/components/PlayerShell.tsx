@@ -183,6 +183,8 @@ interface PlayerShellProps {
   notice?: { text: string; at: number } | null;
   /** a legenda já vem gravada no vídeo: a lembrada não é ligada sozinha */
   burnedSubtitles?: boolean;
+  /** tempo para a fonte começar antes de ser dada como ruim (torrent precisa de mais) */
+  startTimeout?: number;
   /** o vídeo passou a tocar (true) ou parou (false: pausa, fim) */
   onPlaying?: (playing: boolean) => void;
 }
@@ -210,6 +212,7 @@ export function PlayerShell({
   onPlaying,
   burnedSubtitles,
   notice,
+  startTimeout = START_TIMEOUT_MS,
 }: PlayerShellProps) {
   const [time, setTime] = useState(startAt);
   const [length, setLength] = useState(duration);
@@ -308,7 +311,7 @@ export function PlayerShell({
       }
     };
     // Fonte lenta ou morta não dá erro, só nunca começa: o relógio decide.
-    const startTimer = window.setTimeout(() => !started && fail(), START_TIMEOUT_MS);
+    const startTimer = window.setTimeout(() => !started && fail(), startTimeout);
 
     const onMeta = () => {
       if (isFinite(media.duration) && media.duration > 0) setLength(media.duration);

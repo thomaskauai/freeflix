@@ -12,7 +12,7 @@ import { syncProgress, syncStarted } from '../data/sync';
 import type { Season, Title, TitleType } from '../data/types';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
 import { useGoBack, watchPath } from '../nav';
-import { TORRENT_LABEL, torrentAvailable, torrentCandidate } from '../streams/torrent';
+import { TORRENT_LABEL, TORRENT_START_MS, torrentAvailable, torrentCandidate } from '../streams/torrent';
 import {
   firstWorking,
   markFailed,
@@ -455,6 +455,7 @@ export default function Watch() {
         onPlaying={onPlaying}
         burnedSubtitles={candidate.hardSubs}
         notice={notice}
+        startTimeout={candidate.torrent ? TORRENT_START_MS : undefined}
         onExit={goBack}
       />
     </div>

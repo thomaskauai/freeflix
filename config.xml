@@ -3,20 +3,31 @@
      tratar como outro app (instala ao lado, sem herdar dados). A versão vem do
      package.json: npm run build:tizen a copia para cá. -->
 <widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
-        id="http://freeflix.local/app" version="0.5.26" viewmodes="maximized">
+        id="http://freeflix.local/app" version="0.5.28" viewmodes="maximized">
   <tizen:application id="FreeFlixTV.Freeflix" package="FreeFlixTV" required_version="5.0"/>
   <tizen:profile name="tv-samsung"/>
   <name>Freeflix</name>
   <content src="index.html"/>
   <icon src="icon.png"/>
   <feature name="http://tizen.org/feature/screen.size.normal.1080.1920"/>
+  <!-- motor de torrent (torrent-engine/) roda como serviço Node do app -->
+  <feature name="http://tizen.org/feature/web.service"/>
   <!-- teclas de mídia do controle -->
   <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
   <!-- catálogo remoto e embed -->
   <tizen:privilege name="http://tizen.org/privilege/internet"/>
   <!-- identificador da TV (DUID): reencontra a casa da sincronização depois de reinstalar -->
   <tizen:privilege name="http://developer.samsung.com/privilege/productinfo"/>
+  <!-- subir o serviço do motor; ele abre conexões BitTorrent (TCP/UDP) -->
+  <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
+  <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
   <access origin="*" subdomains="true"/>
+  <tizen:service id="FreeFlixTV.Torrent" type="ui" auto-restart="false" on-boot="false">
+    <tizen:content src="service/tizen-service.js"/>
+    <tizen:name>Freeflix Torrent</tizen:name>
+    <tizen:icon src="icon.png"/>
+    <tizen:category name="http://tizen.org/category/service"/>
+  </tizen:service>
   <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable"
                  encryption="disable" install-location="auto" hwkey-event="enable"/>
 </widget>

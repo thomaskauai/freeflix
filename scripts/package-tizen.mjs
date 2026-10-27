@@ -17,7 +17,7 @@
 import { randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
-import { copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,6 +55,17 @@ await writeFile(path.join(root, 'config.xml'), config);
 // hls.js fica fora do bundle da TV; src/streams/loadHls.ts o injeta quando preciso
 await mkdir(path.join(app, 'vendor'), { recursive: true });
 await copyFile(path.join(root, 'node_modules/hls.js/dist/hls.min.js'), path.join(app, 'vendor/hls.min.js'));
+// motor de torrent: o serviço Node do app (config.xml), com as dependências dele
+const engineDir = path.join(root, 'torrent-engine');
+if (!existsSync(path.join(engineDir, 'node_modules'))) {
+  throw new Error('torrent-engine/node_modules não existe (rode npm --prefix torrent-engine install)');
+}
+const service = path.join(app, 'service');
+await rm(service, { recursive: true, force: true });
+await mkdir(service, { recursive: true });
+for (const name of ['server.js', 'tizen-service.js', 'package.json', 'node_modules']) {
+  await cp(path.join(engineDir, name), path.join(service, name), { recursive: true });
+}
 console.log(`app da TV pronto em ${path.relative(root, app)}/`);
 
 const creator = new TizenCertificateCreator();
