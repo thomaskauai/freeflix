@@ -61,6 +61,22 @@ export function hasOriginalAudio(s: ParsedStream, originalLanguage?: string): bo
 }
 
 /**
+ * A fonte tem com certeza o áudio escolhido nas Configurações? O idioma
+ * marcado, ou o original quando o escolhido é o original (ou já é o idioma da
+ * obra). "Multi" sem dizer quais não conta: no ranking é provável, aqui não basta.
+ */
+export function offersAudio(
+  s: { languages: string[]; multiAudio: boolean },
+  ctx: Pick<RankContext, 'audio' | 'originalLanguage'>,
+): boolean {
+  const tagged = s.languages.length > 0;
+  const hasOriginal =
+    !tagged || s.multiAudio || (!!ctx.originalLanguage && s.languages.indexOf(ctx.originalLanguage) >= 0);
+  if (ctx.audio === 'original') return hasOriginal;
+  return s.languages.indexOf(ctx.audio) >= 0 || (ctx.originalLanguage === ctx.audio && hasOriginal);
+}
+
+/**
  * Preferido das configurações primeiro; sem preferência (ou se não houver),
  * o áudio original; depois inglês; depois o resto.
  */
@@ -211,7 +227,7 @@ const AUDIO_NAMES: Record<string, string> = {
   tr: 'Turco',
 };
 
-const audioName = (code: string) => AUDIO_NAMES[code] ?? code.toUpperCase();
+export const audioName = (code: string) => AUDIO_NAMES[code] ?? code.toUpperCase();
 
 /** Um áudio que dá para escolher no player: fontes com o mesmo áudio viram uma opção só. */
 export interface AudioChoice {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AddonStream } from '../data/addonClient';
 import { parseStream } from './parse';
 import { srtToVtt } from './subtitles';
-import { audioChoice, describeStream, foreignOnly, hasOriginalAudio, rankStreams, resolutionCap, type RankContext } from './rank';
+import { audioChoice, describeStream, foreignOnly, offersAudio, hasOriginalAudio, rankStreams, resolutionCap, type RankContext } from './rank';
 
 const stream = (name: string, title: string, extra: Partial<AddonStream> = {}): AddonStream => ({
   name,
@@ -250,6 +250,22 @@ describe('legenda gravada e FenixFlix', () => {
   it('legenda gravada fica atrás da limpa no mesmo áudio', () => {
     const list = [other('Moana.2026.1080p Legendado'), other('Moana.2026.1080p')];
     expect(rankStreams(list, ctx())[0].hardSubs).toBe(false);
+  });
+});
+
+describe('offersAudio', () => {
+  const dub = { languages: ['pt'], multiAudio: false };
+  const plain = { languages: [], multiAudio: false };
+  const dual = { languages: [], multiAudio: true };
+  it('o idioma escolhido, ou o original quando é ele; multi sem dizer quais não conta', () => {
+    expect(offersAudio(dub, { audio: 'pt', originalLanguage: 'en' })).toBe(true);
+    expect(offersAudio(plain, { audio: 'pt', originalLanguage: 'en' })).toBe(false);
+    expect(offersAudio(dual, { audio: 'pt', originalLanguage: 'en' })).toBe(false);
+    expect(offersAudio(dual, { audio: 'original', originalLanguage: 'en' })).toBe(true);
+    expect(offersAudio(plain, { audio: 'en', originalLanguage: 'en' })).toBe(true);
+    expect(offersAudio(dub, { audio: 'en', originalLanguage: 'en' })).toBe(false);
+    expect(offersAudio(dub, { audio: 'original', originalLanguage: 'en' })).toBe(false);
+    expect(offersAudio(plain, { audio: 'original', originalLanguage: 'en' })).toBe(true);
   });
 });
 

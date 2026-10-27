@@ -7,7 +7,7 @@ import { PlayerShell } from '../components/PlayerShell';
 import { EmbedPlayer, VideoPlayer } from '../components/VideoPlayer';
 import { findEpisode, followingEpisode } from '../data/episodes';
 import { catalog, previewTitle } from '../data/provider';
-import { clearPlayerSession, markPlayerSession, rememberSource, saveProgress } from '../data/storage';
+import { clearPlayerSession, markPlayerSession, preferredSource, rememberSource, saveProgress } from '../data/storage';
 import { syncProgress, syncStarted } from '../data/sync';
 import type { Season, Title, TitleType } from '../data/types';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
@@ -21,7 +21,8 @@ import {
   resumePoint,
   type Plan,
 } from '../streams/playback';
-import { audioChoice } from '../streams/rank';
+import { audioChoice, audioName, offersAudio } from '../streams/rank';
+import { getSettings } from '../settings';
 import type { NoSourceReason } from '../streams/resolve';
 
 const MESSAGES: Record<NoSourceReason | 'all-failed', { title: string; text: string; settings?: boolean }> = {
@@ -94,6 +95,8 @@ export default function Watch() {
   /** o vídeo já mostrou imagem: o fundo esmaecido da espera sai */
   const [started, setStarted] = useState(false);
   const warmed = useRef('');
+  /** o espectador aceitou outro áudio porque o escolhido não existe (vale para esta abertura) */
+  const [audioAccepted, setAudioAccepted] = useState('');
 
   const key = `${type}/${id}/${season}/${episode}`;
   const isEpisode = season != null && episode != null;
@@ -197,7 +200,7 @@ export default function Watch() {
   }, [media]);
 
   // O foco muda de dono a cada estado: Voltar enquanto procura, linha do tempo quando toca.
-  usePageFocus(!!title, `${key}:${plan ? plan.status : 'searching'}:${playingIndex}`);
+  usePageFocus(!!title, `${key}:${plan ? plan.status : 'searching'}:${playingIndex}:${audioAccepted === key}`);
 
   const list = seasons && seasons.id === id ? seasons.list : [];
   const current = isEpisode ? findEpisode(list, season, episode) : undefined;
@@ -271,6 +274,54 @@ export default function Watch() {
     );
   }
 
+  // Áudios: um por tipo entre as fontes (dublada, original, dual), na ordem da melhor fonte de cada.
+  const audioOf = plan.candidates.map((c) => audioChoice(c.profile, title.originalLanguage));
+  const audios = audioOf.filter((a, i) => audioOf.map((b) => b.key).indexOf(a.key) === i);
+  const audioKeys = audios.map((a) => a.key);
+
+  // Nenhuma fonte com o áudio das Configurações: não troca sozinho, pergunta.
+  // Episódio que segue a fonte do anterior já teve a escolha feita.
+  const audio = getSettings().audio;
+  const missingAudio =
+    audioAccepted !== key &&
+    !plan.more &&
+    !(isEpisode && preferredSource(title.id)) &&
+    !plan.candidates.some((c) => offersAudio(c.profile, { audio, originalLanguage: title.originalLanguage }));
+  if (missingAudio) {
+    const wantedName = audio === 'original' ? 'original' : `em ${audioName(audio)}`;
+    // o original primeiro: é a troca mais natural
+    const offered = audios.filter((a) => a.original).concat(audios.filter((a) => !a.original));
+    return (
+      <div className="page player" data-focus-main="">
+        <Backdrop title={title} />
+        <div className="player__message">
+          <p className="player__message-title">Sem áudio {wantedName}</p>
+          <p className="player__message-text">
+            Nenhuma fonte tem este título com o áudio escolhido nas Configurações.
+          </p>
+          <div className="player__message-actions">
+            {offered.map((a, i) => (
+              <Button
+                key={a.key}
+                id={`watch-audio-${i}`}
+                autoFocus={i === 0}
+                onClick={() => {
+                  setAudioAccepted(key);
+                  setPlan({ ...plan, index: audioOf.map((b) => b.key).indexOf(a.key) });
+                }}
+              >
+                {`Assistir: ${a.label}`}
+              </Button>
+            ))}
+            <Button icon="back" id="watch-back" onClick={goBack}>
+              Voltar
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const candidate = plan.candidates[plan.index];
   const { startAt, duration } = resumePoint(title, season, episode);
   // Legendas são buscadas pelo id IMDb; títulos sem ele ficam sem.
@@ -280,10 +331,6 @@ export default function Watch() {
   // A lista mostra uma linha por opção distinta. Espelhos da mesma opção não
   // aparecem: são a reserva que o player usa sozinho se o primeiro falhar.
   const options = plan.candidates.map((c) => c.label).filter((label, i, all) => all.indexOf(label) === i);
-  // Áudios: um por tipo entre as fontes (dublada, original, dual), na ordem da melhor fonte de cada.
-  const audioOf = plan.candidates.map((c) => audioChoice(c.profile, title.originalLanguage));
-  const audios = audioOf.filter((a, i) => audioOf.map((b) => b.key).indexOf(a.key) === i);
-  const audioKeys = audios.map((a) => a.key);
   // Fonte ruim fica marcada: a próxima abertura deste título já começa pela
   // seguinte. Acabou a lista e as outras fontes ainda vão chegar: espera por elas.
   const next = () => {
