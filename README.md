@@ -86,18 +86,11 @@ Exemplos: `UN55`**`R`**`U7100` é 2019 (Tizen 5); `QN55Q60`**`C`** é 2023 (Tize
 `QN43QE`**`F`**`1A` é 2025 (Tizen 9). Nas TVs LED a letra vem logo depois do tamanho; nas
 QLED, no fim do nome da série.
 
-### Qual arquivo baixar
+### O arquivo do app
 
-Na página de [Releases](https://github.com/thomaskauai/freeflix/releases/latest) há dois
-arquivos. **O app é o mesmo**; muda só o formato do ícone na tela inicial da TV:
-
-| Arquivo | Ícone | Para |
-|---|---|---|
-| `Freeflix-tv-nova.wgt` | quadrado | TVs com a tela inicial nova (ícones quadrados), em geral 2022 em diante |
-| `Freeflix-tv-antiga.wgt` | largo (16:9) | TVs com a barra de apps antiga, de blocos largos, em geral até 2021 |
-
-Escolheu o "errado"? Funciona do mesmo jeito; o ícone só fica esticado ou com bordas. Dá
-para trocar instalando o outro por cima.
+Baixe o **[Freeflix.wgt](https://github.com/thomaskauai/freeflix/releases/latest/download/Freeflix.wgt)**
+(página de [Releases](https://github.com/thomaskauai/freeflix/releases/latest)). É o mesmo
+arquivo para qualquer TV.
 
 ### Passo 1: anotar o IP do computador
 
@@ -136,7 +129,7 @@ arquivo do seu sistema:
 | Mac com Intel | `TizenBrewInstaller-macos-x64` |
 | Linux | `TizenBrewInstaller-linux-x64` |
 
-Baixe também o `.wgt` do Freeflix (veja [Qual arquivo baixar](#qual-arquivo-baixar)).
+Baixe também o [Freeflix.wgt](#o-arquivo-do-app).
 
 Para abrir:
 
@@ -177,7 +170,7 @@ Em TV abaixo do Tizen 7 esse passo não aparece. Siga adiante.
 ### Passo 6: instalar o Freeflix
 
 1. Clique em **Select file to install**.
-2. Escolha o `.wgt` do Freeflix que você baixou.
+2. Escolha o `Freeflix.wgt` que você baixou.
 3. Acompanhe o status: *Resigning* (só Tizen 7+), *Installing*, e por fim **Package
    installed**.
 
@@ -191,7 +184,7 @@ Deixe o modo de desenvolvedor ligado: ele é necessário para instalar atualiza�
 
 ### Atualizar para uma versão nova
 
-Repita os passos 3 a 6 com o `.wgt` novo da página de Releases. A TV troca o app sem
+Repita os passos 3 a 6 com o `Freeflix.wgt` novo da página de Releases. A TV troca o app sem
 perder o que você assistiu e o código da casa.
 
 A TV só aceita o arquivo como atualização se ele foi assinado com o mesmo certificado do
@@ -283,8 +276,10 @@ npm version patch      # a TV só atualiza se a versão for maior que a instalad
 npm run build:tizen
 ```
 
-Gera o app em `tizen-build/app/` e os dois `.wgt` assinados em `tizen-build/` (fora do
-git). Detalhes:
+Gera o app em `tizen-build/app/` e dois `.wgt` assinados em `tizen-build/` (fora do
+git), iguais a não ser pelo ícone: `Freeflix-tv-nova.wgt` (quadrado, o publicado) e
+`Freeflix-tv-antiga.wgt` (16:9, para a barra de blocos largos das TVs antigas, usado só
+pelo `tv:install`). Detalhes:
 
 - A versão do `package.json` é copiada para o `config.xml` e aparece no fim de
   Configurações no app.
@@ -300,8 +295,9 @@ git). Detalhes:
 - `npm run tv:install` instala direto nas TVs da casa do autor, sem a interface do
   Installer (IPs e modelos fixos em `scripts/tv-install.mjs`).
 
-Para publicar uma versão: suba a versão, rode `npm run build:tizen` e anexe os dois
-`.wgt` a uma release do GitHub com a tag `vX.Y.Z`.
+Para publicar uma versão: suba a versão, rode `npm run build:tizen` e anexe
+`Freeflix-tv-nova.wgt`, renomeado para `Freeflix.wgt`, a uma release do GitHub com a tag
+`vX.Y.Z` (o nome fixo mantém o link de download do README).
 
 ## Como funciona por dentro
 
