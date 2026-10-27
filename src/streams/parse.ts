@@ -21,7 +21,17 @@ export type Unplayable = 'torrent' | 'external' | 'headers' | 'cam' | 'not-video
  */
 const CAM_TAGS = /\b(HD-?)?CAM(-?R[Ii][Pp])?\b|\bCamRip\b|\bTELECINE\b|\b(DVD-?)?SCR(EENER)?\b|(^|[ ._\-[(])(HD-?)?(TS|TC)(?=[ ._\-\])])/;
 const TELESYNC = /\btele-?sync\b/i;
-const isCam = (text: string) => CAM_TAGS.test(text) || TELESYNC.test(text);
+/**
+ * No nome do arquivo, depois do ano, já não é título: ali a etiqueta conta em
+ * qualquer caixa ("Clayface.2026.Tc.1080p.mkv").
+ */
+const CAM_AFTER_YEAR = /(^|[ ._\-[(])(HD-?)?(TS|TC|CAM(-?RIP)?)(?=[ ._\-\])])/i;
+const afterYear = (filename: string) => {
+  const m = filename.match(/(^|[ ._(\-])(19|20)\d\d(?=[ ._)\-])/);
+  return m ? filename.slice((m.index ?? 0) + m[0].length) : '';
+};
+const isCam = (text: string, filename: string) =>
+  CAM_TAGS.test(text) || TELESYNC.test(text) || CAM_AFTER_YEAR.test(afterYear(filename));
 
 /** arquivo que não é vídeo (aplicativo, compactado) */
 const NOT_VIDEO = /\.(apk|exe|msi|dmg|zip|rar|7z|iso)(\b|$)/i;
@@ -122,7 +132,7 @@ export function parseStream(stream: AddonStream, addon: string): ParsedStream {
   else if (hints.proxyHeaders && hints.proxyHeaders.request && Object.keys(hints.proxyHeaders.request).length > 0) {
     unplayable = 'headers';
   } else if (NOT_VIDEO.test(filename)) unplayable = 'not-video';
-  else if (isCam(text)) unplayable = 'cam';
+  else if (isCam(text, filename)) unplayable = 'cam';
 
   const languages: string[] = [];
   const add = (code: string) => languages.indexOf(code) < 0 && languages.push(code);

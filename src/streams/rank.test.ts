@@ -267,6 +267,14 @@ describe('gravação de cinema e arquivos que não são vídeo', () => {
     expect(file('Filme.2026.DVDSCR.x264.mkv').unplayable).toBe('cam');
   });
 
+  it('depois do ano no nome do arquivo, a etiqueta vale em qualquer caixa', () => {
+    expect(file('Clayface.2026.Tc.1080p.MULTi.mkv|^|1080pMKV').unplayable).toBe('cam');
+    expect(file('Clayface.2026.tc.1080p.mkv').unplayable).toBe('cam');
+    expect(file('Filme.2026.hdcam.mkv').unplayable).toBe('cam');
+    expect(file('Filme.2026.1080p.WEB-DL.ts').unplayable).toBeUndefined();
+    expect(file('Ts.Tc.Filme.2026.1080p.WEB-DL.mkv').unplayable).toBeUndefined();
+  });
+
   it('mantém WEB-DL, DTS e segmentos .ts', () => {
     expect(file('Filme.2026.1080p.AMZN.WEB-DL.DDP5.1.H.264.mkv').unplayable).toBeUndefined();
     expect(file('Filme.2026.1080p.BluRay.DTS-HD.MA.5.1.x264.mkv').unplayable).toBeUndefined();
