@@ -36,6 +36,11 @@ const TORRENT_REBUFFER_S = 30;
 /** e não espera mais que isso: volta a tocar com o que tiver */
 const TORRENT_REBUFFER_MAX_MS = 45000;
 const TORRENT_POLL_MS = 1000;
+/**
+ * Começo já baixado e nada de imagem depois disso: o aparelho não decodifica
+ * o arquivo (ex.: MKV x265 10-bit no navegador) e o <video> só espera, sem erro.
+ */
+const TORRENT_DECODE_MS = 15000;
 /** idioma da legenda dos atalhos ("… com legendas") */
 const PRESET_SUBTITLE: SubtitleLanguage = 'pt';
 
@@ -444,6 +449,8 @@ export function PlayerShell({
     if (mode !== 'video' || !media || !torrentUrl || started) return;
     let alive = true;
     let timer = 0;
+    /** quando a folga inicial ficou completa */
+    let fullAt = 0;
     const poll = () => {
       const lengthS = isFinite(media.duration) && media.duration > 0 ? media.duration : lengthRef.current;
       const at = media.currentTime > 0 ? media.currentTime : startAt;
@@ -452,6 +459,13 @@ export function PlayerShell({
         .then((b) => {
           if (!alive) return;
           if (b) setTorrentPercent(b.toEnd ? 99 : Math.min(99, Math.floor((b.aheadS / TORRENT_START_S) * 100)));
+          const full = !!b && (b.toEnd || b.aheadS >= TORRENT_START_S);
+          if (full && !fullAt) fullAt = Date.now();
+          // mesmo caminho de um erro do <video>: o player passa para a próxima fonte
+          if (fullAt && media.readyState < 2 && Date.now() - fullAt > TORRENT_DECODE_MS) {
+            media.dispatchEvent(new Event('error'));
+            return;
+          }
           timer = window.setTimeout(poll, TORRENT_POLL_MS);
         });
     };
