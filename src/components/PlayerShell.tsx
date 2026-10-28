@@ -10,7 +10,7 @@ import {
   type SubtitleLanguage,
   type SubtitleOption,
 } from '../streams/subtitles';
-import type { AudioChoice } from '../streams/rank';
+import { audioName, type AudioChoice } from '../streams/rank';
 import { torrentBuffer } from '../streams/torrent';
 import { Icon, type IconName } from './Icon';
 
@@ -52,6 +52,32 @@ function bufferedAhead(media: HTMLVideoElement): number {
     if (ranges.start(i) <= t + 0.5 && ranges.end(i) >= t) return ranges.end(i) - t;
   }
   return 0;
+}
+
+/** Faixa de áudio dentro do arquivo (audioTracks: TV Samsung, Safari; o Chrome não tem). */
+interface FileAudioTrack {
+  id: string;
+  label: string;
+  language: string;
+  enabled: boolean;
+}
+interface FileAudioTrackList {
+  length: number;
+  [index: number]: FileAudioTrack;
+  addEventListener(type: string, listener: () => void): void;
+  removeEventListener(type: string, listener: () => void): void;
+}
+const audioTracksOf = (media: HTMLVideoElement) =>
+  (media as unknown as { audioTracks?: FileAudioTrackList }).audioTracks;
+
+/** idioma das faixas do arquivo (ISO 639-2, "por", "eng") no código do app ("pt", "en") */
+const ISO3: Record<string, string> = {
+  por: 'pt', eng: 'en', spa: 'es', fre: 'fr', fra: 'fr', ita: 'it', ger: 'de', deu: 'de',
+  jpn: 'ja', kor: 'ko', chi: 'zh', zho: 'zh', hin: 'hi', rus: 'ru', tur: 'tr',
+};
+function trackLanguage(language: string): string {
+  const code = (language || '').toLowerCase().split('-')[0];
+  return ISO3[code] ?? (code.length === 2 ? code : '');
 }
 
 /** idioma da legenda dos atalhos ("… com legendas") */
@@ -215,6 +241,10 @@ interface PlayerShellProps {
   onPlaying?: (playing: boolean) => void;
   /** endereço do vídeo no motor de torrent: carregamento com porcentagem e folga maior quando trava */
   torrentUrl?: string;
+  /** idioma original da obra, para marcar a faixa "[original]" do arquivo */
+  originalLanguage?: string;
+  /** áudio preferido ("pt", "en"…): arquivo com várias faixas começa nela */
+  preferredAudio?: string;
 }
 
 export function PlayerShell({
@@ -228,9 +258,9 @@ export function PlayerShell({
   sources,
   sourceIndex = 0,
   onPickSource,
-  audios = [],
-  audioIndex = 0,
-  onPickAudio,
+  audios: sourceAudios = [],
+  audioIndex: sourceAudioIndex = 0,
+  onPickAudio: onPickSourceAudio,
   onFail,
   onProgress,
   onExit,
@@ -242,12 +272,16 @@ export function PlayerShell({
   notice,
   startTimeout = START_TIMEOUT_MS,
   torrentUrl,
+  originalLanguage,
+  preferredAudio,
 }: PlayerShellProps) {
   const [time, setTime] = useState(startAt);
   const [length, setLength] = useState(duration);
   const [playing, setPlaying] = useState(false);
   const [buffering, setBuffering] = useState(mode === 'video');
   const [failed, setFailed] = useState(false);
+  /** faixas de áudio do próprio arquivo, quando o aparelho mostra (vazio: não mostra ou só uma) */
+  const [tracks, setTracks] = useState<{ id: string; lang: string; label: string; enabled: boolean }[]>([]);
   /** torrent travou: pausado juntando folga */
   const [rebuffering, setRebuffering] = useState(false);
   /** torrent abrindo: quanto da folga inicial já baixou (0–99) */
@@ -457,6 +491,44 @@ export function PlayerShell({
     // startAt só vale para a abertura deste vídeo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, media, wake, goNext]);
+
+  // Arquivo com várias faixas de áudio (pacote dual): começa na preferida e o
+  // menu de áudio troca a faixa, sem trocar de fonte.
+  useEffect(() => {
+    setTracks([]);
+    const list = mode === 'video' && media ? audioTracksOf(media) : undefined;
+    if (!media || !list) return;
+    let chosen = false;
+    const read = () => {
+      const all: FileAudioTrack[] = [];
+      for (let i = 0; i < list.length; i++) all.push(list[i]);
+      if (all.length < 2) return setTracks([]);
+      if (!chosen && preferredAudio) {
+        chosen = true;
+        const wanted = all.filter((t) => trackLanguage(t.language) === preferredAudio)[0];
+        if (wanted && !wanted.enabled) all.forEach((t) => (t.enabled = t === wanted));
+      }
+      setTracks(
+        all.map((t, i) => ({
+          id: t.id,
+          lang: trackLanguage(t.language),
+          label: t.label || `Faixa ${i + 1}`,
+          enabled: t.enabled,
+        })),
+      );
+    };
+    read();
+    list.addEventListener('addtrack', read);
+    list.addEventListener('removetrack', read);
+    list.addEventListener('change', read);
+    return () => {
+      list.removeEventListener('addtrack', read);
+      list.removeEventListener('removetrack', read);
+      list.removeEventListener('change', read);
+    };
+    // a preferência vale para a abertura deste vídeo
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, media]);
 
   // Torrent abrindo: a porcentagem é quanto da folga inicial já baixou.
   useEffect(() => {
@@ -725,6 +797,29 @@ export function PlayerShell({
     applySubtitle(option, true);
   };
 
+  // Com faixas no arquivo, o áudio escolhido é uma delas; senão, uma das fontes.
+  const fileAudios: AudioChoice[] | null = tracks.length
+    ? tracks.map((t, i) => {
+        const name = t.lang ? audioName(t.lang) : t.label;
+        const twin = tracks.filter((o, j) => j < i && o.lang === t.lang && !!t.lang).length;
+        const original = !!t.lang && t.lang === originalLanguage;
+        return {
+          key: `track:${t.id}`,
+          label: `${name}${original ? ' [original]' : ''}${twin ? ` (${twin + 1})` : ''}`,
+          lang: t.lang || undefined,
+          original,
+        };
+      })
+    : null;
+  const audios = fileAudios ?? sourceAudios;
+  const audioIndex = fileAudios ? Math.max(0, tracks.map((t) => t.enabled).indexOf(true)) : sourceAudioIndex;
+  const selectTrack = (index: number) => {
+    const list = media ? audioTracksOf(media) : undefined;
+    if (!list) return;
+    for (let i = 0; i < list.length; i++) list[i].enabled = list[i].id === tracks[index].id;
+  };
+  const onPickAudio = fileAudios ? selectTrack : onPickSourceAudio;
+
   /** Outro áudio é outra fonte: o player recomeça nela de onde estava, e com a legenda lembrada. */
   const pickAudio = (index: number) => {
     if (index === audioIndex || !onPickAudio) return;
@@ -734,7 +829,11 @@ export function PlayerShell({
 
   const pickPreset = (preset: Preset) => {
     const option = (subtitles ?? []).filter((o) => o.language === preset.subtitle)[0] ?? null;
-    if (preset.audio !== audioIndex && onPickAudio) {
+    if (preset.audio !== audioIndex && fileAudios) {
+      // faixa do mesmo arquivo: o vídeo segue, a legenda muda aqui
+      selectTrack(preset.audio);
+      if ((option ? option.language : null) !== subtitleLang) pickSubtitle(option);
+    } else if (preset.audio !== audioIndex && onPickAudio) {
       rememberSubtitle(option ? option.language : null);
       pickAudio(preset.audio);
     } else if ((option ? option.language : null) !== subtitleLang) {

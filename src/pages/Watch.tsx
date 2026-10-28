@@ -464,6 +464,8 @@ export default function Watch() {
         notice={notice}
         startTimeout={candidate.torrent ? TORRENT_START_MS : undefined}
         torrentUrl={candidate.torrent ? candidate.url : undefined}
+        originalLanguage={title.originalLanguage}
+        preferredAudio={audio === 'original' ? title.originalLanguage : audio}
         onExit={goBack}
       />
     </div>
