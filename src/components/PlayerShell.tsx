@@ -32,9 +32,9 @@ const START_TIMEOUT_MS = 15000;
 /** torrent na primeira vez: 100% é ter esse tanto de vídeo pronto à frente */
 const TORRENT_START_S = 12;
 /** torrent travou tocando: pausa até juntar esse tanto à frente, para não travar de novo */
-const TORRENT_REBUFFER_S = 30;
+const TORRENT_REBUFFER_S = 15;
 /** e não espera mais que isso: volta a tocar com o que tiver */
-const TORRENT_REBUFFER_MAX_MS = 45000;
+const TORRENT_REBUFFER_MAX_MS = 20000;
 const TORRENT_POLL_MS = 1000;
 /**
  * Começo já baixado e nada de imagem depois disso: o <video> parou sem erro
@@ -540,6 +540,7 @@ export function PlayerShell({
     let timer = 0;
     /** quando a folga inicial ficou completa */
     let fullAt = 0;
+    let percentMax = 0;
     const poll = () => {
       const lengthS = isFinite(media.duration) && media.duration > 0 ? media.duration : lengthRef.current;
       const at = media.currentTime > 0 ? media.currentTime : startAt;
@@ -548,10 +549,16 @@ export function PlayerShell({
         .then((b) => {
           if (!alive) return;
           const ahead = Math.max(b ? b.aheadS : 0, bufferedAhead(media));
-          // o que está pronto no ponto, ou o que já baixou no total (cabeçalho, índice,
-          // pedaços fora de ordem): a porcentagem anda sempre que o download anda
-          const done = b ? Math.max(ahead / TORRENT_START_S, b.downloadedS / (TORRENT_START_S * 2)) : 0;
-          if (b) setTorrentPercent(b.toEnd ? 99 : Math.min(99, Math.floor(done * 100)));
+          // Até 60% pelo total baixado (anda sempre que o download anda); o resto só
+          // com o vídeo pronto: cabeçalho lido (readyState 1) e trecho no buffer dele.
+          // Assim não chega a 99% com o <video> ainda sem nada.
+          const downloaded = b ? Math.min(1, b.downloadedS / (TORRENT_START_S * 2)) * 0.6 : 0;
+          const header = media.readyState >= 1 ? 0.15 : 0;
+          const buffered = Math.min(1, bufferedAhead(media) / TORRENT_START_S) * 0.25;
+          const done = b && b.toEnd ? 0.99 : downloaded + header + buffered;
+          // não volta: o total baixado pode cair se o motor reabrir o torrent
+          percentMax = Math.max(percentMax, Math.min(99, Math.floor(done * 100)));
+          if (b) setTorrentPercent(percentMax);
           const full = !!b && (b.toEnd || ahead >= TORRENT_START_S);
           if (full && !fullAt) fullAt = Date.now();
           // mesmo caminho de um erro do <video>: o player passa para a próxima fonte
