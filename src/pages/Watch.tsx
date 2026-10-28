@@ -461,6 +461,32 @@ export default function Watch() {
     };
     torrentCandidate(title, season, episode, (t) => sameAudio(want, t)).then(done, () => done(null));
   };
+  // No torrent, trocar o áudio busca outro torrent com ele; nunca cai numa fonte HTTP.
+  const pickAudio = (i: number) => {
+    const want = audios[i];
+    if (!candidate.torrent) return setPlan({ ...plan, index: audioOf.map((a) => a.key).indexOf(want.key) });
+    if (preparingTorrent) return say('Procurando…');
+    const torrents = plan.candidates.map((c, j) => (c.torrent && j !== plan.index ? j : -1)).filter((j) => j >= 0);
+    const loaded =
+      torrents.find((j) => audioOf[j].key === want.key) ?? torrents.find((j) => sameAudio(want, plan.candidates[j].profile));
+    if (loaded !== undefined) return setPlan({ ...plan, index: loaded });
+    const name = want.lang && !want.label.startsWith('Dual') ? audioName(want.lang) : want.label;
+    const current = candidate.torrent.infoHash;
+    const forKey = key;
+    setPreparingTorrent(true);
+    say(`Procurando torrent em ${name}…`);
+    const done = (found: typeof candidate | null) => {
+      if (liveKey.current !== forKey) return;
+      setPreparingTorrent(false);
+      if (!found) return say(`Nenhum torrent em ${name}. Continua no atual.`);
+      setPlan((p) =>
+        p && p.status === 'play' ? { ...p, candidates: p.candidates.concat(found), index: p.candidates.length } : p,
+      );
+    };
+    torrentCandidate(title, season, episode, (t) => t.infoHash !== current && sameAudio(want, t)).then(done, () =>
+      done(null),
+    );
+  };
   const next = () => {
     markFailed(candidate.url);
     const want = audioOf[plan.index];
@@ -515,7 +541,7 @@ export default function Watch() {
         sourceIndex={options.indexOf(candidate.label)}
         audios={audios}
         audioIndex={audioKeys.indexOf(audioOf[plan.index].key)}
-        onPickAudio={(i) => setPlan({ ...plan, index: audioOf.map((a) => a.key).indexOf(audioKeys[i]) })}
+        onPickAudio={pickAudio}
         onPickSource={(option) =>
           options[option] === TORRENT_LABEL && !hasTorrent
             ? pickTorrent()
