@@ -10,7 +10,14 @@ import type { Title } from '../data/types';
 import { loadHls } from './loadHls';
 import type { SourceProfile } from './rank';
 import { resolvePlayback, type Candidate, type NoSourceReason, type Resolution } from './resolve';
-import { noStreamingInBrazil, torrentAvailable, torrentCandidate } from './torrent';
+import {
+  dropTorrent,
+  holdTorrent,
+  noStreamingInBrazil,
+  sweepTorrents,
+  torrentAvailable,
+  torrentCandidate,
+} from './torrent';
 
 /** fontes encontradas valem por este tempo; links de streaming costumam expirar */
 const PLAN_TTL_MS = 10 * 60 * 1000;
@@ -162,9 +169,16 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
  * não é HLS; senão por hls.js. Devolve como desligar.
  */
 export function attachSource(video: HTMLVideoElement, url: string, hls: boolean): () => void {
+  // torrent segue aberto no motor enquanto houver vídeo ligado a ele
+  holdTorrent(url);
+  let held = true;
+  const unhold = () => {
+    if (held) dropTorrent(url);
+    held = false;
+  };
   if (!hls || video.canPlayType('application/vnd.apple.mpegurl')) {
     video.src = url;
-    return () => undefined;
+    return unhold;
   }
   let alive = true;
   let destroy: (() => void) | undefined;
@@ -189,6 +203,7 @@ export function attachSource(video: HTMLVideoElement, url: string, hls: boolean)
   return () => {
     alive = false;
     if (destroy) destroy();
+    unhold();
   };
 }
 
@@ -284,11 +299,17 @@ function preloadCandidate(
   preloaded = { key, url: candidate.url, video, detach };
 }
 
-/** A página de detalhes saiu: se o player não adotar o vídeo logo, ele é descartado. */
+/**
+ * A página de detalhes saiu: se o player não adotar o vídeo logo, ele é
+ * descartado, e os torrents que ficaram abertos sem vídeo saem do motor.
+ */
 export function releasePreload() {
   wanted = null;
   window.clearTimeout(releaseTimer);
-  releaseTimer = window.setTimeout(dropPreloaded, RELEASE_AFTER_MS);
+  releaseTimer = window.setTimeout(() => {
+    dropPreloaded();
+    if (!wanted) sweepTorrents();
+  }, RELEASE_AFTER_MS);
 }
 
 /**

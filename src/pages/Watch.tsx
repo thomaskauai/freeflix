@@ -195,12 +195,18 @@ export default function Watch() {
   // O fundo da espera sai assim que o vídeo mostra imagem. Na TV o evento
   // "playing" pode chegar bem depois das primeiras imagens (ou nem chegar, no
   // vídeo pré-carregado); o tempo andando já basta. Sem isso o fundo ficava
-  // aparecendo nas faixas pretas de filmes mais largos que a tela.
+  // aparecendo nas faixas pretas de filmes mais largos que a tela. Primeira
+  // imagem já pintada (fora de um pulo) também basta: torrent mostra o quadro
+  // e demora a andar.
   useEffect(() => {
     setStarted(false);
     if (!media) return;
     let last = media.currentTime;
     const show = () => setStarted(true);
+    const painted = () => media.readyState >= 2 && !media.seeking && show();
+    painted();
+    const frameEvents = ['loadeddata', 'canplay', 'seeked'];
+    frameEvents.forEach((e) => media.addEventListener(e, painted));
     // pulo para onde o espectador parou também muda o tempo; só conta o vídeo andando
     const moved = () => {
       if (!media.paused && !media.seeking && media.currentTime > last + 0.05 && media.currentTime - last < 2) show();
@@ -209,6 +215,7 @@ export default function Watch() {
     media.addEventListener('playing', show);
     media.addEventListener('timeupdate', moved);
     return () => {
+      frameEvents.forEach((e) => media.removeEventListener(e, painted));
       media.removeEventListener('playing', show);
       media.removeEventListener('timeupdate', moved);
     };

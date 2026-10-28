@@ -9,7 +9,7 @@
  *
  *   GET /health                         -> { ok, engines }
  *   GET /<hash>/create?tr=..&s=1&e=2    -> abre o torrent; { infoHash, name, files, fileIdx }
- *   GET /<hash>/<idx>                   -> o arquivo, com Range
+ *   GET /<hash>/<idx>                   -> o arquivo, com Range (torrent removido reabre)
  *   GET /<hash>/<idx>/stats.json        -> peers, velocidade, quanto baixou
  *   GET /<hash>/remove                  -> para e apaga o que baixou
  *   GET /removeAll
@@ -66,6 +66,8 @@ var MIME = {
 
 /** hash -> { engine, ready, lastUsed, error } */
 var engines = {};
+/** hash -> trackers com que foi aberto: o app solta o torrent ao sair dos detalhes, e o endereço antigo reabre com eles */
+var known = {};
 
 function now() {
   return Date.now();
@@ -121,6 +123,7 @@ function remove(hash) {
 /** Abre (ou reaproveita) o torrent; chama back(err, entry) quando a lista de arquivos chega. */
 function open(hash, trackers, back) {
   var entry = engines[hash];
+  known[hash] = trackers;
   if (!entry) {
     // espaço da TV: o torrent mais antigo sai
     var hashes = Object.keys(engines).sort(function (a, b) {
@@ -395,11 +398,19 @@ function handle(req, res) {
   }
 
   var idx = Number(parts[1]);
+  if (isNaN(idx)) return send(res, 404, { error: 'not-open' });
+  var serve = function (entry) {
+    entry.lastUsed = now();
+    if (parts[2] === 'stats.json') return send(res, 200, stats(entry, idx));
+    return serveFile(req, res, entry, idx);
+  };
   var entry = engines[hash];
-  if (!entry || !entry.ready || isNaN(idx)) return send(res, 404, { error: 'not-open' });
-  entry.lastUsed = now();
-  if (parts[2] === 'stats.json') return send(res, 200, stats(entry, idx));
-  return serveFile(req, res, entry, idx);
+  if (entry && entry.ready) return serve(entry);
+  // removido (o app solta ao sair dos detalhes) ou ainda abrindo: abre e serve
+  return open(hash, known[hash] || trackersFrom({}), function (err, opened) {
+    if (err) return send(res, 504, { error: String(err.message || err) });
+    serve(opened);
+  });
 }
 
 // torrent parado há muito tempo sai (TV com pouco espaço)
