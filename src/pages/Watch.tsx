@@ -463,6 +463,7 @@ export default function Watch() {
         burnedSubtitles={candidate.hardSubs}
         notice={notice}
         startTimeout={candidate.torrent ? TORRENT_START_MS : undefined}
+        torrentUrl={candidate.torrent ? candidate.url : undefined}
         onExit={goBack}
       />
     </div>

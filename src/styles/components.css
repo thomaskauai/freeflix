@@ -1786,6 +1786,43 @@
   font-size: 22px;
 }
 
+/* carregamento por cima de tudo, visível mesmo com os controles escondidos */
+.shell__loading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* porcentagem do torrent, no meio do círculo (que gira sozinho) */
+.shell__loading-percent {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 120px;
+  margin: -16px 0 0 -60px;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 32px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.shell__loading-text {
+  position: absolute;
+  top: 50%;
+  left: 10%;
+  width: 80%;
+  margin: 72px 0 0;
+  font-size: 22px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.72);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
 .shell__spinner {
   position: absolute;
   top: 50%;

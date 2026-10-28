@@ -237,3 +237,32 @@ export async function torrentCandidate(title: Title, season?: number, episode?: 
   }
   return null;
 }
+
+/** Como o torrent em tela está: quanto já tem à frente do ponto pedido, em segundos de vídeo. */
+export interface TorrentBuffer {
+  /** segundos de vídeo prontos em sequência a partir do ponto */
+  aheadS: number;
+  /** o arquivo está pronto até o fim a partir do ponto */
+  toEnd: boolean;
+  peers: number;
+  /** bytes por segundo */
+  speed: number;
+}
+
+/** Pergunta ao motor quanto do vídeo `url` está pronto a partir de `atS` (duração `lengthS`). */
+export async function torrentBuffer(url: string, atS: number, lengthS: number): Promise<TorrentBuffer | null> {
+  if (!hashOf(url) || !(lengthS > 0)) return null;
+  const pos = Math.max(0, Math.min(1, atS / lengthS));
+  const s = await getJson<{ ahead: number; peers: number; downloadSpeed: number; length: number }>(
+    `${url}/stats.json?pos=${pos.toFixed(6)}`,
+    4000,
+  );
+  // bytes viram segundos pela taxa média do arquivo
+  const bytesPerS = s.length / lengthS;
+  return {
+    aheadS: bytesPerS > 0 ? s.ahead / bytesPerS : 0,
+    toEnd: pos * s.length + s.ahead >= s.length - 1,
+    peers: s.peers,
+    speed: s.downloadSpeed,
+  };
+}

@@ -11,6 +11,7 @@ import {
   type SubtitleOption,
 } from '../streams/subtitles';
 import type { AudioChoice } from '../streams/rank';
+import { torrentBuffer } from '../streams/torrent';
 import { Icon, type IconName } from './Icon';
 
 const HIDE_AFTER_MS = 4000;
@@ -28,6 +29,13 @@ const UPNEXT_S = 20;
 const SAVE_EVERY_MS = 5000;
 /** fonte que não começa a tocar nesse tempo é dada como ruim */
 const START_TIMEOUT_MS = 15000;
+/** torrent na primeira vez: 100% é ter esse tanto de vídeo pronto à frente */
+const TORRENT_START_S = 12;
+/** torrent travou tocando: pausa até juntar esse tanto à frente, para não travar de novo */
+const TORRENT_REBUFFER_S = 30;
+/** e não espera mais que isso: volta a tocar com o que tiver */
+const TORRENT_REBUFFER_MAX_MS = 45000;
+const TORRENT_POLL_MS = 1000;
 /** idioma da legenda dos atalhos ("… com legendas") */
 const PRESET_SUBTITLE: SubtitleLanguage = 'pt';
 
@@ -187,6 +195,8 @@ interface PlayerShellProps {
   startTimeout?: number;
   /** o vídeo passou a tocar (true) ou parou (false: pausa, fim) */
   onPlaying?: (playing: boolean) => void;
+  /** endereço do vídeo no motor de torrent: carregamento com porcentagem e folga maior quando trava */
+  torrentUrl?: string;
 }
 
 export function PlayerShell({
@@ -213,12 +223,17 @@ export function PlayerShell({
   burnedSubtitles,
   notice,
   startTimeout = START_TIMEOUT_MS,
+  torrentUrl,
 }: PlayerShellProps) {
   const [time, setTime] = useState(startAt);
   const [length, setLength] = useState(duration);
   const [playing, setPlaying] = useState(false);
   const [buffering, setBuffering] = useState(mode === 'video');
   const [failed, setFailed] = useState(false);
+  /** torrent travou: pausado juntando folga */
+  const [rebuffering, setRebuffering] = useState(false);
+  /** torrent abrindo: quanto da folga inicial já baixou (0–99) */
+  const [torrentPercent, setTorrentPercent] = useState<number | null>(null);
   /** o vídeo já mostrou imagem uma vez */
   const [started, setStarted] = useState(false);
   /** passada em andamento: de onde partiu e aonde vai (o vídeo ainda não pulou) */
@@ -258,6 +273,8 @@ export function PlayerShell({
   const lengthRef = useRef(length);
   const progressRef = useRef(onProgress);
   const failRef = useRef(onFail);
+  const torrentRef = useRef(torrentUrl);
+  torrentRef.current = torrentUrl;
   playingRef.current = playing;
   timeRef.current = time;
   lengthRef.current = length;
@@ -326,7 +343,40 @@ export function PlayerShell({
       if (!started && !media.paused && !media.seeking && step > 0.05 && step < 2) onReady();
       last = media.currentTime;
     };
+    // Torrent travou tocando: pausa até juntar folga, em vez de travar a cada pedaço.
+    let holding = false;
+    let holdTimer = 0;
+    const release = () => {
+      holding = false;
+      window.clearTimeout(holdTimer);
+      setRebuffering(false);
+    };
+    const hold = (url: string) => {
+      holding = true;
+      setRebuffering(true);
+      const since = Date.now();
+      media.pause();
+      const check = () => {
+        const lengthS = isFinite(media.duration) && media.duration > 0 ? media.duration : lengthRef.current;
+        torrentBuffer(url, media.currentTime, lengthS)
+          .catch(() => null)
+          .then((b) => {
+            if (!holding) return;
+            const enough = !b || b.toEnd || b.aheadS >= TORRENT_REBUFFER_S || Date.now() - since > TORRENT_REBUFFER_MAX_MS;
+            if (!enough) {
+              holdTimer = window.setTimeout(check, TORRENT_POLL_MS);
+              return;
+            }
+            release();
+            const resumed = media.play();
+            if (resumed && resumed.catch) resumed.catch(() => undefined);
+          });
+      };
+      check();
+    };
     const onPlay = () => {
+      // play apertado durante a espera: o espectador manda
+      if (holding) release();
       setPlaying(true);
       if (playingCb.current) playingCb.current(true);
       wake();
@@ -341,7 +391,11 @@ export function PlayerShell({
       if (playingCb.current) playingCb.current(false);
       goNext();
     };
-    const onWaiting = () => setBuffering(true);
+    const onWaiting = () => {
+      setBuffering(true);
+      const url = torrentRef.current;
+      if (started && url && !holding && !media.seeking && !media.paused) hold(url);
+    };
     const onReady = () => {
       if (!started && startRef.current) startRef.current();
       started = true;
@@ -367,6 +421,8 @@ export function PlayerShell({
 
     return () => {
       window.clearTimeout(startTimer);
+      holding = false;
+      window.clearTimeout(holdTimer);
       media.removeEventListener('loadedmetadata', onMeta);
       media.removeEventListener('durationchange', onMeta);
       media.removeEventListener('timeupdate', onTime);
@@ -381,6 +437,32 @@ export function PlayerShell({
     // startAt só vale para a abertura deste vídeo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, media, wake, goNext]);
+
+  // Torrent abrindo: a porcentagem é quanto da folga inicial já baixou.
+  useEffect(() => {
+    setTorrentPercent(null);
+    if (mode !== 'video' || !media || !torrentUrl || started) return;
+    let alive = true;
+    let timer = 0;
+    const poll = () => {
+      const lengthS = isFinite(media.duration) && media.duration > 0 ? media.duration : lengthRef.current;
+      const at = media.currentTime > 0 ? media.currentTime : startAt;
+      torrentBuffer(torrentUrl, at, lengthS)
+        .catch(() => null)
+        .then((b) => {
+          if (!alive) return;
+          if (b) setTorrentPercent(b.toEnd ? 99 : Math.min(99, Math.floor((b.aheadS / TORRENT_START_S) * 100)));
+          timer = window.setTimeout(poll, TORRENT_POLL_MS);
+        });
+    };
+    poll();
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+    // startAt só vale para a abertura deste vídeo
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, media, torrentUrl, started]);
 
   // TV desligada ou app em segundo plano sem fechar: guarda onde parou e, na
   // volta, continua tocando se estava tocando.
@@ -665,6 +747,18 @@ export function PlayerShell({
           <span>{caption}</span>
         </div>
       )}
+      {/* fora do shell: o carregamento aparece mesmo com os controles escondidos */}
+      {hasControls && (buffering || rebuffering) && !failed && feedback === null && (
+        <div className="shell__loading" aria-label="Carregando">
+          <div className="shell__spinner" />
+          {!started && torrentPercent !== null && (
+            <>
+              <div className="shell__loading-percent">{torrentPercent}%</div>
+              <p className="shell__loading-text">Torrent demora um pouquinho mais para começar. Já está baixando.</p>
+            </>
+          )}
+        </div>
+      )}
       <div
         className={`shell${visible || failed ? '' : ' is-hidden'}${seeking ? ' is-seeking' : ''}`}
       >
@@ -709,9 +803,6 @@ export function PlayerShell({
 
         {toast && <div className="shell__toast">{toast}</div>}
 
-        {hasControls && buffering && !failed && feedback === null && (
-          <div className="shell__spinner" aria-label="Carregando" />
-        )}
         {feedback !== null && (
           <div className={`shell__seek shell__seek--${feedback < 0 ? 'back' : 'forward'}`}>
             <Icon name={feedback < 0 ? 'rewind' : 'forward'} />
