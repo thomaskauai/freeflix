@@ -899,7 +899,7 @@ export function PlayerShell({
           {!started && torrentPercent !== null && (
             <>
               <div className="shell__loading-percent">{torrentPercent}%</div>
-              <p className="shell__loading-text">Buscando melhor qualidade via Torrent... Já vai começar.</p>
+              <p className="shell__loading-text">Buscando a melhor qualidade por Torrent...</p>
             </>
           )}
         </div>
