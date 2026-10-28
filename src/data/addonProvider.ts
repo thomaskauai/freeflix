@@ -82,7 +82,7 @@ function pickFeatured(trending: Title[], count: number, salt: string): Title[] {
     .map((t, rank) => {
       const rating = ratingOf(t);
       const quality = rating ? Math.min(1, Math.max(0, (rating - 5) / 4)) : 0.3;
-      return { t, weight: Math.pow(0.6 * (1 - rank / trending.length) + 0.4 * quality, 2) };
+      return { t, weight: 0.6 * (1 - rank / trending.length) + 0.4 * quality };
     })
     .filter(({ t }) => !!t.backdrop && !!t.synopsis && (!t.rating || ratingOf(t) >= FEATURED_MIN_RATING));
   const picked: { t: Title; weight: number }[] = [];
@@ -92,7 +92,8 @@ function pickFeatured(trending: Title[], count: number, salt: string): Title[] {
     while (i < pool.length - 1 && roll >= pool[i].weight) roll -= pool[i++].weight;
     picked.push(pool.splice(i, 1)[0]);
   }
-  return picked.sort((a, b) => b.weight - a.weight).map((p) => p.t);
+  // na ordem do sorteio: ordenar pelo peso deixava o 1º em alta sempre na frente
+  return picked.map((p) => p.t);
 }
 
 /** "109m", "45 min", "1h 30m" → minutos */
@@ -417,7 +418,7 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
 
   return {
     getFeatured() {
-      // dois filmes e duas séries em alta, intercalados, do mais forte para o mais fraco
+      // dois filmes e duas séries em alta, intercalados, na ordem do sorteio
       if (featuredAnimes !== getSettings().animes) {
         featured = null;
         featuredAnimes = getSettings().animes;
