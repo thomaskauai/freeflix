@@ -11,6 +11,8 @@ const SIMILAR_LIMIT = 12;
 const FEATURED_COUNT = 4;
 /** nota mínima para entrar nos destaques e na fileira de notas altas */
 const FEATURED_MIN_RATING = 6.5;
+/** a TV deixa o app aberto por dias: passado esse tempo, os destaques são sorteados de novo */
+const FEATURED_TTL_MS = 3 * 60 * 60 * 1000;
 const TOP_RATED_MIN = 7.5;
 const TOP_RATED_LIMIT = 24;
 /** listas que já vêm em ordem de "mais em alta" ou de data: começam na página 1 */
@@ -415,6 +417,9 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
   let featured: Promise<Title[]> | null = null;
   /** com ou sem animes: mudou a opção, os destaques são escolhidos de novo */
   let featuredAnimes = getSettings().animes;
+  /** quando saiu o sorteio atual e quantos já houve (entra na semente, para o novo sair diferente) */
+  let featuredAt = 0;
+  let featuredDraw = 0;
 
   return {
     getFeatured() {
@@ -423,12 +428,18 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
         featured = null;
         featuredAnimes = getSettings().animes;
       }
+      if (featured && Date.now() - featuredAt > FEATURED_TTL_MS) {
+        featured = null;
+        featuredDraw++;
+      }
       if (!featured) {
+        featuredAt = Date.now();
+        const draw = featuredDraw;
         featured = Promise.all(
           (['movie', 'series'] as TitleType[]).map((t) =>
             page(t, `trending-${plural(t)}`)
               .catch(() => [] as Title[])
-              .then((items) => pickFeatured(items, FEATURED_COUNT, `featured:${t}`)),
+              .then((items) => pickFeatured(items, FEATURED_COUNT, `featured:${t}:${draw}`)),
           ),
         ).then(([movies, series]) => {
           const half = FEATURED_COUNT / 2;

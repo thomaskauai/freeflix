@@ -27,6 +27,11 @@ interface EpisodeCard {
 }
 
 /** "T3:E8 · Faltam 12 min" (série) ou "Faltam 40 min" (filme). */
+/** mesmos títulos na mesma ordem */
+function sameIds(a: Title[], b: Title[]) {
+  return a.length === b.length && a.every((t, i) => t.id === b[i].id);
+}
+
 function remainingInfo(p: Progress): string {
   const left = Math.max(1, Math.round((p.duration - p.time) / 60));
   const when = isFinished(p) ? 'Assistido' : p.duration ? `Faltam ${left} min` : 'Continuar';
@@ -185,6 +190,26 @@ export default function Home() {
     );
     return () => {
       alive = false;
+    };
+  }, []);
+
+  // App aberto por dias na TV: ao voltar a ficar visível, os destaques podem ter sido sorteados de novo.
+  useEffect(() => {
+    let alive = true;
+    const refresh = () => {
+      if (document.hidden) return;
+      catalog.getFeatured().then(
+        (featured) => {
+          if (!alive || !featured.length) return;
+          setData((d) => (d && !sameIds(d.featured, featured) ? { ...d, featured } : d));
+        },
+        () => {},
+      );
+    };
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      alive = false;
+      document.removeEventListener('visibilitychange', refresh);
     };
   }, []);
 
