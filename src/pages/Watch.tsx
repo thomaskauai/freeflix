@@ -200,32 +200,27 @@ export default function Watch() {
   const videoKey = `video:${key}:${playingIndex}`;
   const media = mediaOf && mediaOf.key === videoKey ? mediaOf.el : null;
 
-  // O fundo da espera sai assim que o vídeo mostra imagem. Na TV o evento
-  // "playing" pode chegar bem depois das primeiras imagens (ou nem chegar, no
-  // vídeo pré-carregado); o tempo andando já basta. Sem isso o fundo ficava
-  // aparecendo nas faixas pretas de filmes mais largos que a tela. Primeira
-  // imagem já pintada (fora de um pulo) também basta: torrent mostra o quadro
-  // e demora a andar.
+  // O fundo da espera cobre o vídeo até ele andar de verdade. Na TV o evento
+  // "playing" pode chegar antes da imagem (ou nem chegar, no vídeo
+  // pré-carregado), e o primeiro quadro pintado ainda fica parado um tempo: só
+  // o tempo andando com o vídeo tocando conta. Pausa do espectador antes disso,
+  // com imagem pronta, também revela o quadro.
   useEffect(() => {
     setStarted(false);
     if (!media) return;
     let last = media.currentTime;
     const show = () => setStarted(true);
-    const painted = () => media.readyState >= 2 && !media.seeking && show();
-    painted();
-    const frameEvents = ['loadeddata', 'canplay', 'seeked'];
-    frameEvents.forEach((e) => media.addEventListener(e, painted));
     // pulo para onde o espectador parou também muda o tempo; só conta o vídeo andando
     const moved = () => {
       if (!media.paused && !media.seeking && media.currentTime > last + 0.05 && media.currentTime - last < 2) show();
       last = media.currentTime;
     };
-    media.addEventListener('playing', show);
+    const paused = () => media.readyState >= 2 && !media.seeking && show();
     media.addEventListener('timeupdate', moved);
+    media.addEventListener('pause', paused);
     return () => {
-      frameEvents.forEach((e) => media.removeEventListener(e, painted));
-      media.removeEventListener('playing', show);
       media.removeEventListener('timeupdate', moved);
+      media.removeEventListener('pause', paused);
     };
   }, [media]);
 
@@ -244,8 +239,9 @@ export default function Watch() {
   // carregamento. Antes dos detalhes completos chegarem, vale o que a lista já
   // sabia do título: o fundo não fica preto nem por um instante.
   const known = title ?? previewTitle(type, id);
-  const veil = known && !started && (!plan || plan.status === 'play') && (
-    <div className="player__veil">
+  // Fica montado depois de o vídeo andar, só some aos poucos.
+  const veil = known && (!plan || plan.status === 'play') && (
+    <div className={`player__veil${started ? ' is-gone' : ''}`}>
       <Backdrop title={known} shade={false} />
     </div>
   );
@@ -497,7 +493,6 @@ export default function Watch() {
 
   return (
     <div className="page player" data-focus-main="">
-      {veil}
       <VideoPlayer
         key={videoKey}
         url={candidate.url}
@@ -505,6 +500,8 @@ export default function Watch() {
         onMedia={(el) => setMediaOf((m) => (el ? { key: videoKey, el } : m && m.key === videoKey ? null : m))}
         onRelease={(video, detach) => parkVideo(title, season, episode, candidate.url, video, detach)}
       />
+      {/* por cima do vídeo e por baixo dos controles e do carregamento */}
+      {veil}
       <PlayerShell
         key={`shell:${key}:${plan.index}`}
         title={title.title}

@@ -1151,7 +1151,7 @@
   height: 100%;
 }
 
-/* sem fundo próprio: até a primeira imagem, o fundo esmaecido aparece por trás */
+/* o fundo esmaecido cobre o vídeo até ele andar */
 .player__video {
   object-fit: contain;
 }
@@ -1164,6 +1164,15 @@
   left: 0;
   width: 100%;
   height: 100%;
+  /* tapa o vídeo por completo, faixas pretas inclusive */
+  background: var(--black);
+  pointer-events: none;
+}
+
+/* some aos poucos quando o vídeo anda; volta de uma vez na troca de fonte */
+.player__veil.is-gone {
+  opacity: 0;
+  transition: opacity 400ms ease-out;
 }
 
 .player__veil .backdrop {
