@@ -232,7 +232,7 @@ export async function torrentCandidate(
         url,
         hls: false,
         label: TORRENT_LABEL,
-        profile: { base: 'torrent', label: TORRENT_LABEL, languages: t.languages, multiAudio: t.multiAudio },
+        profile: { base: 'torrent', label: TORRENT_LABEL, languages: t.languages, multiAudio: t.multiAudio, dualAudio: t.dualAudio },
         hardSubs: !!t.hardSubs,
         torrent: { infoHash: t.infoHash, seeds: t.seeds, resolution: t.resolution },
       };

@@ -23,7 +23,7 @@ import {
   resumePoint,
   type Plan,
 } from '../streams/playback';
-import { audioChoice, audioName, offersAudio, type AudioChoice } from '../streams/rank';
+import { audioChoice, audioName, effectiveLanguages, offersAudio, type AudioChoice, type SourceProfile } from '../streams/rank';
 import { getSettings } from '../settings';
 import type { NoSourceReason } from '../streams/resolve';
 
@@ -437,10 +437,10 @@ export default function Watch() {
   // seguinte. O áudio em uso se mantém: a próxima fonte é uma com ele; acabou a
   // lista e as outras fontes ainda vão chegar, espera por elas; nenhuma com ele,
   // tenta o torrent desse áudio e, por fim, pergunta se troca de áudio.
-  const sameAudio = (want: AudioChoice, s: { languages: string[]; multiAudio: boolean }) => {
+  const sameAudio = (want: AudioChoice, s: Pick<SourceProfile, 'languages' | 'multiAudio' | 'dualAudio'>) => {
     if (audioChoice(s, title.originalLanguage).key === want.key) return true;
     if (want.original) return offersAudio(s, { audio: 'original', originalLanguage: title.originalLanguage });
-    return !!want.lang && s.languages.indexOf(want.lang) >= 0;
+    return !!want.lang && effectiveLanguages(s, title.originalLanguage).indexOf(want.lang) >= 0;
   };
   const nextWith = (want: AudioChoice, list: typeof plan.candidates, from: number) => {
     for (let i = from + 1; i < list.length; i++) if (sameAudio(want, list[i].profile)) return i;

@@ -223,6 +223,22 @@ describe('audioChoice', () => {
     expect(audioChoice({ languages: ['pt', 'en'], multiAudio: true }, 'en').label).toBe('Dual: Português e Inglês');
     expect(audioChoice({ languages: [], multiAudio: false }).label).toBe('Original');
   });
+
+  it('"Dual Áudio" sem idiomas é português e o original, nunca "Dual áudio"', () => {
+    const dual = { languages: [], multiAudio: true, dualAudio: true };
+    expect(audioChoice(dual, 'en')).toMatchObject({ key: 'multi:en+pt', label: 'Dual: Português e Inglês' });
+    expect(audioChoice(dual).label).toBe('Dual: Português e original');
+    expect(audioChoice(dual, 'pt').label).toBe('Dual: Português e original');
+    expect(audioChoice({ languages: ['pt'], multiAudio: true, dualAudio: true }, 'en').key).toBe('multi:en+pt');
+    expect(audioChoice(parseStream(stream('1080p', 'Filme DUAL AUDIO'), 'T'), 'ja').label).toBe('Dual: Português e Japonês');
+  });
+
+  it('"multi" sem idiomas diz o original e outros idiomas', () => {
+    const multi = { languages: [], multiAudio: true };
+    expect(audioChoice(multi, 'en').label).toBe('Inglês e outros idiomas');
+    expect(audioChoice(multi).label).toBe('Original e outros idiomas');
+    expect(audioChoice(parseStream(stream('1080p', 'Filme MULTI'), 'T'), 'en').key).not.toBe('multi:en+pt');
+  });
 });
 
 describe('foreignOnly', () => {
@@ -277,6 +293,9 @@ describe('offersAudio', () => {
     expect(offersAudio(dub, { audio: 'en', originalLanguage: 'en' })).toBe(false);
     expect(offersAudio(dub, { audio: 'original', originalLanguage: 'en' })).toBe(false);
     expect(offersAudio(plain, { audio: 'original', originalLanguage: 'en' })).toBe(true);
+  });
+  it('"Dual Áudio" tem português', () => {
+    expect(offersAudio({ languages: [], multiAudio: true, dualAudio: true }, { audio: 'pt', originalLanguage: 'en' })).toBe(true);
   });
 });
 

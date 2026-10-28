@@ -55,6 +55,8 @@ export interface ParsedStream {
   languages: string[];
   /** "dual", "multi": traz mais de um áudio, em geral o original e uma dublagem */
   multiAudio: boolean;
+  /** "dual" de release brasileiro: português e o original */
+  dualAudio: boolean;
   codec: Codec;
   hdr: boolean;
   container: Container;
@@ -141,6 +143,9 @@ export function parseStream(stream: AddonStream, addon: string): ParsedStream {
   Object.keys(FLAGS).forEach((flag) => text.indexOf(flag) >= 0 && add(FLAGS[flag]));
   LANGUAGE_WORDS.forEach(([pattern, code]) => pattern.test(text) && add(code));
 
+  // "Dual Áudio", "Multi", "Multi-Lang". "Multi-Sub" é sobre legendas, não áudio.
+  const multiAudio = /\b(dual|multi)(?![- .]?subs?\b)([- .]?(audio|áudio|lang))?\b/i.test(text);
+
   let resolution = 0;
   for (const [pattern, height] of RESOLUTIONS) {
     if (pattern.test(text)) {
@@ -156,8 +161,8 @@ export function parseStream(stream: AddonStream, addon: string): ParsedStream {
     resolution,
     sizeBytes: sizeOf(text, hints.videoSize),
     languages,
-    // "Dual Áudio", "Multi", "Multi-Lang". "Multi-Sub" é sobre legendas, não áudio.
-    multiAudio: /\b(dual|multi)(?![- .]?subs?\b)([- .]?(audio|áudio|lang))?\b/i.test(text),
+    multiAudio,
+    dualAudio: multiAudio && /\bdual\b/i.test(text),
     codec: /\b(hevc|[hx][. ]?265)\b/i.test(text)
       ? 'hevc'
       : /\bav1\b/i.test(text)

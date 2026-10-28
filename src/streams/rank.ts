@@ -12,6 +12,21 @@ export interface SourceProfile {
   label: string;
   languages: string[];
   multiAudio: boolean;
+  dualAudio?: boolean;
+}
+
+/** O que a fonte diz do áudio. */
+type AudioInfo = { languages: string[]; multiAudio: boolean; dualAudio?: boolean };
+
+/**
+ * Idiomas da fonte, completando o que "dual"/"multi" deixa implícito: "Dual
+ * Áudio" de release brasileiro é português e o original; "multi" traz o original.
+ */
+export function effectiveLanguages(s: AudioInfo, originalLanguage?: string): string[] {
+  if (!s.multiAudio) return s.languages;
+  const languages = s.languages.length ? s.languages.slice() : s.dualAudio ? ['pt'] : [];
+  if (originalLanguage && languages.indexOf(originalLanguage) < 0) languages.push(originalLanguage);
+  return languages;
 }
 
 export interface RankContext {
@@ -65,15 +80,13 @@ export function hasOriginalAudio(s: ParsedStream, originalLanguage?: string): bo
  * marcado, ou o original quando o escolhido é o original (ou já é o idioma da
  * obra). "Multi" sem dizer quais não conta: no ranking é provável, aqui não basta.
  */
-export function offersAudio(
-  s: { languages: string[]; multiAudio: boolean },
-  ctx: Pick<RankContext, 'audio' | 'originalLanguage'>,
-): boolean {
+export function offersAudio(s: AudioInfo, ctx: Pick<RankContext, 'audio' | 'originalLanguage'>): boolean {
+  const languages = effectiveLanguages(s, ctx.originalLanguage);
   const tagged = s.languages.length > 0;
   const hasOriginal =
     !tagged || s.multiAudio || (!!ctx.originalLanguage && s.languages.indexOf(ctx.originalLanguage) >= 0);
   if (ctx.audio === 'original') return hasOriginal;
-  return s.languages.indexOf(ctx.audio) >= 0 || (ctx.originalLanguage === ctx.audio && hasOriginal);
+  return languages.indexOf(ctx.audio) >= 0 || (ctx.originalLanguage === ctx.audio && hasOriginal);
 }
 
 /**
@@ -86,7 +99,7 @@ function languageTier(s: ParsedStream, ctx: RankContext): number {
     !tagged || s.multiAudio || (!!ctx.originalLanguage && s.languages.indexOf(ctx.originalLanguage) >= 0);
 
   if (ctx.audio !== 'original') {
-    if (s.languages.indexOf(ctx.audio) >= 0) return 5;
+    if (effectiveLanguages(s, ctx.originalLanguage).indexOf(ctx.audio) >= 0) return 5;
     // "dual"/"multi" sem dizer quais idiomas: provável, não certo
     if (s.multiAudio && !tagged) return 4;
     // o preferido já é o idioma original da obra
@@ -304,11 +317,19 @@ function leadLanguage(languages: string[], originalLanguage?: string): string {
   return languages[0];
 }
 
-export function audioChoice(s: { languages: string[]; multiAudio: boolean }, originalLanguage?: string): AudioChoice {
+export function audioChoice(s: AudioInfo, originalLanguage?: string): AudioChoice {
   const sorted = s.languages.slice().sort().join('+');
   if (s.multiAudio) {
-    const named = languagesLabel(s.languages, originalLanguage);
-    return { key: `multi:${sorted}`, label: named ? `Dual: ${named}` : 'Dual áudio', original: false };
+    const languages = effectiveLanguages(s, originalLanguage);
+    const key = languages.slice().sort().join('+');
+    // "multi" sem dizer quais: só o original é certo
+    if (!s.languages.length && !s.dualAudio) {
+      const lead = originalLanguage ? audioName(originalLanguage) : 'Original';
+      return { key: `multi+:${key}`, label: `${lead} e outros idiomas`, original: false };
+    }
+    // o original sem nome: "Dual: Português e original"
+    const named = languages.length === 1 ? `${audioName(languages[0])} e original` : languagesLabel(languages, originalLanguage);
+    return { key: `multi:${key}`, label: `Dual: ${named}`, original: false };
   }
   if (!s.languages.length || (!!originalLanguage && s.languages.length === 1 && s.languages[0] === originalLanguage)) {
     const lang = originalLanguage;

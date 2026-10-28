@@ -124,7 +124,7 @@ export async function resolvePlayback(
       url: s.url as string,
       hls: s.container === 'hls',
       label,
-      profile: { base: s.base ?? '', label, languages: s.languages, multiAudio: s.multiAudio },
+      profile: { base: s.base ?? '', label, languages: s.languages, multiAudio: s.multiAudio, dualAudio: s.dualAudio },
       hardSubs: !!s.hardSubs,
     };
   };
