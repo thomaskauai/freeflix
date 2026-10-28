@@ -257,6 +257,8 @@ export async function torrentBuffer(url: string, atS: number, lengthS: number): 
     `${url}/stats.json?pos=${pos.toFixed(6)}`,
     4000,
   );
+  // motor de versão antiga não diz o que tem à frente
+  if (typeof s.ahead !== 'number' || !(s.length > 0)) return null;
   // bytes viram segundos pela taxa média do arquivo
   const bytesPerS = s.length / lengthS;
   return {
