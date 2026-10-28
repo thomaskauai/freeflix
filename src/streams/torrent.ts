@@ -244,6 +244,8 @@ export interface TorrentBuffer {
   aheadS: number;
   /** o arquivo está pronto até o fim a partir do ponto */
   toEnd: boolean;
+  /** tudo o que o motor já baixou deste torrent, em segundos de vídeo (mostra que está andando) */
+  downloadedS: number;
   peers: number;
   /** bytes por segundo */
   speed: number;
@@ -253,7 +255,7 @@ export interface TorrentBuffer {
 export async function torrentBuffer(url: string, atS: number, lengthS: number): Promise<TorrentBuffer | null> {
   if (!hashOf(url) || !(lengthS > 0)) return null;
   const pos = Math.max(0, Math.min(1, atS / lengthS));
-  const s = await getJson<{ ahead: number; peers: number; downloadSpeed: number; length: number }>(
+  const s = await getJson<{ ahead: number; downloaded: number; peers: number; downloadSpeed: number; length: number }>(
     `${url}/stats.json?pos=${pos.toFixed(6)}`,
     4000,
   );
@@ -264,6 +266,7 @@ export async function torrentBuffer(url: string, atS: number, lengthS: number): 
   return {
     aheadS: bytesPerS > 0 ? s.ahead / bytesPerS : 0,
     toEnd: pos * s.length + s.ahead >= s.length - 1,
+    downloadedS: bytesPerS > 0 ? (s.downloaded || 0) / bytesPerS : 0,
     peers: s.peers,
     speed: s.downloadSpeed,
   };

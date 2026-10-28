@@ -41,6 +41,19 @@ const TORRENT_POLL_MS = 1000;
  * (conexão com o motor caiu, arquivo que o aparelho não decodifica).
  */
 const TORRENT_DECODE_MS = 15000;
+/**
+ * Segundos que o próprio <video> já tem à frente. Mais certo que a conta do
+ * motor, que acha o byte do ponto pela taxa média e erra no meio do arquivo.
+ */
+function bufferedAhead(media: HTMLVideoElement): number {
+  const t = media.currentTime;
+  const ranges = media.buffered;
+  for (let i = 0; i < ranges.length; i++) {
+    if (ranges.start(i) <= t + 0.5 && ranges.end(i) >= t) return ranges.end(i) - t;
+  }
+  return 0;
+}
+
 /** idioma da legenda dos atalhos ("… com legendas") */
 const PRESET_SUBTITLE: SubtitleLanguage = 'pt';
 
@@ -367,7 +380,9 @@ export function PlayerShell({
           .catch(() => null)
           .then((b) => {
             if (!holding) return;
-            const enough = !b || b.toEnd || b.aheadS >= TORRENT_REBUFFER_S || Date.now() - since > TORRENT_REBUFFER_MAX_MS;
+            const ahead = Math.max(b ? b.aheadS : 0, bufferedAhead(media));
+            const enough =
+              !b || b.toEnd || ahead >= TORRENT_REBUFFER_S || Date.now() - since > TORRENT_REBUFFER_MAX_MS;
             if (!enough) {
               holdTimer = window.setTimeout(check, TORRENT_POLL_MS);
               return;
@@ -458,8 +473,12 @@ export function PlayerShell({
         .catch(() => null)
         .then((b) => {
           if (!alive) return;
-          if (b) setTorrentPercent(b.toEnd ? 99 : Math.min(99, Math.floor((b.aheadS / TORRENT_START_S) * 100)));
-          const full = !!b && (b.toEnd || b.aheadS >= TORRENT_START_S);
+          const ahead = Math.max(b ? b.aheadS : 0, bufferedAhead(media));
+          // o que está pronto no ponto, ou o que já baixou no total (cabeçalho, índice,
+          // pedaços fora de ordem): a porcentagem anda sempre que o download anda
+          const done = b ? Math.max(ahead / TORRENT_START_S, b.downloadedS / (TORRENT_START_S * 2)) : 0;
+          if (b) setTorrentPercent(b.toEnd ? 99 : Math.min(99, Math.floor(done * 100)));
+          const full = !!b && (b.toEnd || ahead >= TORRENT_START_S);
           if (full && !fullAt) fullAt = Date.now();
           // mesmo caminho de um erro do <video>: o player passa para a próxima fonte
           if (fullAt && media.readyState < 2 && Date.now() - fullAt > TORRENT_DECODE_MS) {
