@@ -156,7 +156,9 @@ function presetsFor(audios: AudioChoice[], current: number, subtitles: SubtitleO
   const list: Preset[] = [];
   const add = (audio: number, subtitle: boolean) => {
     if (audio < 0 || (subtitle && !withSubs)) return;
-    const label = audios[audio] ? audios[audio].label : 'Sem legendas';
+    // o atalho diz só o idioma principal; a lista inteira ("e mais 5 idiomas") fica no menu de fontes
+    const a = audios[audio];
+    const label = !a ? 'Sem legendas' : a.lang ? `${audioName(a.lang)}${a.original ? ' [original]' : ''}` : a.label;
     list.push({
       audio,
       subtitle: subtitle ? PRESET_SUBTITLE : null,
