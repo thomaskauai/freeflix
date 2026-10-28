@@ -374,3 +374,13 @@ describe('rankTorrents', () => {
   });
 });
 
+
+describe('audioChoice com muitos idiomas', () => {
+  it('mostra o português na frente e conta o resto', () => {
+    const choice = audioChoice({ languages: ['en', 'pt', 'es', 'fr', 'de', 'it'], multiAudio: false }, 'en');
+    expect(choice.label).toBe('Português e mais 5 idiomas');
+  });
+  it('dois idiomas seguem por extenso', () => {
+    expect(audioChoice({ languages: ['pt', 'en'], multiAudio: true }, 'en').label).toBe('Dual: Português e Inglês');
+  });
+});

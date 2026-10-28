@@ -1,5 +1,5 @@
-import type { AudioLanguage } from '../settings';
-import type { ParsedStream } from './parse';
+import type { AudioLanguage } from "../settings";
+import type { ParsedStream } from "./parse";
 
 /**
  * A fonte que tocou num episódio, para o próximo começar igual: mesmo addon,
@@ -23,7 +23,7 @@ export interface RankContext {
   /** duração em minutos, para estimar o bitrate a partir do tamanho */
   runtime?: number;
   /** o aparelho declara suporte? (injetável para teste) */
-  canPlay: (what: 'hevc' | 'av1' | 'mkv') => boolean;
+  canPlay: (what: "hevc" | "av1" | "mkv") => boolean;
   /** fonte escolhida no episódio anterior: vale mais que qualquer outro critério */
   prefer?: SourceProfile;
 }
@@ -54,10 +54,17 @@ function fitsNetwork(s: ParsedStream, ctx: RankContext): boolean {
  * apenas com o idioma original da obra. "Dual"/"multi" não conta: ali o
  * original divide espaço com uma dublagem, e qual toca primeiro varia.
  */
-export function hasOriginalAudio(s: ParsedStream, originalLanguage?: string): boolean {
+export function hasOriginalAudio(
+  s: ParsedStream,
+  originalLanguage?: string,
+): boolean {
   if (s.multiAudio) return false;
   if (s.languages.length === 0) return true;
-  return !!originalLanguage && s.languages.length === 1 && s.languages[0] === originalLanguage;
+  return (
+    !!originalLanguage &&
+    s.languages.length === 1 &&
+    s.languages[0] === originalLanguage
+  );
 }
 
 /**
@@ -67,13 +74,18 @@ export function hasOriginalAudio(s: ParsedStream, originalLanguage?: string): bo
  */
 export function offersAudio(
   s: { languages: string[]; multiAudio: boolean },
-  ctx: Pick<RankContext, 'audio' | 'originalLanguage'>,
+  ctx: Pick<RankContext, "audio" | "originalLanguage">,
 ): boolean {
   const tagged = s.languages.length > 0;
   const hasOriginal =
-    !tagged || s.multiAudio || (!!ctx.originalLanguage && s.languages.indexOf(ctx.originalLanguage) >= 0);
-  if (ctx.audio === 'original') return hasOriginal;
-  return s.languages.indexOf(ctx.audio) >= 0 || (ctx.originalLanguage === ctx.audio && hasOriginal);
+    !tagged ||
+    s.multiAudio ||
+    (!!ctx.originalLanguage && s.languages.indexOf(ctx.originalLanguage) >= 0);
+  if (ctx.audio === "original") return hasOriginal;
+  return (
+    s.languages.indexOf(ctx.audio) >= 0 ||
+    (ctx.originalLanguage === ctx.audio && hasOriginal)
+  );
 }
 
 /**
@@ -83,9 +95,11 @@ export function offersAudio(
 function languageTier(s: ParsedStream, ctx: RankContext): number {
   const tagged = s.languages.length > 0;
   const hasOriginal =
-    !tagged || s.multiAudio || (!!ctx.originalLanguage && s.languages.indexOf(ctx.originalLanguage) >= 0);
+    !tagged ||
+    s.multiAudio ||
+    (!!ctx.originalLanguage && s.languages.indexOf(ctx.originalLanguage) >= 0);
 
-  if (ctx.audio !== 'original') {
+  if (ctx.audio !== "original") {
     if (s.languages.indexOf(ctx.audio) >= 0) return 5;
     // "dual"/"multi" sem dizer quais idiomas: provável, não certo
     if (s.multiAudio && !tagged) return 4;
@@ -93,7 +107,7 @@ function languageTier(s: ParsedStream, ctx: RankContext): number {
     if (ctx.originalLanguage === ctx.audio && hasOriginal) return 5;
   }
   if (hasOriginal) return 3;
-  if (s.languages.indexOf('en') >= 0) return 2;
+  if (s.languages.indexOf("en") >= 0) return 2;
   return 1;
 }
 
@@ -101,16 +115,20 @@ function languageTier(s: ParsedStream, ctx: RankContext): number {
  * Áudio que ninguém aqui pediu: dublagem só em outro idioma (russo, francês…),
  * sem português, inglês, o original da obra ou o preferido.
  */
-export function foreignOnly(s: ParsedStream, ctx: Pick<RankContext, 'audio' | 'originalLanguage'>): boolean {
+export function foreignOnly(
+  s: ParsedStream,
+  ctx: Pick<RankContext, "audio" | "originalLanguage">,
+): boolean {
   if (s.multiAudio || s.languages.length === 0) return false;
-  const wanted = ['pt', 'en'];
+  const wanted = ["pt", "en"];
   if (ctx.originalLanguage) wanted.push(ctx.originalLanguage);
-  if (ctx.audio !== 'original') wanted.push(ctx.audio);
+  if (ctx.audio !== "original") wanted.push(ctx.audio);
   return !s.languages.some((l) => wanted.indexOf(l) >= 0);
 }
 
 const sameAudio = (s: ParsedStream, p: SourceProfile) =>
-  s.multiAudio === p.multiAudio && s.languages.slice().sort().join() === p.languages.slice().sort().join();
+  s.multiAudio === p.multiAudio &&
+  s.languages.slice().sort().join() === p.languages.slice().sort().join();
 
 /** Quanto a fonte lembra a escolhida antes: mesma opção do mesmo addon, mesmo áudio no mesmo addon, mesmo áudio. */
 function preferenceTier(s: ParsedStream, p?: SourceProfile): number {
@@ -127,11 +145,14 @@ function preferenceTier(s: ParsedStream, p?: SourceProfile): number {
  */
 const LAST_RESORT = /fenixflix/i;
 function lastResortTier(s: ParsedStream, ctx: RankContext): number {
-  return ctx.audio !== 'pt' && LAST_RESORT.test(`${s.base ?? ''} ${s.addon}`) ? 0 : 1;
+  return ctx.audio !== "pt" && LAST_RESORT.test(`${s.base ?? ""} ${s.addon}`)
+    ? 0
+    : 1;
 }
 
 /** Legenda gravada fica atrás das limpas, fora do português (a do app ficaria por cima). */
-const cleanTier = (s: ParsedStream, ctx: RankContext) => (ctx.audio !== 'pt' && s.hardSubs ? 0 : 1);
+const cleanTier = (s: ParsedStream, ctx: RankContext) =>
+  ctx.audio !== "pt" && s.hardSubs ? 0 : 1;
 
 /** 1080p é o alvo; acima dele só quando é o que há. */
 function resolutionTier(resolution: number): number {
@@ -146,10 +167,11 @@ function resolutionTier(resolution: number): number {
 
 function compatTier(s: ParsedStream, ctx: RankContext): number {
   let tier = 3;
-  if (s.codec === 'hevc' && !ctx.canPlay('hevc')) tier -= 2;
-  if (s.codec === 'av1' && !ctx.canPlay('av1')) tier -= 2;
+  if (s.codec === "hevc" && !ctx.canPlay("hevc")) tier -= 2;
+  if (s.codec === "av1" && !ctx.canPlay("av1")) tier -= 2;
   if (s.hdr) tier -= 1;
-  if ((s.container === 'mkv' && !ctx.canPlay('mkv')) || s.notWebReady) tier -= 1;
+  if ((s.container === "mkv" && !ctx.canPlay("mkv")) || s.notWebReady)
+    tier -= 1;
   return tier;
 }
 
@@ -160,7 +182,10 @@ function compatTier(s: ParsedStream, ctx: RankContext): number {
  * total mantém a ordem de chegada. Assim, no idioma preferido, a fonte 1 ganha
  * da 2; a 2 só entra quando a 1 não tem o idioma.
  */
-export function rankStreams(streams: ParsedStream[], ctx: RankContext): ParsedStream[] {
+export function rankStreams(
+  streams: ParsedStream[],
+  ctx: RankContext,
+): ParsedStream[] {
   const key = (s: ParsedStream) => {
     const fits = fitsNetwork(s, ctx);
     return [
@@ -209,11 +234,16 @@ const TORRENT_MAX_MBPS = 8;
  * (1080p é o alvo), no idioma preferido, com seeds suficientes e, entre
  * esses, o que tem mais seeds. Gravação de cinema e o que não toca ficam fora.
  */
-export function rankTorrents(list: TorrentStream[], ctx: RankContext): TorrentStream[] {
+export function rankTorrents(
+  list: TorrentStream[],
+  ctx: RankContext,
+): TorrentStream[] {
   // resolução pela banda medida; tamanho pelo que um torrent costuma baixar
   const swarm = { ...ctx, mbps: Math.min(ctx.mbps, TORRENT_MAX_MBPS) };
   const key = (s: TorrentStream) => {
-    const fits = s.resolution <= resolutionCap(ctx.mbps) && fitsNetwork({ ...s, resolution: 0 }, swarm);
+    const fits =
+      s.resolution <= resolutionCap(ctx.mbps) &&
+      fitsNetwork({ ...s, resolution: 0 }, swarm);
     return [
       compatTier(s, ctx),
       fits ? 1 : 0,
@@ -236,46 +266,48 @@ export function rankTorrents(list: TorrentStream[], ctx: RankContext): TorrentSt
 }
 
 const LANGUAGE_LABELS: Record<string, string> = {
-  pt: 'português',
-  en: 'inglês',
-  es: 'espanhol',
-  fr: 'francês',
-  de: 'alemão',
-  it: 'italiano',
-  ja: 'japonês',
-  ko: 'coreano',
-  ru: 'russo',
+  pt: "português",
+  en: "inglês",
+  es: "espanhol",
+  fr: "francês",
+  de: "alemão",
+  it: "italiano",
+  ja: "japonês",
+  ko: "coreano",
+  ru: "russo",
 };
 
 /** Resumo de uma linha da fonte em uso, para o espectador. */
 export function describeStream(s: ParsedStream): string {
   const parts: string[] = [];
-  if (s.resolution) parts.push(s.resolution >= 2160 ? '4K' : `${s.resolution}p`);
-  const named = s.languages.map((l) => LANGUAGE_LABELS[l] ?? l).join(' e ');
+  if (s.resolution)
+    parts.push(s.resolution >= 2160 ? "4K" : `${s.resolution}p`);
+  const named = s.languages.map((l) => LANGUAGE_LABELS[l] ?? l).join(" e ");
   // "dual"/"multi": a fonte diz que há mais de um áudio; os idiomas, só se ela citar
-  if (s.multiAudio) parts.push(named ? `dual: ${named}` : 'mais de um áudio');
+  if (s.multiAudio) parts.push(named ? `dual: ${named}` : "mais de um áudio");
   else if (named) parts.push(named);
-  else parts.push('áudio original');
+  else parts.push("áudio original");
   parts.push(s.addon);
-  return parts.join(', ');
+  return parts.join(", ");
 }
 
 const AUDIO_NAMES: Record<string, string> = {
-  pt: 'Português',
-  en: 'Inglês',
-  es: 'Espanhol',
-  fr: 'Francês',
-  it: 'Italiano',
-  de: 'Alemão',
-  ja: 'Japonês',
-  ko: 'Coreano',
-  zh: 'Chinês',
-  hi: 'Hindi',
-  ru: 'Russo',
-  tr: 'Turco',
+  pt: "Português",
+  en: "Inglês",
+  es: "Espanhol",
+  fr: "Francês",
+  it: "Italiano",
+  de: "Alemão",
+  ja: "Japonês",
+  ko: "Coreano",
+  zh: "Chinês",
+  hi: "Hindi",
+  ru: "Russo",
+  tr: "Turco",
 };
 
-export const audioName = (code: string) => AUDIO_NAMES[code] ?? code.toUpperCase();
+export const audioName = (code: string) =>
+  AUDIO_NAMES[code] ?? code.toUpperCase();
 
 /** Um áudio que dá para escolher no player: fontes com o mesmo áudio viram uma opção só. */
 export interface AudioChoice {
@@ -288,15 +320,55 @@ export interface AudioChoice {
 }
 
 /** O áudio de uma fonte, como a Netflix mostra: "Português", "Inglês [original]", "Dual: …". */
-export function audioChoice(s: { languages: string[]; multiAudio: boolean }, originalLanguage?: string): AudioChoice {
-  const sorted = s.languages.slice().sort().join('+');
+/**
+ * Nome curto de uma lista de idiomas: até dois por extenso; mais que isso
+ * (pacotes com seis áudios), português ou o original na frente e "e mais N".
+ */
+function languagesLabel(
+  languages: string[],
+  originalLanguage?: string,
+): string {
+  if (languages.length <= 2) return languages.map(audioName).join(" e ");
+  const lead =
+    languages.indexOf("pt") >= 0
+      ? "pt"
+      : originalLanguage && languages.indexOf(originalLanguage) >= 0
+        ? originalLanguage
+        : languages[0];
+  return `${audioName(lead)} e mais ${languages.length - 1} idiomas`;
+}
+
+export function audioChoice(
+  s: { languages: string[]; multiAudio: boolean },
+  originalLanguage?: string,
+): AudioChoice {
+  const sorted = s.languages.slice().sort().join("+");
   if (s.multiAudio) {
-    const named = s.languages.map(audioName).join(' e ');
-    return { key: `multi:${sorted}`, label: named ? `Dual: ${named}` : 'Dual áudio', original: false };
+    const named = languagesLabel(s.languages, originalLanguage);
+    return {
+      key: `multi:${sorted}`,
+      label: named ? `Dual: ${named}` : "Dual áudio",
+      original: false,
+    };
   }
-  if (!s.languages.length || (!!originalLanguage && s.languages.length === 1 && s.languages[0] === originalLanguage)) {
+  if (
+    !s.languages.length ||
+    (!!originalLanguage &&
+      s.languages.length === 1 &&
+      s.languages[0] === originalLanguage)
+  ) {
     const lang = originalLanguage;
-    return { key: 'original', label: lang ? `${audioName(lang)} [original]` : 'Original', lang, original: true };
+    return {
+      key: "original",
+      label: lang ? `${audioName(lang)} [original]` : "Original",
+      lang,
+      original: true,
+    };
   }
-  return { key: sorted, label: s.languages.map(audioName).join(' e '), lang: s.languages[0], original: false };
+  return {
+    key: sorted,
+    label: languagesLabel(s.languages, originalLanguage),
+    lang: s.languages[0],
+    original: false,
+  };
 }
