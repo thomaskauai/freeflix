@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "postinstall": "node patch-torrent-stream.js"
   },
   "dependencies": {
     "torrent-stream": "1.2.1"

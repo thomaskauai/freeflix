@@ -288,15 +288,36 @@ export interface AudioChoice {
 }
 
 /** O áudio de uma fonte, como a Netflix mostra: "Português", "Inglês [original]", "Dual: …". */
+/**
+ * Nome curto de uma lista de idiomas: até dois por extenso; mais que isso
+ * (pacotes com seis áudios), português ou o original na frente e "e mais N".
+ */
+function languagesLabel(languages: string[], originalLanguage?: string): string {
+  if (languages.length <= 2) return languages.map(audioName).join(' e ');
+  return `${audioName(leadLanguage(languages, originalLanguage))} e mais ${languages.length - 1} idiomas`;
+}
+
+/** O idioma que representa a lista: português, senão o original, senão o primeiro. */
+function leadLanguage(languages: string[], originalLanguage?: string): string {
+  if (languages.indexOf('pt') >= 0) return 'pt';
+  if (originalLanguage && languages.indexOf(originalLanguage) >= 0) return originalLanguage;
+  return languages[0];
+}
+
 export function audioChoice(s: { languages: string[]; multiAudio: boolean }, originalLanguage?: string): AudioChoice {
   const sorted = s.languages.slice().sort().join('+');
   if (s.multiAudio) {
-    const named = s.languages.map(audioName).join(' e ');
+    const named = languagesLabel(s.languages, originalLanguage);
     return { key: `multi:${sorted}`, label: named ? `Dual: ${named}` : 'Dual áudio', original: false };
   }
   if (!s.languages.length || (!!originalLanguage && s.languages.length === 1 && s.languages[0] === originalLanguage)) {
     const lang = originalLanguage;
     return { key: 'original', label: lang ? `${audioName(lang)} [original]` : 'Original', lang, original: true };
   }
-  return { key: sorted, label: s.languages.map(audioName).join(' e '), lang: s.languages[0], original: false };
+  return {
+    key: sorted,
+    label: languagesLabel(s.languages, originalLanguage),
+    lang: leadLanguage(s.languages, originalLanguage),
+    original: false,
+  };
 }

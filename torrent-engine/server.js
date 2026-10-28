@@ -9,8 +9,8 @@
  *
  *   GET /health                         -> { ok, engines }
  *   GET /<hash>/create?tr=..&s=1&e=2    -> abre o torrent; { infoHash, name, files, fileIdx }
- *   GET /<hash>/<idx>                   -> o arquivo, com Range
- *   GET /<hash>/<idx>/stats.json        -> peers, velocidade, quanto baixou
+ *   GET /<hash>/<idx>                   -> o arquivo, com Range (torrent removido reabre)
+ *   GET /<hash>/<idx>/stats.json?pos=F  -> peers, velocidade, quanto baixou; ahead: bytes prontos em sequência a partir da fração F do arquivo
  *   GET /<hash>/remove                  -> para e apaga o que baixou
  *   GET /removeAll
  *   GET /streaming-br?imdb=tt..&q=nome&type=movie|series -> { streaming: true|false|null }
@@ -35,6 +35,8 @@ var STORE = process.env.TORRENT_DIR || path.join(os.tmpdir(), 'freeflix-torrents
 var METADATA_TIMEOUT_MS = 30000;
 /** torrent sem pedido nenhum por esse tempo é parado e apagado */
 var IDLE_MS = 10 * 60 * 1000;
+/** à frente de onde o player lê, isso baixa com prioridade máxima (trava menos em rede fraca) */
+var CRITICAL_BYTES = 8 * 1024 * 1024;
 /** torrents abertos ao mesmo tempo; o mais antigo sai (espaço da TV) */
 var MAX_ENGINES = 2;
 
@@ -66,6 +68,8 @@ var MIME = {
 
 /** hash -> { engine, ready, lastUsed, error } */
 var engines = {};
+/** hash -> trackers com que foi aberto: o app solta o torrent ao sair dos detalhes, e o endereço antigo reabre com eles */
+var known = {};
 
 function now() {
   return Date.now();
@@ -121,6 +125,7 @@ function remove(hash) {
 /** Abre (ou reaproveita) o torrent; chama back(err, entry) quando a lista de arquivos chega. */
 function open(hash, trackers, back) {
   var entry = engines[hash];
+  known[hash] = trackers;
   if (!entry) {
     // espaço da TV: o torrent mais antigo sai
     var hashes = Object.keys(engines).sort(function (a, b) {
@@ -202,11 +207,24 @@ function fileList(engine) {
   });
 }
 
-function stats(entry, idx) {
+/** Bytes do arquivo já baixados sem buraco a partir de `at`. */
+function aheadOf(engine, file, at) {
+  if (!file || !engine.bitfield || !engine.torrent) return 0;
+  var pieceLength = engine.torrent.pieceLength;
+  var start = file.offset + Math.max(0, Math.min(at, file.length));
+  var end = file.offset + file.length;
+  var piece = (start / pieceLength) | 0;
+  var last = ((end - 1) / pieceLength) | 0;
+  while (piece <= last && engine.bitfield.get(piece)) piece++;
+  return Math.max(0, Math.min(end, piece * pieceLength) - start);
+}
+
+function stats(entry, idx, pos) {
   var engine = entry.engine;
   var swarm = engine.swarm;
   var file = engine.files[idx];
   return {
+    ahead: aheadOf(engine, file, file ? Math.floor(Math.max(0, Math.min(1, pos || 0)) * file.length) : 0),
     name: engine.torrent ? engine.torrent.name : null,
     file: file ? file.name : null,
     length: file ? file.length : 0,
@@ -262,6 +280,9 @@ function serveFile(req, res, entry, idx) {
   for (k in headers) h[k] = headers[k];
   res.writeHead(status, h);
   var stream = file.createReadStream({ start: start, end: end });
+  // o torrent-stream só prioriza 1 MB à frente; com mais, um peer lento não trava o vídeo
+  var pieceLength = entry.engine.torrent.pieceLength;
+  stream._critical = Math.max(stream._critical || 0, Math.ceil(CRITICAL_BYTES / pieceLength));
   stream.pipe(res);
   var stop = function () {
     try {
@@ -395,11 +416,19 @@ function handle(req, res) {
   }
 
   var idx = Number(parts[1]);
+  if (isNaN(idx)) return send(res, 404, { error: 'not-open' });
+  var serve = function (entry) {
+    entry.lastUsed = now();
+    if (parts[2] === 'stats.json') return send(res, 200, stats(entry, idx, Number(query.pos) || 0));
+    return serveFile(req, res, entry, idx);
+  };
   var entry = engines[hash];
-  if (!entry || !entry.ready || isNaN(idx)) return send(res, 404, { error: 'not-open' });
-  entry.lastUsed = now();
-  if (parts[2] === 'stats.json') return send(res, 200, stats(entry, idx));
-  return serveFile(req, res, entry, idx);
+  if (entry && entry.ready) return serve(entry);
+  // removido (o app solta ao sair dos detalhes) ou ainda abrindo: abre e serve
+  return open(hash, known[hash] || trackersFrom({}), function (err, opened) {
+    if (err) return send(res, 504, { error: String(err.message || err) });
+    serve(opened);
+  });
 }
 
 // torrent parado há muito tempo sai (TV com pouco espaço)

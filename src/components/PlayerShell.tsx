@@ -10,7 +10,8 @@ import {
   type SubtitleLanguage,
   type SubtitleOption,
 } from '../streams/subtitles';
-import type { AudioChoice } from '../streams/rank';
+import { audioName, type AudioChoice } from '../streams/rank';
+import { torrentBuffer } from '../streams/torrent';
 import { Icon, type IconName } from './Icon';
 
 const HIDE_AFTER_MS = 4000;
@@ -28,6 +29,57 @@ const UPNEXT_S = 20;
 const SAVE_EVERY_MS = 5000;
 /** fonte que não começa a tocar nesse tempo é dada como ruim */
 const START_TIMEOUT_MS = 15000;
+/** torrent na primeira vez: 100% é ter esse tanto de vídeo pronto à frente */
+const TORRENT_START_S = 12;
+/** torrent travou tocando: pausa até juntar esse tanto à frente, para não travar de novo */
+const TORRENT_REBUFFER_S = 15;
+/** e não espera mais que isso: volta a tocar com o que tiver */
+const TORRENT_REBUFFER_MAX_MS = 20000;
+const TORRENT_POLL_MS = 1000;
+/**
+ * Começo já baixado e nada de imagem depois disso: o <video> parou sem erro
+ * (conexão com o motor caiu, arquivo que o aparelho não decodifica).
+ */
+const TORRENT_DECODE_MS = 15000;
+/**
+ * Segundos que o próprio <video> já tem à frente. Mais certo que a conta do
+ * motor, que acha o byte do ponto pela taxa média e erra no meio do arquivo.
+ */
+function bufferedAhead(media: HTMLVideoElement): number {
+  const t = media.currentTime;
+  const ranges = media.buffered;
+  for (let i = 0; i < ranges.length; i++) {
+    if (ranges.start(i) <= t + 0.5 && ranges.end(i) >= t) return ranges.end(i) - t;
+  }
+  return 0;
+}
+
+/** Faixa de áudio dentro do arquivo (audioTracks: TV Samsung, Safari; o Chrome não tem). */
+interface FileAudioTrack {
+  id: string;
+  label: string;
+  language: string;
+  enabled: boolean;
+}
+interface FileAudioTrackList {
+  length: number;
+  [index: number]: FileAudioTrack;
+  addEventListener(type: string, listener: () => void): void;
+  removeEventListener(type: string, listener: () => void): void;
+}
+const audioTracksOf = (media: HTMLVideoElement) =>
+  (media as unknown as { audioTracks?: FileAudioTrackList }).audioTracks;
+
+/** idioma das faixas do arquivo (ISO 639-2, "por", "eng") no código do app ("pt", "en") */
+const ISO3: Record<string, string> = {
+  por: 'pt', eng: 'en', spa: 'es', fre: 'fr', fra: 'fr', ita: 'it', ger: 'de', deu: 'de',
+  jpn: 'ja', kor: 'ko', chi: 'zh', zho: 'zh', hin: 'hi', rus: 'ru', tur: 'tr',
+};
+function trackLanguage(language: string): string {
+  const code = (language || '').toLowerCase().split('-')[0];
+  return ISO3[code] ?? (code.length === 2 ? code : '');
+}
+
 /** idioma da legenda dos atalhos ("… com legendas") */
 const PRESET_SUBTITLE: SubtitleLanguage = 'pt';
 
@@ -104,7 +156,9 @@ function presetsFor(audios: AudioChoice[], current: number, subtitles: SubtitleO
   const list: Preset[] = [];
   const add = (audio: number, subtitle: boolean) => {
     if (audio < 0 || (subtitle && !withSubs)) return;
-    const label = audios[audio] ? audios[audio].label : 'Sem legendas';
+    // o atalho diz só o idioma principal; a lista inteira ("e mais 5 idiomas") fica no menu de fontes
+    const a = audios[audio];
+    const label = !a ? 'Sem legendas' : a.lang ? `${audioName(a.lang)}${a.original ? ' [original]' : ''}` : a.label;
     list.push({
       audio,
       subtitle: subtitle ? PRESET_SUBTITLE : null,
@@ -187,6 +241,12 @@ interface PlayerShellProps {
   startTimeout?: number;
   /** o vídeo passou a tocar (true) ou parou (false: pausa, fim) */
   onPlaying?: (playing: boolean) => void;
+  /** endereço do vídeo no motor de torrent: carregamento com porcentagem e folga maior quando trava */
+  torrentUrl?: string;
+  /** idioma original da obra, para marcar a faixa "[original]" do arquivo */
+  originalLanguage?: string;
+  /** áudio preferido ("pt", "en"…): arquivo com várias faixas começa nela */
+  preferredAudio?: string;
 }
 
 export function PlayerShell({
@@ -200,9 +260,9 @@ export function PlayerShell({
   sources,
   sourceIndex = 0,
   onPickSource,
-  audios = [],
-  audioIndex = 0,
-  onPickAudio,
+  audios: sourceAudios = [],
+  audioIndex: sourceAudioIndex = 0,
+  onPickAudio: onPickSourceAudio,
   onFail,
   onProgress,
   onExit,
@@ -213,12 +273,21 @@ export function PlayerShell({
   burnedSubtitles,
   notice,
   startTimeout = START_TIMEOUT_MS,
+  torrentUrl,
+  originalLanguage,
+  preferredAudio,
 }: PlayerShellProps) {
   const [time, setTime] = useState(startAt);
   const [length, setLength] = useState(duration);
   const [playing, setPlaying] = useState(false);
   const [buffering, setBuffering] = useState(mode === 'video');
   const [failed, setFailed] = useState(false);
+  /** faixas de áudio do próprio arquivo, quando o aparelho mostra (vazio: não mostra ou só uma) */
+  const [tracks, setTracks] = useState<{ id: string; lang: string; label: string; enabled: boolean }[]>([]);
+  /** torrent travou: pausado juntando folga */
+  const [rebuffering, setRebuffering] = useState(false);
+  /** torrent abrindo: quanto da folga inicial já baixou (0–99) */
+  const [torrentPercent, setTorrentPercent] = useState<number | null>(null);
   /** o vídeo já mostrou imagem uma vez */
   const [started, setStarted] = useState(false);
   /** passada em andamento: de onde partiu e aonde vai (o vídeo ainda não pulou) */
@@ -258,6 +327,8 @@ export function PlayerShell({
   const lengthRef = useRef(length);
   const progressRef = useRef(onProgress);
   const failRef = useRef(onFail);
+  const torrentRef = useRef(torrentUrl);
+  torrentRef.current = torrentUrl;
   playingRef.current = playing;
   timeRef.current = time;
   lengthRef.current = length;
@@ -326,7 +397,42 @@ export function PlayerShell({
       if (!started && !media.paused && !media.seeking && step > 0.05 && step < 2) onReady();
       last = media.currentTime;
     };
+    // Torrent travou tocando: pausa até juntar folga, em vez de travar a cada pedaço.
+    let holding = false;
+    let holdTimer = 0;
+    const release = () => {
+      holding = false;
+      window.clearTimeout(holdTimer);
+      setRebuffering(false);
+    };
+    const hold = (url: string) => {
+      holding = true;
+      setRebuffering(true);
+      const since = Date.now();
+      media.pause();
+      const check = () => {
+        const lengthS = isFinite(media.duration) && media.duration > 0 ? media.duration : lengthRef.current;
+        torrentBuffer(url, media.currentTime, lengthS)
+          .catch(() => null)
+          .then((b) => {
+            if (!holding) return;
+            const ahead = Math.max(b ? b.aheadS : 0, bufferedAhead(media));
+            const enough =
+              !b || b.toEnd || ahead >= TORRENT_REBUFFER_S || Date.now() - since > TORRENT_REBUFFER_MAX_MS;
+            if (!enough) {
+              holdTimer = window.setTimeout(check, TORRENT_POLL_MS);
+              return;
+            }
+            release();
+            const resumed = media.play();
+            if (resumed && resumed.catch) resumed.catch(() => undefined);
+          });
+      };
+      check();
+    };
     const onPlay = () => {
+      // play apertado durante a espera: o espectador manda
+      if (holding) release();
       setPlaying(true);
       if (playingCb.current) playingCb.current(true);
       wake();
@@ -341,7 +447,11 @@ export function PlayerShell({
       if (playingCb.current) playingCb.current(false);
       goNext();
     };
-    const onWaiting = () => setBuffering(true);
+    const onWaiting = () => {
+      setBuffering(true);
+      const url = torrentRef.current;
+      if (started && url && !holding && !media.seeking && !media.paused) hold(url);
+    };
     const onReady = () => {
       if (!started && startRef.current) startRef.current();
       started = true;
@@ -367,6 +477,8 @@ export function PlayerShell({
 
     return () => {
       window.clearTimeout(startTimer);
+      holding = false;
+      window.clearTimeout(holdTimer);
       media.removeEventListener('loadedmetadata', onMeta);
       media.removeEventListener('durationchange', onMeta);
       media.removeEventListener('timeupdate', onTime);
@@ -381,6 +493,94 @@ export function PlayerShell({
     // startAt só vale para a abertura deste vídeo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, media, wake, goNext]);
+
+  // Arquivo com várias faixas de áudio (pacote dual): começa na preferida e o
+  // menu de áudio troca a faixa, sem trocar de fonte.
+  useEffect(() => {
+    setTracks([]);
+    const list = mode === 'video' && media ? audioTracksOf(media) : undefined;
+    if (!media || !list) return;
+    let chosen = false;
+    const read = () => {
+      const all: FileAudioTrack[] = [];
+      for (let i = 0; i < list.length; i++) all.push(list[i]);
+      if (all.length < 2) return setTracks([]);
+      if (!chosen && preferredAudio) {
+        chosen = true;
+        // MKV sem idioma na faixa vale inglês pela especificação; releases
+        // russos/indianos (EniaHD, PrimeFix) deixam assim a faixa inglesa
+        const wanted =
+          all.filter((t) => trackLanguage(t.language) === preferredAudio)[0] ??
+          (preferredAudio === 'en' ? all.filter((t) => !trackLanguage(t.language))[0] : undefined);
+        if (wanted && !wanted.enabled) all.forEach((t) => (t.enabled = t === wanted));
+      }
+      setTracks(
+        all.map((t, i) => ({
+          id: t.id,
+          lang: trackLanguage(t.language),
+          label: t.label || `Faixa ${i + 1}`,
+          enabled: t.enabled,
+        })),
+      );
+    };
+    read();
+    list.addEventListener('addtrack', read);
+    list.addEventListener('removetrack', read);
+    list.addEventListener('change', read);
+    return () => {
+      list.removeEventListener('addtrack', read);
+      list.removeEventListener('removetrack', read);
+      list.removeEventListener('change', read);
+    };
+    // a preferência vale para a abertura deste vídeo
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, media]);
+
+  // Torrent abrindo: a porcentagem é quanto da folga inicial já baixou.
+  useEffect(() => {
+    setTorrentPercent(null);
+    if (mode !== 'video' || !media || !torrentUrl || started) return;
+    let alive = true;
+    let timer = 0;
+    /** quando a folga inicial ficou completa */
+    let fullAt = 0;
+    let percentMax = 0;
+    const poll = () => {
+      const lengthS = isFinite(media.duration) && media.duration > 0 ? media.duration : lengthRef.current;
+      const at = media.currentTime > 0 ? media.currentTime : startAt;
+      torrentBuffer(torrentUrl, at, lengthS)
+        .catch(() => null)
+        .then((b) => {
+          if (!alive) return;
+          const ahead = Math.max(b ? b.aheadS : 0, bufferedAhead(media));
+          // Até 60% pelo total baixado (anda sempre que o download anda); o resto só
+          // com o vídeo pronto: cabeçalho lido (readyState 1) e trecho no buffer dele.
+          // Assim não chega a 99% com o <video> ainda sem nada.
+          const downloaded = b ? Math.min(1, b.downloadedS / (TORRENT_START_S * 2)) * 0.6 : 0;
+          const header = media.readyState >= 1 ? 0.15 : 0;
+          const buffered = Math.min(1, bufferedAhead(media) / TORRENT_START_S) * 0.25;
+          const done = b && b.toEnd ? 0.99 : downloaded + header + buffered;
+          // não volta: o total baixado pode cair se o motor reabrir o torrent
+          percentMax = Math.max(percentMax, Math.min(99, Math.floor(done * 100)));
+          if (b) setTorrentPercent(percentMax);
+          const full = !!b && (b.toEnd || ahead >= TORRENT_START_S);
+          if (full && !fullAt) fullAt = Date.now();
+          // mesmo caminho de um erro do <video>: o player passa para a próxima fonte
+          if (fullAt && media.readyState < 2 && Date.now() - fullAt > TORRENT_DECODE_MS) {
+            media.dispatchEvent(new Event('error'));
+            return;
+          }
+          timer = window.setTimeout(poll, TORRENT_POLL_MS);
+        });
+    };
+    poll();
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+    // startAt só vale para a abertura deste vídeo
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, media, torrentUrl, started]);
 
   // TV desligada ou app em segundo plano sem fechar: guarda onde parou e, na
   // volta, continua tocando se estava tocando.
@@ -610,6 +810,29 @@ export function PlayerShell({
     applySubtitle(option, true);
   };
 
+  // Com faixas no arquivo, o áudio escolhido é uma delas; senão, uma das fontes.
+  const fileAudios: AudioChoice[] | null = tracks.length
+    ? tracks.map((t, i) => {
+        const name = t.lang ? audioName(t.lang) : t.label;
+        const twin = tracks.filter((o, j) => j < i && o.lang === t.lang && !!t.lang).length;
+        const original = !!t.lang && t.lang === originalLanguage;
+        return {
+          key: `track:${t.id}`,
+          label: `${name}${original ? ' [original]' : ''}${twin ? ` (${twin + 1})` : ''}`,
+          lang: t.lang || undefined,
+          original,
+        };
+      })
+    : null;
+  const audios = fileAudios ?? sourceAudios;
+  const audioIndex = fileAudios ? Math.max(0, tracks.map((t) => t.enabled).indexOf(true)) : sourceAudioIndex;
+  const selectTrack = (index: number) => {
+    const list = media ? audioTracksOf(media) : undefined;
+    if (!list) return;
+    for (let i = 0; i < list.length; i++) list[i].enabled = list[i].id === tracks[index].id;
+  };
+  const onPickAudio = fileAudios ? selectTrack : onPickSourceAudio;
+
   /** Outro áudio é outra fonte: o player recomeça nela de onde estava, e com a legenda lembrada. */
   const pickAudio = (index: number) => {
     if (index === audioIndex || !onPickAudio) return;
@@ -619,7 +842,11 @@ export function PlayerShell({
 
   const pickPreset = (preset: Preset) => {
     const option = (subtitles ?? []).filter((o) => o.language === preset.subtitle)[0] ?? null;
-    if (preset.audio !== audioIndex && onPickAudio) {
+    if (preset.audio !== audioIndex && fileAudios) {
+      // faixa do mesmo arquivo: o vídeo segue, a legenda muda aqui
+      selectTrack(preset.audio);
+      if ((option ? option.language : null) !== subtitleLang) pickSubtitle(option);
+    } else if (preset.audio !== audioIndex && onPickAudio) {
       rememberSubtitle(option ? option.language : null);
       pickAudio(preset.audio);
     } else if ((option ? option.language : null) !== subtitleLang) {
@@ -663,6 +890,18 @@ export function PlayerShell({
       {caption && (
         <div className={`captions${visible || failed ? ' is-raised' : ''}`} aria-live="polite">
           <span>{caption}</span>
+        </div>
+      )}
+      {/* fora do shell: o carregamento aparece mesmo com os controles escondidos */}
+      {hasControls && (buffering || rebuffering) && !failed && feedback === null && (
+        <div className="shell__loading" aria-label="Carregando">
+          <div className="shell__spinner" />
+          {!started && torrentPercent !== null && (
+            <>
+              <div className="shell__loading-percent">{torrentPercent}%</div>
+              <p className="shell__loading-text">Buscando melhor qualidade via Torrent... Já vai começar.</p>
+            </>
+          )}
         </div>
       )}
       <div
@@ -709,9 +948,6 @@ export function PlayerShell({
 
         {toast && <div className="shell__toast">{toast}</div>}
 
-        {hasControls && buffering && !failed && feedback === null && (
-          <div className="shell__spinner" aria-label="Carregando" />
-        )}
         {feedback !== null && (
           <div className={`shell__seek shell__seek--${feedback < 0 ? 'back' : 'forward'}`}>
             <Icon name={feedback < 0 ? 'rewind' : 'forward'} />

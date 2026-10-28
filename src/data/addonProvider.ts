@@ -11,6 +11,8 @@ const SIMILAR_LIMIT = 12;
 const FEATURED_COUNT = 4;
 /** nota mínima para entrar nos destaques e na fileira de notas altas */
 const FEATURED_MIN_RATING = 6.5;
+/** a TV deixa o app aberto por dias: passado esse tempo, os destaques são sorteados de novo */
+const FEATURED_TTL_MS = 3 * 60 * 60 * 1000;
 const TOP_RATED_MIN = 7.5;
 const TOP_RATED_LIMIT = 24;
 /** listas que já vêm em ordem de "mais em alta" ou de data: começam na página 1 */
@@ -82,7 +84,7 @@ function pickFeatured(trending: Title[], count: number, salt: string): Title[] {
     .map((t, rank) => {
       const rating = ratingOf(t);
       const quality = rating ? Math.min(1, Math.max(0, (rating - 5) / 4)) : 0.3;
-      return { t, weight: Math.pow(0.6 * (1 - rank / trending.length) + 0.4 * quality, 2) };
+      return { t, weight: 0.6 * (1 - rank / trending.length) + 0.4 * quality };
     })
     .filter(({ t }) => !!t.backdrop && !!t.synopsis && (!t.rating || ratingOf(t) >= FEATURED_MIN_RATING));
   const picked: { t: Title; weight: number }[] = [];
@@ -92,7 +94,8 @@ function pickFeatured(trending: Title[], count: number, salt: string): Title[] {
     while (i < pool.length - 1 && roll >= pool[i].weight) roll -= pool[i++].weight;
     picked.push(pool.splice(i, 1)[0]);
   }
-  return picked.sort((a, b) => b.weight - a.weight).map((p) => p.t);
+  // na ordem do sorteio: ordenar pelo peso deixava o 1º em alta sempre na frente
+  return picked.map((p) => p.t);
 }
 
 /** "109m", "45 min", "1h 30m" → minutos */
@@ -414,20 +417,29 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
   let featured: Promise<Title[]> | null = null;
   /** com ou sem animes: mudou a opção, os destaques são escolhidos de novo */
   let featuredAnimes = getSettings().animes;
+  /** quando saiu o sorteio atual e quantos já houve (entra na semente, para o novo sair diferente) */
+  let featuredAt = 0;
+  let featuredDraw = 0;
 
   return {
     getFeatured() {
-      // dois filmes e duas séries em alta, intercalados, do mais forte para o mais fraco
+      // dois filmes e duas séries em alta, intercalados, na ordem do sorteio
       if (featuredAnimes !== getSettings().animes) {
         featured = null;
         featuredAnimes = getSettings().animes;
       }
+      if (featured && Date.now() - featuredAt > FEATURED_TTL_MS) {
+        featured = null;
+        featuredDraw++;
+      }
       if (!featured) {
+        featuredAt = Date.now();
+        const draw = featuredDraw;
         featured = Promise.all(
           (['movie', 'series'] as TitleType[]).map((t) =>
             page(t, `trending-${plural(t)}`)
               .catch(() => [] as Title[])
-              .then((items) => pickFeatured(items, FEATURED_COUNT, `featured:${t}`)),
+              .then((items) => pickFeatured(items, FEATURED_COUNT, `featured:${t}:${draw}`)),
           ),
         ).then(([movies, series]) => {
           const half = FEATURED_COUNT / 2;

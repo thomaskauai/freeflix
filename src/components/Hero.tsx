@@ -69,6 +69,13 @@ export function Hero({ titles, onPlay, onInfo, away, onFocus }: HeroProps) {
   const [index, setIndex] = useState(0);
   /** destaque anterior, que fica embaixo enquanto o novo fundo aparece */
   const [previous, setPrevious] = useState<number | null>(null);
+  // destaques sorteados de novo: recomeça do primeiro
+  const [shown, setShown] = useState(titles);
+  if (shown !== titles) {
+    setShown(titles);
+    setIndex(0);
+    setPrevious(null);
+  }
   const title = titles[Math.min(index, titles.length - 1)];
 
   // Os fundos dos outros destaques já ficam no cache: passar entre eles não mostra preto.

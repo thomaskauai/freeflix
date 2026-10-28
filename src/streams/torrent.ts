@@ -154,6 +154,50 @@ export async function findTorrents(title: Title, season?: number, episode?: numb
   });
 }
 
+/*
+ * Torrent aberto ocupa memória e disco da TV. Cada <video> ligado a um endereço
+ * do motor segura o torrent; solto por todos, ele sai do motor. Os que abriram
+ * e nenhum vídeo usou (detalhes deixados antes, episódio só focado) saem na
+ * varredura ao deixar os detalhes. Endereço antigo pedido de novo: o motor
+ * reabre sozinho.
+ */
+const opened: Record<string, boolean> = {};
+const holds: Record<string, number> = {};
+/** solto e religado logo (troca de fonte, player adotando o vídeo) não sai do motor */
+const DROP_DELAY_MS = 5000;
+
+function hashOf(url: string): string | null {
+  if (url.indexOf(`${ENGINE}/`) !== 0) return null;
+  const m = /^([0-9a-f]{40})\//.exec(url.slice(ENGINE.length + 1));
+  return m ? m[1] : null;
+}
+
+function removeFromEngine(hash: string) {
+  delete opened[hash];
+  fetch(`${ENGINE}/${hash}/remove`, { cache: 'no-store' }).catch(() => undefined);
+}
+
+/** Um vídeo passou a tocar este endereço. */
+export function holdTorrent(url: string) {
+  const hash = hashOf(url);
+  if (hash) holds[hash] = (holds[hash] || 0) + 1;
+}
+
+/** O vídeo soltou o endereço: ninguém mais usando, o torrent sai do motor. */
+export function dropTorrent(url: string) {
+  const hash = hashOf(url);
+  if (!hash || !holds[hash]) return;
+  holds[hash] -= 1;
+  if (holds[hash]) return;
+  delete holds[hash];
+  window.setTimeout(() => !holds[hash] && removeFromEngine(hash), DROP_DELAY_MS);
+}
+
+/** Tira do motor os torrents abertos que nenhum vídeo está usando. */
+export function sweepTorrents() {
+  Object.keys(opened).forEach((hash) => !holds[hash] && removeFromEngine(hash));
+}
+
 /** Abre o torrent no motor e devolve o endereço do vídeo dentro dele. */
 async function openInEngine(t: TorrentStream, season?: number, episode?: number): Promise<string> {
   const params: string[] = [];
@@ -165,6 +209,7 @@ async function openInEngine(t: TorrentStream, season?: number, episode?: number)
     `${ENGINE}/${t.infoHash}/create?${params.join('&')}`,
   );
   if (created.fileIdx == null) throw new Error(created.error || 'sem arquivo de vídeo');
+  opened[t.infoHash] = true;
   return `${ENGINE}/${t.infoHash}/${created.fileIdx}`;
 }
 
@@ -172,8 +217,14 @@ async function openInEngine(t: TorrentStream, season?: number, episode?: number)
  * A fonte "Torrent" pronta para o player: o melhor torrent que o motor
  * conseguiu abrir. Null quando não há torrent ou nenhum abriu.
  */
-export async function torrentCandidate(title: Title, season?: number, episode?: number): Promise<Candidate | null> {
-  const list = await findTorrents(title, season, episode);
+export async function torrentCandidate(
+  title: Title,
+  season?: number,
+  episode?: number,
+  /** só torrents que passam aqui (ex.: com o áudio escolhido) */
+  accept?: (t: TorrentStream) => boolean,
+): Promise<Candidate | null> {
+  const list = (await findTorrents(title, season, episode)).filter((t) => !accept || accept(t));
   for (const t of list.slice(0, TRIES)) {
     try {
       const url = await openInEngine(t, season, episode);
@@ -186,8 +237,43 @@ export async function torrentCandidate(title: Title, season?: number, episode?: 
         torrent: { infoHash: t.infoHash, seeds: t.seeds, resolution: t.resolution },
       };
     } catch {
-      // sem peers ou sem vídeo: o próximo
+      // sem peers ou sem vídeo: o próximo, e este não fica baixando metadados à toa
+      if (!holds[t.infoHash]) removeFromEngine(t.infoHash);
     }
   }
   return null;
+}
+
+/** Como o torrent em tela está: quanto já tem à frente do ponto pedido, em segundos de vídeo. */
+export interface TorrentBuffer {
+  /** segundos de vídeo prontos em sequência a partir do ponto */
+  aheadS: number;
+  /** o arquivo está pronto até o fim a partir do ponto */
+  toEnd: boolean;
+  /** tudo o que o motor já baixou deste torrent, em segundos de vídeo (mostra que está andando) */
+  downloadedS: number;
+  peers: number;
+  /** bytes por segundo */
+  speed: number;
+}
+
+/** Pergunta ao motor quanto do vídeo `url` está pronto a partir de `atS` (duração `lengthS`). */
+export async function torrentBuffer(url: string, atS: number, lengthS: number): Promise<TorrentBuffer | null> {
+  if (!hashOf(url) || !(lengthS > 0)) return null;
+  const pos = Math.max(0, Math.min(1, atS / lengthS));
+  const s = await getJson<{ ahead: number; downloaded: number; peers: number; downloadSpeed: number; length: number }>(
+    `${url}/stats.json?pos=${pos.toFixed(6)}`,
+    4000,
+  );
+  // motor de versão antiga não diz o que tem à frente
+  if (typeof s.ahead !== 'number' || !(s.length > 0)) return null;
+  // bytes viram segundos pela taxa média do arquivo
+  const bytesPerS = s.length / lengthS;
+  return {
+    aheadS: bytesPerS > 0 ? s.ahead / bytesPerS : 0,
+    toEnd: pos * s.length + s.ahead >= s.length - 1,
+    downloadedS: bytesPerS > 0 ? (s.downloaded || 0) / bytesPerS : 0,
+    peers: s.peers,
+    speed: s.downloadSpeed,
+  };
 }
