@@ -37,8 +37,8 @@ const TORRENT_REBUFFER_S = 30;
 const TORRENT_REBUFFER_MAX_MS = 45000;
 const TORRENT_POLL_MS = 1000;
 /**
- * Começo já baixado e nada de imagem depois disso: o aparelho não decodifica
- * o arquivo (ex.: MKV x265 10-bit no navegador) e o <video> só espera, sem erro.
+ * Começo já baixado e nada de imagem depois disso: o <video> parou sem erro
+ * (conexão com o motor caiu, arquivo que o aparelho não decodifica).
  */
 const TORRENT_DECODE_MS = 15000;
 /** idioma da legenda dos atalhos ("… com legendas") */
