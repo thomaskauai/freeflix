@@ -507,7 +507,11 @@ export function PlayerShell({
       if (all.length < 2) return setTracks([]);
       if (!chosen && preferredAudio) {
         chosen = true;
-        const wanted = all.filter((t) => trackLanguage(t.language) === preferredAudio)[0];
+        // MKV sem idioma na faixa vale inglês pela especificação; releases
+        // russos/indianos (EniaHD, PrimeFix) deixam assim a faixa inglesa
+        const wanted =
+          all.filter((t) => trackLanguage(t.language) === preferredAudio)[0] ??
+          (preferredAudio === 'en' ? all.filter((t) => !trackLanguage(t.language))[0] : undefined);
         if (wanted && !wanted.enabled) all.forEach((t) => (t.enabled = t === wanted));
       }
       setTracks(
