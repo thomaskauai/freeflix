@@ -39,6 +39,8 @@ export function markFailed(url: string) {
   failedUrls[url] = true;
 }
 
+export const hasFailed = (url: string) => !!failedUrls[url];
+
 /**
  * Por onde o player começa: a fonte do vídeo que ficou guardado ao sair deste
  * mesmo episódio, senão a primeira que ainda não falhou.

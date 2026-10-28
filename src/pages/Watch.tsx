@@ -15,6 +15,7 @@ import { useGoBack, watchPath } from '../nav';
 import { TORRENT_LABEL, TORRENT_START_MS, torrentAvailable, torrentCandidate } from '../streams/torrent';
 import {
   firstWorking,
+  hasFailed,
   markFailed,
   mergeCandidates,
   parkVideo,
@@ -22,7 +23,7 @@ import {
   resumePoint,
   type Plan,
 } from '../streams/playback';
-import { audioChoice, audioName, offersAudio } from '../streams/rank';
+import { audioChoice, audioName, offersAudio, type AudioChoice } from '../streams/rank';
 import { getSettings } from '../settings';
 import type { NoSourceReason } from '../streams/resolve';
 
@@ -98,8 +99,15 @@ export default function Watch() {
   const warmed = useRef('');
   /** o espectador aceitou outro áudio porque o escolhido não existe (vale para esta abertura) */
   const [audioAccepted, setAudioAccepted] = useState('');
+  /** as fontes do áudio em uso acabaram: o torrent dele está sendo procurado (chave da abertura) */
+  const [hunting, setHunting] = useState('');
+  /** nem fonte nem torrent com o áudio em uso: pergunta se troca */
+  const [lost, setLost] = useState<{ key: string; want: AudioChoice } | null>(null);
+  const torrentTried = useRef('');
+  const liveKey = useRef('');
 
   const key = `${type}/${id}/${season}/${episode}`;
+  liveKey.current = key;
   const isEpisode = season != null && episode != null;
 
   // Torrent: opção do menu de fontes, só com o motor local no ar (nunca escolhida sozinha).
@@ -344,6 +352,58 @@ export default function Watch() {
     );
   }
 
+  // O áudio em uso some de todas as fontes: procura o torrent dele, senão pergunta.
+  if (hunting === key) {
+    return (
+      <div className="page player" data-focus-main="">
+        {veil}
+        <Waiting title={title.title} subtitle={`Procurando o áudio ${audioOf[plan.index].label} no torrent…`} onExit={goBack} />
+      </div>
+    );
+  }
+  if (lost && lost.key === key) {
+    const want = lost.want;
+    const others = audios.filter((a) => a.key !== want.key);
+    const offered = others.filter((a) => a.original).concat(others.filter((a) => !a.original));
+    // a primeira fonte daquele áudio que ainda não falhou
+    const indexFor = (a: AudioChoice) => {
+      const all = audioOf.map((b, i) => (b.key === a.key ? i : -1)).filter((i) => i >= 0);
+      const fresh = all.filter((i) => !hasFailed(plan.candidates[i].url));
+      return (fresh.length ? fresh : all)[0];
+    };
+    return (
+      <div className="page player" data-focus-main="">
+        <Backdrop title={title} />
+        <div className="player__message">
+          <p className="player__message-title">{`Sem fonte com áudio ${want.label}`}</p>
+          <p className="player__message-text">
+            {offered.length
+              ? 'Nenhuma fonte com este áudio tocou. Quer assistir com outro?'
+              : 'Nenhuma fonte com este áudio tocou, e não há outro áudio disponível.'}
+          </p>
+          <div className="player__message-actions">
+            {offered.map((a, i) => (
+              <Button
+                key={a.key}
+                id={`watch-lost-${i}`}
+                autoFocus={i === 0}
+                onClick={() => {
+                  setLost(null);
+                  setPlan({ ...plan, index: indexFor(a) });
+                }}
+              >
+                {`Assistir: ${a.label}`}
+              </Button>
+            ))}
+            <Button icon="back" id="watch-back" autoFocus={!offered.length} onClick={goBack}>
+              Voltar
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const candidate = plan.candidates[plan.index];
   const { startAt, duration } = resumePoint(title, season, episode);
   // Legendas são buscadas pelo id IMDb; títulos sem ele ficam sem.
@@ -378,25 +438,49 @@ export default function Watch() {
     );
   };
   // Fonte ruim fica marcada: a próxima abertura deste título já começa pela
-  // seguinte. Acabou a lista e as outras fontes ainda vão chegar: espera por elas.
+  // seguinte. O áudio em uso se mantém: a próxima fonte é uma com ele; acabou a
+  // lista e as outras fontes ainda vão chegar, espera por elas; nenhuma com ele,
+  // tenta o torrent desse áudio e, por fim, pergunta se troca de áudio.
+  const sameAudio = (want: AudioChoice, s: { languages: string[]; multiAudio: boolean }) => {
+    if (audioChoice(s, title.originalLanguage).key === want.key) return true;
+    if (want.original) return offersAudio(s, { audio: 'original', originalLanguage: title.originalLanguage });
+    return !!want.lang && s.languages.indexOf(want.lang) >= 0;
+  };
+  const nextWith = (want: AudioChoice, list: typeof plan.candidates, from: number) => {
+    for (let i = from + 1; i < list.length; i++) if (sameAudio(want, list[i].profile)) return i;
+    return -1;
+  };
+  const lastResort = (want: AudioChoice) => {
+    const forKey = key;
+    if (!torrentOk || hasTorrent || torrentTried.current === key) return setLost({ key, want });
+    torrentTried.current = key;
+    setHunting(key);
+    const done = (found: typeof candidate | null) => {
+      if (liveKey.current !== forKey) return;
+      setHunting('');
+      if (!found) return setLost({ key: forKey, want });
+      setPlan((p) =>
+        p && p.status === 'play' ? { ...p, candidates: p.candidates.concat(found), index: p.candidates.length } : p,
+      );
+    };
+    torrentCandidate(title, season, episode, (t) => sameAudio(want, t)).then(done, () => done(null));
+  };
   const next = () => {
     markFailed(candidate.url);
-    if (hasNext) {
-      setPlan({ ...plan, index: plan.index + 1 });
-    } else if (plan.more) {
-      const more = plan.more;
-      more.then((list) =>
-        setPlan((p) => {
-          if (!p || p.status !== 'play') return p;
-          const merged = mergeCandidates(p.candidates, list);
-          return merged.length > p.index + 1
-            ? { ...p, candidates: merged, index: p.index + 1, more: undefined }
-            : { status: 'none', reason: 'all-failed' };
-        }),
+    const want = audioOf[plan.index];
+    const found = nextWith(want, plan.candidates, plan.index);
+    if (found >= 0) return setPlan({ ...plan, index: found });
+    if (!plan.more) return lastResort(want);
+    const from = plan.index;
+    plan.more.then((list) => {
+      if (liveKey.current !== key) return;
+      const merged = mergeCandidates(plan.candidates, list);
+      const index = nextWith(want, merged, from);
+      setPlan((p) =>
+        p && p.status === 'play' ? { ...p, candidates: merged, index: index >= 0 ? index : p.index, more: undefined } : p,
       );
-    } else {
-      setPlan({ status: 'none', reason: 'all-failed' });
-    }
+      if (index < 0) lastResort(want);
+    });
   };
 
   const upNext = following
@@ -441,7 +525,7 @@ export default function Watch() {
             : setPlan({ ...plan, index: plan.candidates.map((c) => c.label).indexOf(options[option]) })
         }
         // fonte ruim: passa para a próxima sem perguntar
-        onFail={plan.candidates.length > 1 || plan.more ? next : undefined}
+        onFail={next}
         // a fonte que tocou vale para os outros episódios: mesmo addon, mesmo áudio
         onStart={() => {
           // torrent não vira a fonte padrão dos próximos episódios

@@ -217,8 +217,14 @@ async function openInEngine(t: TorrentStream, season?: number, episode?: number)
  * A fonte "Torrent" pronta para o player: o melhor torrent que o motor
  * conseguiu abrir. Null quando não há torrent ou nenhum abriu.
  */
-export async function torrentCandidate(title: Title, season?: number, episode?: number): Promise<Candidate | null> {
-  const list = await findTorrents(title, season, episode);
+export async function torrentCandidate(
+  title: Title,
+  season?: number,
+  episode?: number,
+  /** só torrents que passam aqui (ex.: com o áudio escolhido) */
+  accept?: (t: TorrentStream) => boolean,
+): Promise<Candidate | null> {
+  const list = (await findTorrents(title, season, episode)).filter((t) => !accept || accept(t));
   for (const t of list.slice(0, TRIES)) {
     try {
       const url = await openInEngine(t, season, episode);
