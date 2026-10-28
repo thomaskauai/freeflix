@@ -294,13 +294,14 @@ export interface AudioChoice {
  */
 function languagesLabel(languages: string[], originalLanguage?: string): string {
   if (languages.length <= 2) return languages.map(audioName).join(' e ');
-  const lead =
-    languages.indexOf('pt') >= 0
-      ? 'pt'
-      : originalLanguage && languages.indexOf(originalLanguage) >= 0
-        ? originalLanguage
-        : languages[0];
-  return `${audioName(lead)} e mais ${languages.length - 1} idiomas`;
+  return `${audioName(leadLanguage(languages, originalLanguage))} e mais ${languages.length - 1} idiomas`;
+}
+
+/** O idioma que representa a lista: português, senão o original, senão o primeiro. */
+function leadLanguage(languages: string[], originalLanguage?: string): string {
+  if (languages.indexOf('pt') >= 0) return 'pt';
+  if (originalLanguage && languages.indexOf(originalLanguage) >= 0) return originalLanguage;
+  return languages[0];
 }
 
 export function audioChoice(s: { languages: string[]; multiAudio: boolean }, originalLanguage?: string): AudioChoice {
@@ -313,5 +314,10 @@ export function audioChoice(s: { languages: string[]; multiAudio: boolean }, ori
     const lang = originalLanguage;
     return { key: 'original', label: lang ? `${audioName(lang)} [original]` : 'Original', lang, original: true };
   }
-  return { key: sorted, label: languagesLabel(s.languages, originalLanguage), lang: s.languages[0], original: false };
+  return {
+    key: sorted,
+    label: languagesLabel(s.languages, originalLanguage),
+    lang: leadLanguage(s.languages, originalLanguage),
+    original: false,
+  };
 }
