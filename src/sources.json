@@ -1,18 +1,22 @@
 [
     {
-        "name": "FrostStream", 
+        "name": "FrostStream",
         "url": "https://froststream.cloutteam.com/%7B%22providers%22%3A%7B%22cloutupload%22%3Atrue%2C%22redeflix%22%3Atrue%7D%2C%22resolutions%22%3A%7B%224K%20HDR%22%3Atrue%2C%221080p%22%3Atrue%2C%22720p%22%3Atrue%2C%22SD%22%3Afalse%2C%22Cinema%22%3Afalse%7D%2C%22iptvSources%22%3A%7B%22Astra%22%3Atrue%2C%22Neon%22%3Atrue%2C%22Carbon%22%3Atrue%2C%22Azure%22%3Atrue%7D%2C%22maxSourcesPerResolution%22%3A4%7D/manifest.json"
     },
     {
-        "name": "PenguPlay", 
+        "name": "PenguPlay",
         "url": "https://pengu.uk/%7B%22auth_token%22%3A%22FPf4uFyJoQG7veojqY0XrqXhBSB8bP71AWT51UNX2Qk%22%7D/manifest.json"
     },
     {
-        "name": "FenixFlix", 
+        "name": "FenixFlix",
         "url": "https://fenixflix.fenixhub.online/qualities=4k,1080p,720p%7Caudio=dublado,legendado%7Ccatalogs=populares_movie,populares_series,recentes_movie,recentes_series/manifest.json"
     },
     {
-        "name": "MagnetFlix", 
+        "name": "MagnetFlix",
         "url": "https://magnetflix.flixbr.online/qualities%3D4k%2C1080p%2C720p%2Csd%7Caudio%3Ddublado%2Clegendado%7Ccatalogs%3Dpopulares_movie%2Cpopulares_series%2Crecentes_servidor_movie%2Crecentes_servidor_series%2Cemalta_movie%2Cemalta_series/manifest.json"
+    },
+    {
+        "name": "PlavioHD",
+        "url": "https://hd.plavio.site/c/eyJzb3VyY2VzIjpbIlBsYXZpb0hEIl0sInBjbG91ZCI6ZmFsc2UsInEiOlsiMjE2MHAiLCIxMDgwcCIsIjcyMHAiXSwiZHluYW1pY1JhbmdlIjpbIlNEUiIsIkhEUiIsIlVua25vd24iXSwic29ydE1vZGUiOiJxdWFsaXR5IiwidGl0bGVfZm9ybWF0IjoiZGVmYXVsdCJ9/manifest.json"
     }
 ]
