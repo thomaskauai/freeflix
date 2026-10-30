@@ -12,11 +12,11 @@
         "url": "https://fenixflix.fenixhub.online/qualities=4k,1080p,720p%7Caudio=dublado,legendado%7Ccatalogs=populares_movie,populares_series,recentes_movie,recentes_series/manifest.json"
     },
     {
-        "name": "MagnetFlix",
-        "url": "https://magnetflix.flixbr.online/qualities%3D4k%2C1080p%2C720p%2Csd%7Caudio%3Ddublado%2Clegendado%7Ccatalogs%3Dpopulares_movie%2Cpopulares_series%2Crecentes_servidor_movie%2Crecentes_servidor_series%2Cemalta_movie%2Cemalta_series/manifest.json"
-    },
-    {
         "name": "PlavioHD",
         "url": "https://hd.plavio.site/c/eyJzb3VyY2VzIjpbIlBsYXZpb0hEIl0sInBjbG91ZCI6ZmFsc2UsInEiOlsiMjE2MHAiLCIxMDgwcCIsIjcyMHAiXSwiZHluYW1pY1JhbmdlIjpbIlNEUiIsIkhEUiIsIlVua25vd24iXSwic29ydE1vZGUiOiJxdWFsaXR5IiwidGl0bGVfZm9ybWF0IjoiZGVmYXVsdCJ9/manifest.json"
+    },
+    {
+        "name": "Iracemaflix",
+        "url": "https://6880ee460bc3-iracemaflix.baby-beamup.club/manifest.json"
     }
 ]
