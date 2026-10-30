@@ -122,7 +122,10 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
   const toPlan = (found: Resolution): Plan =>
     'reason' in found
       ? { status: 'none', reason: found.reason }
-      : { status: 'play', candidates: found.candidates, index: 0 };
+      : { status: 'play', candidates: found.candidates, index: 0, more: found.later };
+  // a lista inteira, com os addons lentos, quando chegarem
+  const everything = (p: Plan): Promise<Candidate[]> =>
+    p.status !== 'play' ? Promise.resolve([]) : p.more ? p.more : Promise.resolve(p.candidates);
   const unreachable = (): Plan => ({ status: 'none', reason: 'unreachable' });
 
   // Episódio de série que já tocou outro: pergunta primeiro só ao addon que
@@ -136,7 +139,7 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
         .then(
           (quick): Plan | Promise<Plan> =>
             quick.status === 'play'
-              ? { ...quick, more: full.then((f) => (f.status === 'play' ? f.candidates : [])) }
+              ? { ...quick, more: full.then(everything) }
               : full,
         )
     : full;
@@ -165,7 +168,7 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
             status: 'play',
             candidates: [torrent],
             index: 0,
-            more: httpPlan.then((p) => (p.status === 'play' ? p.candidates : [])),
+            more: httpPlan.then(everything),
           }
         : httpPlan.then((p) => (p.status === 'none' ? torrentBackup(p) : p)),
   );

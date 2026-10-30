@@ -3,7 +3,7 @@ import type { Title } from '../data/types';
 import { getSettings } from '../settings';
 import { getSpeed } from './network';
 import { parseStream, type ParsedStream } from './parse';
-import { audioChoice, describeStream, foreignOnly, rankStreams, type RankContext, type SourceProfile } from './rank';
+import { audioChoice, describeStream, foreignOnly, offersAudio, rankStreams, type RankContext, type SourceProfile } from './rank';
 import { installDefaultSources, listSources, sourcePriority, type SourceAddon } from './sources';
 
 export interface Candidate {
@@ -36,7 +36,13 @@ export type NoSourceReason =
   /** nenhum addon respondeu */
   | 'unreachable';
 
-export type Resolution = { candidates: Candidate[] } | { reason: NoSourceReason };
+export type Resolution =
+  | {
+      candidates: Candidate[];
+      /** addons lentos ainda respondendo: a lista completa, já com estas, quando chegarem */
+      later?: Promise<Candidate[]>;
+    }
+  | { reason: NoSourceReason };
 
 /** quantas fontes o player guarda para tentar em sequência */
 const MAX_CANDIDATES = 12;
@@ -48,6 +54,12 @@ const MAX_CANDIDATES = 12;
 const MAX_MIRRORS = 3;
 /** áudios a mais (um de cada) além da lista, para dar o que escolher no player */
 const MAX_EXTRA_AUDIOS = 4;
+/**
+ * Passado esse tempo, o play sai com as fontes que já responderam (os addons
+ * rápidos levam menos de 1 s; alguns levam 10 s ou mais). Os lentos entram
+ * depois como reserva.
+ */
+const QUICK_MS = 2500;
 
 const accepts = (addon: SourceAddon, type: string, id: string) =>
   (addon.types.length === 0 || addon.types.indexOf(type) >= 0) &&
@@ -76,8 +88,10 @@ export async function resolvePlayback(
   options: ResolveOptions = {},
 ): Promise<Resolution> {
   const videoId = season != null && episode != null ? `${title.id}:${season}:${episode}` : title.id;
-  // na primeira abertura, as fontes padrão podem ainda estar entrando
-  await installDefaultSources();
+  // Na primeira abertura as fontes padrão podem ainda estar entrando. Já
+  // instaladas, a lista remota atualiza em segundo plano, sem segurar o play.
+  const installing = installDefaultSources();
+  if (listSources().length === 0) await installing;
   const addons = listSources().filter(
     (a) => accepts(a, title.type, title.id) && (!options.only || a.base === options.only),
   );
@@ -85,26 +99,65 @@ export async function resolvePlayback(
   if (addons.length === 0) return { reason: 'not-found' };
 
   let answered = 0;
-  const [lists, speed] = await Promise.all([
-    Promise.all(
-      addons.map((addon) =>
-        fetchStreams(addon.base, title.type, videoId).then(
-          (streams) => {
-            answered++;
-            const priority = sourcePriority(addon, listSources());
-            return streams.map((s) => ({ ...parseStream(s, addon.name), priority, base: addon.base }));
-          },
-          () => [] as ParsedStream[],
-        ),
-      ),
+  let pending = addons.length;
+  const lists: ParsedStream[][] = addons.map(() => []);
+  let arrived: () => void = () => undefined;
+  const all = Promise.all(
+    addons.map((addon, i) =>
+      fetchStreams(addon.base, title.type, videoId).then(
+        (streams) => {
+          answered++;
+          const priority = sourcePriority(addon, listSources());
+          lists[i] = streams.map((s) => ({ ...parseStream(s, addon.name), priority, base: addon.base }));
+        },
+        () => undefined,
+      ).then(() => {
+        pending--;
+        arrived();
+      }),
     ),
-    getSpeed(),
-  ]);
-  if (answered === 0) return { reason: 'unreachable' };
+  );
+  // a medida de rede não segura o play (streams/network.ts)
+  const speed = await getSpeed();
+  const rank = () => rankAll(([] as ParsedStream[]).concat(...lists), title, speed.mbps, options);
 
-  const all = ([] as ParsedStream[]).concat(...lists);
+  // Espera todos, ou só os que chegaram até QUICK_MS se a melhor fonte já tem o áudio escolhido.
+  const audio = { audio: getSettings().audio, originalLanguage: title.originalLanguage };
+  const ready = () => {
+    const ranked = rank();
+    return ranked.length > 0 && offersAudio(ranked[0], audio);
+  };
+  let quick = false;
+  const timer = window.setTimeout(() => {
+    quick = true;
+    arrived();
+  }, QUICK_MS);
+  await new Promise<void>((done) => {
+    arrived = () => {
+      if (pending === 0 || (quick && ready())) done();
+    };
+    arrived();
+  });
+  window.clearTimeout(timer);
+
+  if (pending > 0) {
+    return {
+      candidates: pick(rank(), title).map(toCandidate),
+      later: all.then(() => pick(rank(), title).map(toCandidate)),
+    };
+  }
+  if (answered === 0) return { reason: 'unreachable' };
+  const ranked = rank();
+  if (ranked.length === 0) {
+    const flat = ([] as ParsedStream[]).concat(...lists);
+    return { reason: flat.some((s) => s.unplayable === 'torrent') ? 'torrent-only' : 'not-found' };
+  }
+  return { candidates: pick(ranked, title).map(toCandidate) };
+}
+
+function rankAll(all: ParsedStream[], title: Title, mbps: number, options: ResolveOptions): ParsedStream[] {
   const context: RankContext = {
-    mbps: speed.mbps,
+    mbps,
     audio: getSettings().audio,
     originalLanguage: title.originalLanguage,
     runtime: title.runtime,
@@ -114,21 +167,21 @@ export async function resolvePlayback(
   // Dublagem só em outro idioma (russo, francês…) fica de fora, a não ser que seja o que há.
   const playable = rankStreams(all, context);
   const wanted = playable.filter((s) => !foreignOnly(s, context));
-  const ranked = wanted.length ? wanted : playable;
-  if (ranked.length === 0) {
-    return { reason: all.some((s) => s.unplayable === 'torrent') ? 'torrent-only' : 'not-found' };
-  }
-  const toCandidate = (s: ParsedStream): Candidate => {
-    const label = describeStream(s);
-    return {
-      url: s.url as string,
-      hls: s.container === 'hls',
-      label,
-      profile: { base: s.base ?? '', label, languages: s.languages, multiAudio: s.multiAudio, dualAudio: s.dualAudio },
-      hardSubs: !!s.hardSubs,
-    };
-  };
+  return wanted.length ? wanted : playable;
+}
 
+function toCandidate(s: ParsedStream): Candidate {
+  const label = describeStream(s);
+  return {
+    url: s.url as string,
+    hls: s.container === 'hls',
+    label,
+    profile: { base: s.base ?? '', label, languages: s.languages, multiAudio: s.multiAudio, dualAudio: s.dualAudio },
+    hardSubs: !!s.hardSubs,
+  };
+}
+
+function pick(ranked: ParsedStream[], title: Title): ParsedStream[] {
   const kept: ParsedStream[] = [];
   const mirrors: Record<string, number> = {};
   for (const s of ranked) {
@@ -150,5 +203,5 @@ export async function resolvePlayback(
     present.push(k);
     kept.push(s);
   });
-  return { candidates: kept.map(toCandidate) };
+  return kept;
 }

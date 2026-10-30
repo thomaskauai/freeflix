@@ -127,8 +127,12 @@ export function fetchCatalog(base: string, type: string, id: string, extra?: Rec
 export const fetchMeta = (base: string, type: string, id: string) =>
   cached<{ meta?: AddonMeta }>(`${base}/meta/${type}/${encodeURIComponent(id)}.json`).then((r) => r.meta ?? null);
 
+/** alguns addons levam 12 s ou mais; o play não espera por eles (streams/resolve.ts) */
+const STREAMS_TIMEOUT_MS = 16000;
+
 /** Fontes não ficam em cache: links de vídeo expiram. */
 export const fetchStreams = (base: string, type: string, videoId: string) =>
-  getJson<{ streams?: AddonStream[] }>(`${base}/stream/${type}/${encodeURIComponent(videoId)}.json`).then(
-    (r) => r.streams ?? [],
-  );
+  getJson<{ streams?: AddonStream[] }>(
+    `${base}/stream/${type}/${encodeURIComponent(videoId)}.json`,
+    STREAMS_TIMEOUT_MS,
+  ).then((r) => r.streams ?? []);

@@ -68,9 +68,20 @@ export async function measureSpeed(): Promise<SpeedReading> {
   return reading;
 }
 
-/** Medida recente, se houver; senão mede agora. */
+let measuring: Promise<SpeedReading> | null = null;
+
+/**
+ * Medida recente, se houver. Velha, vale na hora e outra sai em segundo plano:
+ * o play não espera o teste (até 8 s). Só sem medida nenhuma mede antes.
+ */
 export async function getSpeed(): Promise<SpeedReading> {
   const last = lastSpeed();
   if (last && Date.now() - last.at < FRESH_FOR_MS) return last;
-  return measureSpeed();
+  if (!measuring) {
+    measuring = measureSpeed().then((reading) => {
+      measuring = null;
+      return reading;
+    });
+  }
+  return last ?? measuring;
 }
