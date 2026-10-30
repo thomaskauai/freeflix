@@ -111,6 +111,22 @@ function languageTier(s: ParsedStream, ctx: RankContext): number {
 }
 
 /**
+ * Áudio limpo: só idiomas pedidos (português, inglês, o original, o
+ * preferido). Pacote com dublagem de fora (russo, híndi) ou "MULTI" sem dizer
+ * quais costuma abrir na faixa estrangeira (PenguPlay: "Org.Hindi…English",
+ * PrimeFix "MULTI" = híndi, tâmil, télugo e inglês por último); fica atrás do
+ * inglês puro/original no mesmo nível de idioma. "Dual Áudio" sem idiomas é
+ * release brasileiro (português e o original) e conta como limpo.
+ */
+function cleanAudioTier(s: ParsedStream, ctx: Pick<RankContext, 'audio' | 'originalLanguage'>): number {
+  if (s.multiAudio && !s.languages.length) return s.dualAudio ? 1 : 0;
+  const wanted = ['pt', 'en'];
+  if (ctx.originalLanguage) wanted.push(ctx.originalLanguage);
+  if (ctx.audio !== 'original') wanted.push(ctx.audio);
+  return s.languages.some((l) => wanted.indexOf(l) < 0) ? 0 : 1;
+}
+
+/**
  * Áudio que ninguém aqui pediu: dublagem só em outro idioma (russo, francês…),
  * sem português, inglês, o original da obra ou o preferido.
  */
@@ -181,6 +197,7 @@ export function rankStreams(streams: ParsedStream[], ctx: RankContext): ParsedSt
       preferenceTier(s, ctx.prefer),
       fits ? 1 : 0,
       languageTier(s, ctx),
+      cleanAudioTier(s, ctx),
       cleanTier(s, ctx),
       -(s.priority ?? 0),
       // fora do que a rede aguenta, quanto menor a resolução, menos engasga
@@ -231,6 +248,7 @@ export function rankTorrents(list: TorrentStream[], ctx: RankContext): TorrentSt
       compatTier(s, ctx),
       fits ? 1 : 0,
       languageTier(s, ctx),
+      cleanAudioTier(s, ctx),
       s.seeds >= MIN_SEEDS ? 1 : 0,
       fits ? resolutionTier(s.resolution) : -s.resolution,
       s.seeds,
@@ -258,6 +276,11 @@ const LANGUAGE_LABELS: Record<string, string> = {
   ja: 'japonês',
   ko: 'coreano',
   ru: 'russo',
+  hi: 'híndi',
+  ta: 'tâmil',
+  te: 'télugo',
+  uk: 'ucraniano',
+  ar: 'árabe',
 };
 
 /** Resumo de uma linha da fonte em uso, para o espectador. */
@@ -283,7 +306,11 @@ const AUDIO_NAMES: Record<string, string> = {
   ja: 'Japonês',
   ko: 'Coreano',
   zh: 'Chinês',
-  hi: 'Hindi',
+  hi: 'Híndi',
+  ta: 'Tâmil',
+  te: 'Télugo',
+  uk: 'Ucraniano',
+  ar: 'Árabe',
   ru: 'Russo',
   tr: 'Turco',
 };

@@ -412,3 +412,67 @@ describe('audioChoice com muitos idiomas', () => {
     expect(audioChoice({ languages: ['pt', 'en'], multiAudio: true }, 'en').label).toBe('Dual: Português e Inglês');
   });
 });
+
+describe('PenguPlay: dublagem estrangeira no pacote', () => {
+  // nomes reais (out/2026); ffprobe: a primeira faixa é a híndi, a inglesa vem depois
+  const pengu = (filename: string, description = '') =>
+    parseStream(
+      {
+        name: '🐧 PenguPlay 🧊 1080p • Arctic',
+        description,
+        url: `https://pengu.uk/direct/hubcloud/${encodeURIComponent(filename)}`,
+        behaviorHints: { filename: `${filename}|^|1080pMKV.pad-Arctic` },
+      },
+      'PenguPlay',
+    );
+  const hindiEnglish = 'Breaking.Bad.S01E01.1080p.10bit.BluRay.x265.HEVC.Org.Hindi.DD.2.0.English.AAC.5.1.ESubs.XDMovies.mkv';
+  const pure = 'Inception.2010.1080p.BluRay.H264.AAC-RARBG.mp4';
+
+  it('"Org.Hindi…English", "HIN.ENG" e "[Hindi + English]" trazem híndi, não só inglês', () => {
+    expect(pengu(hindiEnglish).languages).toEqual(['en', 'hi']);
+    expect(pengu('The.Bad.Guys.Breaking.In.S01E01.1080p.10bit.HIN.ENG.x265.ESub.Luffy.mkv').languages).toEqual(['en', 'hi']);
+    expect(pengu('Weapons (2025) 1080p BluRay [Hindi (Studio-Dub) DDP 5.1 + English DDP 7.1 Atmos] x264 (ZoroSenpai-4kHDHub.com).mkv').languages).toEqual(['en', 'hi']);
+    expect(hasOriginalAudio(pengu(hindiEnglish), 'en')).toBe(false);
+    expect(audioChoice(pengu(hindiEnglish), 'en').original).toBe(false);
+  });
+
+  it('"Dual Audio" híndi não vira português', () => {
+    const dual = pengu('AnimeDubHindi.The.Bad.Guys.Breaking.In.S01E01.720p.HD.NF.WEB.DL.Dual.Audio.ESub.mkv');
+    expect(dual.languages).toEqual(['hi']);
+    expect(offersAudio(dual, { audio: 'pt', originalLanguage: 'en' })).toBe(false);
+    expect(audioChoice(dual, 'en').label).toBe('Dual: Híndi e Inglês');
+  });
+
+  it('dublagem só estrangeira (russo, ucraniano, tâmil) fica de fora', () => {
+    const c = { audio: 'original' as const, originalLanguage: 'en' };
+    expect(foreignOnly(pengu('Weapons.2025.Russian.1080p.mp4', '🎞️ 1080p • H.264 • MP4 • Russian dub audio\n🎧 Audio: Russian'), c)).toBe(true);
+    expect(foreignOnly(pengu('Weapons.2025.ukr.1080p.mp4', '🎞️ 1080p • H.264 • MP4 • ukr dub audio'), c)).toBe(true);
+    expect(foreignOnly(pengu('F1.The.Movie.2025.Org.Itunes.DDPA.448Kbps.Tamil.Audio.GTM.m4a.mkv'), c)).toBe(true);
+    expect(foreignOnly(pengu('Filme.2024.1080p.WEB-DL.MVO.Jaskier.mkv'), c)).toBe(true);
+    expect(foreignOnly(pengu('Фильм.2024.1080p.WEB-DL.mkv'), c)).toBe(true);
+  });
+
+  it('"Tel Aviv" no título não é télugo', () => {
+    expect(pengu('Tel.Aviv.on.Fire.2018.1080p.WEB-DL.mkv').languages).toEqual([]);
+  });
+
+  it('inglês puro ganha do pacote com híndi, mesmo vindo depois', () => {
+    for (const audio of ['original', 'en'] as const) {
+      const ranked = rankStreams([pengu(hindiEnglish), pengu(pure)], ctx({ audio }));
+      expect(ranked[0].url).toContain('RARBG');
+    }
+  });
+
+  it('"MULTI" sem dizer quais (PrimeFix: híndi, tâmil, télugo, inglês) fica atrás do original puro', () => {
+    const ranked = rankStreams([pengu('F1.The.Movie.2025.720p.AMZN.WEB.DL.MULTI.DDP5.1.H.265.PrimeFix.mkv'), pengu(pure)], ctx());
+    expect(ranked[0].url).toContain('RARBG');
+  });
+
+  it('dual russo e inglês fica atrás do inglês puro, mas antes do só russo', () => {
+    const ranked = rankStreams(
+      [pengu('Filme.2024.1080p.RUS.mkv'), pengu('Filme.2024.1080p.Dual.RUS.ENG.mkv'), pengu(pure)],
+      ctx(),
+    );
+    expect(ranked.map((s) => s.languages)).toEqual([[], ['en', 'ru'], ['ru']]);
+  });
+});

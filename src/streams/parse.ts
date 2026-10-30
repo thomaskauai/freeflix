@@ -115,6 +115,20 @@ const LANGUAGE_WORDS: [RegExp, string][] = [
   [/\b(japanese|jap)\b/i, 'ja'],
   [/\b(korean|kor)\b/i, 'ko'],
   [/\b(russian|rus)\b/i, 'ru'],
+  // releases russos: cirílico, dublagem/voz-over (MVO, AVO, DVO), grupos e trackers
+  [/[А-Яа-яЁё]|\b(lostfilm|newstudio|jaskier|hdrezka|rezka|kerob|rutor|rutracker|kinozal)\b/i, 'ru'],
+  [/\b(MVO|AVO|DVO)\b/, 'ru'],
+  // releases indianos (PenguPlay: Arctic, 4KHDHub): "Org.Hindi…English", "HIN.ENG".
+  // A sigla só em maiúsculas: "Tel Aviv" não é télugo.
+  // "AnimeDubHindi.…Dual.Audio": sem fronteira antes
+  [/hindi/i, 'hi'],
+  [/\bHIN\b/, 'hi'],
+  [/\btamil\b/i, 'ta'],
+  [/\bTAM\b/, 'ta'],
+  [/\btelugu\b/i, 'te'],
+  [/\bTEL\b/, 'te'],
+  [/\b(ukrainian|ukr)\b/i, 'uk'],
+  [/\barabic\b/i, 'ar'],
 ];
 
 const UNITS: Record<string, number> = { kb: 1e3, mb: 1e6, gb: 1e9, tb: 1e12, kib: 1024, mib: 1024 ** 2, gib: 1024 ** 3 };
