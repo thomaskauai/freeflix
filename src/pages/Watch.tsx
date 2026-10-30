@@ -39,7 +39,7 @@ const MESSAGES: Record<NoSourceReason | 'all-failed', { title: string; text: str
   },
   'torrent-only': {
     title: 'Só há fontes de torrent',
-    text: 'As fontes instaladas só devolveram torrents para este título, e o Freeflix não toca torrent.',
+    text: 'As fontes instaladas só têm torrent para este título, e nenhum abriu (o motor de torrent pode estar fora do ar).',
     settings: true,
   },
   unreachable: {
@@ -110,7 +110,7 @@ export default function Watch() {
   liveKey.current = key;
   const isEpisode = season != null && episode != null;
 
-  // Torrent: opção do menu de fontes, só com o motor local no ar (nunca escolhida sozinha).
+  // Torrent: opção do menu de fontes, só com o motor local no ar.
   const [torrentOk, setTorrentOk] = useState(false);
   const [preparingTorrent, setPreparingTorrent] = useState(false);
   const [notice, setNotice] = useState<{ text: string; at: number } | null>(null);

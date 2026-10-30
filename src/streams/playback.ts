@@ -143,12 +143,21 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
   // Sem streaming no Brasil (lançamento recente, título fora dos catálogos), as
   // fontes HTTP costumam ser fracas: com o motor no ar, o torrent vem primeiro e
   // as fontes HTTP ficam de reserva. Episódio com fonte escolhida antes segue ela.
+  let torrentTried = false;
   const torrentFirst = prefer
     ? Promise.resolve(null)
     : torrentAvailable()
         .then((ok) => ok && noStreamingInBrazil(title))
-        .then((yes) => (yes ? torrentCandidate(title, season, episode) : null))
+        .then((yes) => (yes ? ((torrentTried = true), torrentCandidate(title, season, episode)) : null))
         .catch(() => null);
+  // Nenhuma fonte HTTP: o torrent é a reserva antes de dizer que não há o título.
+  const torrentBackup = (none: Plan): Promise<Plan> =>
+    torrentTried
+      ? Promise.resolve(none)
+      : torrentAvailable()
+          .then((ok) => (ok ? torrentCandidate(title, season, episode) : null))
+          .then((torrent): Plan => (torrent ? { status: 'play', candidates: [torrent], index: 0 } : none))
+          .catch(() => none);
   const plan = torrentFirst.then(
     (torrent): Plan | Promise<Plan> =>
       torrent
@@ -158,7 +167,7 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
             index: 0,
             more: httpPlan.then((p) => (p.status === 'play' ? p.candidates : [])),
           }
-        : httpPlan,
+        : httpPlan.then((p) => (p.status === 'none' ? torrentBackup(p) : p)),
   );
   plans[key] = { at: Date.now(), plan };
   // sem fonte, a próxima tentativa pergunta de novo
