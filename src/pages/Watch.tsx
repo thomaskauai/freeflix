@@ -25,7 +25,7 @@ import {
 } from '../streams/playback';
 import { audioChoice, audioName, effectiveLanguages, offersAudio, type AudioChoice, type SourceProfile } from '../streams/rank';
 import { getSettings } from '../settings';
-import type { NoSourceReason } from '../streams/resolve';
+import type { Candidate, NoSourceReason } from '../streams/resolve';
 
 const MESSAGES: Record<NoSourceReason | 'all-failed', { title: string; text: string; settings?: boolean }> = {
   'no-addons': {
@@ -99,8 +99,15 @@ export default function Watch() {
   const warmed = useRef('');
   /** o espectador aceitou outro áudio porque o escolhido não existe (vale para esta abertura) */
   const [audioAccepted, setAudioAccepted] = useState('');
-  /** as fontes do áudio em uso acabaram: o torrent dele está sendo procurado (chave da abertura) */
-  const [hunting, setHunting] = useState('');
+  /**
+   * Troca de fonte que leva tempo (torrent abrindo, fontes que ainda vão
+   * chegar): o vídeo sai da tela e fica o carregamento com este texto (chave da abertura).
+   */
+  const [switching, setSwitching] = useState<{ key: string; text: string } | null>(null);
+  /** segundo em que a última troca de fonte começou: a fonte nova começa nele (chave da abertura) */
+  const [resumeAt, setResumeAt] = useState<{ key: string; time: number } | null>(null);
+  /** onde o vídeo em tela está, ao segundo */
+  const position = useRef({ key: '', time: 0 });
   /** nem fonte nem torrent com o áudio em uso: pergunta se troca */
   const [lost, setLost] = useState<{ key: string; want: AudioChoice } | null>(null);
   const torrentTried = useRef('');
@@ -112,7 +119,6 @@ export default function Watch() {
 
   // Torrent: opção do menu de fontes, só com o motor local no ar.
   const [torrentOk, setTorrentOk] = useState(false);
-  const [preparingTorrent, setPreparingTorrent] = useState(false);
   const [notice, setNotice] = useState<{ text: string; at: number } | null>(null);
   const say = (text: string) => setNotice({ text, at: Date.now() });
   useEffect(() => {
@@ -122,7 +128,6 @@ export default function Watch() {
       alive = false;
     };
   }, []);
-  useEffect(() => setPreparingTorrent(false), [key]);
 
   // Vídeo tocando fica anotado: TV desligada ou app fechado com ele tocando,
   // a próxima abertura volta para o player. Pausado, parado ou fora do player,
@@ -209,17 +214,33 @@ export default function Watch() {
     setStarted(false);
     if (!media) return;
     let last = media.currentTime;
+    /** o vídeo andou tocando */
+    let went = false;
     const show = () => setStarted(true);
+    // Onde o vídeo está, para a troca de fonte começar no mesmo segundo. O vídeo
+    // novo passa pelo zero antes de pular para o ponto de partida (e o descartado
+    // volta a zero): abaixo de 1 s só conta o pulo pedido depois de o vídeo
+    // andar (Recomeçar do início).
+    const note = () => {
+      if (media.currentTime < 1 && !(went && media.seeking)) return;
+      position.current = { key: liveKey.current, time: media.currentTime };
+    };
     // pulo para onde o espectador parou também muda o tempo; só conta o vídeo andando
     const moved = () => {
-      if (!media.paused && !media.seeking && media.currentTime > last + 0.05 && media.currentTime - last < 2) show();
+      if (!media.paused && !media.seeking && media.currentTime > last + 0.05 && media.currentTime - last < 2) {
+        went = true;
+        show();
+      }
       last = media.currentTime;
+      note();
     };
     const paused = () => media.readyState >= 2 && !media.seeking && show();
     media.addEventListener('timeupdate', moved);
+    media.addEventListener('seeking', note);
     media.addEventListener('pause', paused);
     return () => {
       media.removeEventListener('timeupdate', moved);
+      media.removeEventListener('seeking', note);
       media.removeEventListener('pause', paused);
     };
   }, [media]);
@@ -348,12 +369,12 @@ export default function Watch() {
     );
   }
 
-  // O áudio em uso some de todas as fontes: procura o torrent dele, senão pergunta.
-  if (hunting === key) {
+  // Troca de fonte em andamento: o vídeo atual já parou; a nova começa no segundo guardado.
+  if (switching && switching.key === key) {
     return (
       <div className="page player" data-focus-main="">
         {veil}
-        <Waiting title={title.title} subtitle={`Procurando o áudio ${audioOf[plan.index].label} no torrent…`} onExit={goBack} />
+        <Waiting title={title.title} subtitle={switching.text} onExit={goBack} />
       </div>
     );
   }
@@ -401,37 +422,52 @@ export default function Watch() {
   }
 
   const candidate = plan.candidates[plan.index];
-  const { startAt, duration } = resumePoint(title, season, episode);
+  const saved = resumePoint(title, season, episode);
+  // Depois de uma troca de fonte, a nova começa no segundo em que a troca
+  // começou, não no progresso salvo (que anda de 5 em 5 s).
+  const startAt = resumeAt && resumeAt.key === key ? resumeAt.time : saved.startAt;
+  const duration = saved.duration;
   // Legendas são buscadas pelo id IMDb; títulos sem ele ficam sem.
   const imdbId = title.imdbId ?? (/^tt\d+$/.test(title.id) ? title.id : undefined);
   const subtitleId = imdbId ? (isEpisode ? `${imdbId}:${season}:${episode}` : imdbId) : undefined;
-  const hasNext = plan.index + 1 < plan.candidates.length;
   // A lista mostra uma linha por opção distinta. Espelhos da mesma opção não
   // aparecem: são a reserva que o player usa sozinho se o primeiro falhar.
   const labels = plan.candidates.map((c) => c.label).filter((label, i, all) => all.indexOf(label) === i);
   // "Torrent" no fim da lista enquanto não foi escolhido; escolhido, vira uma fonte como as outras
   const hasTorrent = plan.candidates.some((c) => !!c.torrent);
   const options = torrentOk && !hasTorrent ? labels.concat(TORRENT_LABEL) : labels;
-  // O vídeo atual segue tocando enquanto o torrent abre no motor; pronto, troca.
-  const pickTorrent = () => {
-    if (preparingTorrent) return say('Preparando o torrent…');
-    setPreparingTorrent(true);
-    say('Preparando o torrent… o vídeo atual segue até ele abrir.');
-    const forKey = key;
-    torrentCandidate(title, season, episode).then(
-      (found) => {
-        if (forKey !== key) return;
-        setPreparingTorrent(false);
-        if (!found) return say('Nenhum torrent abriu. Continua na fonte atual.');
-        setPlan((p) =>
-          p && p.status === 'play' ? { ...p, candidates: p.candidates.concat(found), index: p.candidates.length } : p,
-        );
-      },
-      () => {
-        setPreparingTorrent(false);
-        say('O torrent não abriu. Continua na fonte atual.');
-      },
+  // Toda troca de fonte começa aqui: o vídeo atual para na hora e o segundo em
+  // que estava fica guardado. A fonte nova (ou esta mesma, se a troca não der
+  // certo) começa nele.
+  const stopHere = () => {
+    const time = position.current.key === key ? position.current.time : startAt;
+    setResumeAt({ key, time });
+    if (media) media.pause();
+  };
+  const switchTo = (index: number) => {
+    stopHere();
+    setPlan((p) => (p && p.status === 'play' ? { ...p, index } : p));
+  };
+  /** troca que espera algo (torrent abrindo, fontes chegando): carregamento no lugar do vídeo */
+  const waitFor = (text: string) => {
+    stopHere();
+    setSwitching({ key, text });
+  };
+  const addAndPlay = (found: typeof candidate) =>
+    setPlan((p) =>
+      p && p.status === 'play' ? { ...p, candidates: p.candidates.concat(found), index: p.candidates.length } : p,
     );
+  // O torrent abre no motor com o vídeo atual parado; não abrindo, este volta no mesmo segundo.
+  const pickTorrent = () => {
+    waitFor('Preparando o torrent…');
+    const forKey = key;
+    const done = (found: typeof candidate | null) => {
+      if (liveKey.current !== forKey) return;
+      setSwitching(null);
+      if (!found) return say('Nenhum torrent abriu. Continua na fonte atual.');
+      addAndPlay(found);
+    };
+    torrentCandidate(title, season, episode).then(done, () => done(null));
   };
   // Fonte ruim fica marcada: a próxima abertura deste título já começa pela
   // seguinte. O áudio em uso se mantém: a próxima fonte é uma com ele; acabou a
@@ -442,61 +478,89 @@ export default function Watch() {
     if (want.original) return offersAudio(s, { audio: 'original', originalLanguage: title.originalLanguage });
     return !!want.lang && effectiveLanguages(s, title.originalLanguage).indexOf(want.lang) >= 0;
   };
+  // fonte que já falhou não volta: torrent que caiu para HTTP não pode voltar a ele (laço)
   const nextWith = (want: AudioChoice, list: typeof plan.candidates, from: number) => {
-    for (let i = from + 1; i < list.length; i++) if (sameAudio(want, list[i].profile)) return i;
+    for (let i = from + 1; i < list.length; i++) {
+      if (!hasFailed(list[i].url) && sameAudio(want, list[i].profile)) return i;
+    }
     return -1;
   };
   const lastResort = (want: AudioChoice) => {
     const forKey = key;
     if (!torrentOk || hasTorrent || torrentTried.current === key) return setLost({ key, want });
     torrentTried.current = key;
-    setHunting(key);
+    setSwitching({ key, text: `Procurando o áudio ${want.label} no torrent…` });
     const done = (found: typeof candidate | null) => {
       if (liveKey.current !== forKey) return;
-      setHunting('');
+      setSwitching(null);
       if (!found) return setLost({ key: forKey, want });
-      setPlan((p) =>
-        p && p.status === 'play' ? { ...p, candidates: p.candidates.concat(found), index: p.candidates.length } : p,
-      );
+      addAndPlay(found);
     };
     torrentCandidate(title, season, episode, (t) => sameAudio(want, t)).then(done, () => done(null));
   };
   // No torrent, trocar o áudio busca outro torrent com ele; nunca cai numa fonte HTTP.
   const pickAudio = (i: number) => {
     const want = audios[i];
-    if (!candidate.torrent) return setPlan({ ...plan, index: audioOf.map((a) => a.key).indexOf(want.key) });
-    if (preparingTorrent) return say('Procurando…');
+    if (!candidate.torrent) return switchTo(audioOf.map((a) => a.key).indexOf(want.key));
     const torrents = plan.candidates.map((c, j) => (c.torrent && j !== plan.index ? j : -1)).filter((j) => j >= 0);
     const loaded =
       torrents.find((j) => audioOf[j].key === want.key) ?? torrents.find((j) => sameAudio(want, plan.candidates[j].profile));
-    if (loaded !== undefined) return setPlan({ ...plan, index: loaded });
+    if (loaded !== undefined) return switchTo(loaded);
     const name = want.lang && !want.label.startsWith('Dual') ? audioName(want.lang) : want.label;
     const current = candidate.torrent.infoHash;
     const forKey = key;
-    setPreparingTorrent(true);
-    say(`Procurando torrent em ${name}…`);
+    waitFor(`Procurando torrent em ${name}…`);
     const done = (found: typeof candidate | null) => {
       if (liveKey.current !== forKey) return;
-      setPreparingTorrent(false);
+      setSwitching(null);
       if (!found) return say(`Nenhum torrent em ${name}. Continua no atual.`);
-      setPlan((p) =>
-        p && p.status === 'play' ? { ...p, candidates: p.candidates.concat(found), index: p.candidates.length } : p,
-      );
+      addAndPlay(found);
     };
     torrentCandidate(title, season, episode, (t) => t.infoHash !== current && sameAudio(want, t)).then(done, () =>
       done(null),
     );
   };
+  // Torrent que não tocou volta para as fontes HTTP, no mesmo segundo: a
+  // primeira que não falhou com o mesmo áudio, senão com o das Configurações,
+  // senão qualquer uma. Daqui não sai outro torrent (torrent → HTTP → torrent
+  // seria um laço); sem fonte HTTP, não há o que tocar.
+  const httpAfterTorrent = (want: AudioChoice, list: typeof plan.candidates) => {
+    const fresh = list.map((c, i) => (!c.torrent && !hasFailed(c.url) ? i : -1)).filter((i) => i >= 0);
+    const first = (ok: (c: (typeof list)[number]) => boolean) => fresh.filter((i) => ok(list[i]))[0];
+    const i =
+      first((c) => sameAudio(want, c.profile)) ??
+      first((c) => offersAudio(c.profile, { audio, originalLanguage: title.originalLanguage })) ??
+      fresh[0];
+    return i === undefined ? -1 : i;
+  };
+  const leaveTorrent = (want: AudioChoice, list: typeof plan.candidates) => {
+    const index = httpAfterTorrent(want, list);
+    if (index < 0) return setPlan({ status: 'none', reason: 'all-failed' });
+    if (!sameAudio(want, list[index].profile)) say(`O torrent não tocou. Seguindo em ${list[index].label}.`);
+    setPlan((p) => (p && p.status === 'play' ? { ...p, candidates: list, index, more: undefined } : p));
+  };
   const next = () => {
+    stopHere();
     markFailed(candidate.url);
     const want = audioOf[plan.index];
-    const found = nextWith(want, plan.candidates, plan.index);
+    const forKey = key;
+    const from = plan.index;
+    const { candidates, more } = plan;
+    // fontes que ainda vão chegar: espera por elas com o carregamento na tela
+    const later = (then: (merged: Candidate[]) => void) => {
+      if (!more) return then(candidates);
+      setSwitching({ key, text: 'Procurando outra fonte…' });
+      more.then((list) => {
+        if (liveKey.current !== forKey) return;
+        setSwitching(null);
+        then(mergeCandidates(candidates, list));
+      });
+    };
+    if (candidate.torrent) return later((merged) => leaveTorrent(want, merged));
+    const found = nextWith(want, plan.candidates, from);
     if (found >= 0) return setPlan({ ...plan, index: found });
     if (!plan.more) return lastResort(want);
-    const from = plan.index;
-    plan.more.then((list) => {
-      if (liveKey.current !== key) return;
-      const merged = mergeCandidates(plan.candidates, list);
+    later((merged) => {
       const index = nextWith(want, merged, from);
       setPlan((p) =>
         p && p.status === 'play' ? { ...p, candidates: merged, index: index >= 0 ? index : p.index, more: undefined } : p,
@@ -545,7 +609,7 @@ export default function Watch() {
         onPickSource={(option) =>
           options[option] === TORRENT_LABEL && !hasTorrent
             ? pickTorrent()
-            : setPlan({ ...plan, index: plan.candidates.map((c) => c.label).indexOf(options[option]) })
+            : switchTo(plan.candidates.map((c) => c.label).indexOf(options[option]))
         }
         // fonte ruim: passa para a próxima sem perguntar
         onFail={next}

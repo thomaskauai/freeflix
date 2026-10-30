@@ -29,6 +29,15 @@ const UPNEXT_S = 20;
 const SAVE_EVERY_MS = 5000;
 /** fonte que não começa a tocar nesse tempo é dada como ruim */
 const START_TIMEOUT_MS = 15000;
+/** link HTTP que nem responde (sem metadados) nesse tempo: os bons levam 1-2 s */
+const NO_ANSWER_MS = 8000;
+/** fonte que já tocou e travou (tempo parado querendo tocar) por isso é dada como ruim */
+const STALL_MS = 20000;
+/** torrent trava e junta folga sozinho (TORRENT_REBUFFER_MAX_MS por vez): tem mais tempo */
+const TORRENT_STALL_MS = 60000;
+const WATCH_TICK_MS = 1000;
+/** "ended" a mais que isso da duração do arquivo não é o fim: é a fonte que caiu */
+const END_SLACK_S = 10;
 /** torrent na primeira vez: 100% é ter esse tanto de vídeo pronto à frente */
 const TORRENT_START_S = 12;
 /** torrent travou tocando: pausa até juntar esse tanto à frente, para não travar de novo */
@@ -279,6 +288,8 @@ export function PlayerShell({
 }: PlayerShellProps) {
   const [time, setTime] = useState(startAt);
   const [length, setLength] = useState(duration);
+  /** a duração veio do arquivo (não é a estimativa do progresso salvo ou do catálogo) */
+  const [lengthKnown, setLengthKnown] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [buffering, setBuffering] = useState(mode === 'video');
   const [failed, setFailed] = useState(false);
@@ -371,9 +382,16 @@ export function PlayerShell({
   useEffect(() => {
     if (mode !== 'video' || !media) return;
     let started = false;
+    /** o tempo já andou com o vídeo tocando: a fonte começou de verdade */
+    let moving = false;
+    let gaveUp = false;
+    /** a maior duração que o arquivo já disse ter */
+    let realLength = 0;
 
     const fail = () => {
-      window.clearTimeout(startTimer);
+      if (gaveUp) return;
+      gaveUp = true;
+      window.clearInterval(watchdog);
       if (failRef.current) failRef.current();
       else {
         setFailed(true);
@@ -381,20 +399,28 @@ export function PlayerShell({
         setPlaying(false);
       }
     };
-    // Fonte lenta ou morta não dá erro, só nunca começa: o relógio decide.
-    const startTimer = window.setTimeout(() => !started && fail(), startTimeout);
 
     const onMeta = () => {
-      if (isFinite(media.duration) && media.duration > 0) setLength(media.duration);
+      // A duração só cresce: conexão que cai no meio faz o aparelho encolher a
+      // duração até onde o arquivo chegou, e isso não é o fim do episódio.
+      if (isFinite(media.duration) && media.duration > realLength) {
+        realLength = media.duration;
+        setLength(realLength);
+        setLengthKnown(true);
+      }
       if (startAt > 0 && startAt < media.duration && media.currentTime < 1) media.currentTime = startAt;
     };
     // Na TV o tempo andando é o sinal mais confiável de que o vídeo começou
     // (o pulo para onde o espectador parou também muda o tempo, e não conta).
     let last = media.currentTime;
     const onTime = () => {
-      setTime(media.currentTime);
+      // o vídeo novo passa pelo zero antes de pular para o ponto de partida: a barra não volta ao início
+      if (moving || media.currentTime >= 1 || !(startAt > 0)) setTime(media.currentTime);
       const step = media.currentTime - last;
-      if (!started && !media.paused && !media.seeking && step > 0.05 && step < 2) onReady();
+      if (!moving && !media.paused && !media.seeking && step > 0.05 && step < 2) {
+        moving = true;
+        onReady();
+      }
       last = media.currentTime;
     };
     // Torrent travou tocando: pausa até juntar folga, em vez de travar a cada pedaço.
@@ -440,12 +466,26 @@ export function PlayerShell({
     const onPause = () => {
       setPlaying(false);
       if (playingCb.current) playingCb.current(false);
-      if (media.currentTime > 0 && !media.ended) progressRef.current(media.currentTime, lengthRef.current, 'pause');
+      // vídeo novo parado antes de pular para o ponto de partida não apaga o progresso salvo
+      if ((moving || media.currentTime >= 1) && !media.ended) {
+        progressRef.current(media.currentTime, lengthRef.current, 'pause');
+      }
+    };
+    // Só é o fim com o vídeo perto da duração de verdade. Fonte que cai ou trava
+    // também dispara "ended" no aparelho, no meio do episódio: aí é fonte ruim (a
+    // próxima começa neste segundo), nunca o próximo episódio.
+    const atEnd = () => {
+      const t = media.currentTime;
+      if (realLength > 0) return t >= realLength - END_SLACK_S;
+      // sem a duração do arquivo (HLS sem fim marcado), vale a estimativa, com a folga dos créditos
+      const guess = lengthRef.current;
+      return !(guess > 0) || t >= guess - Math.max(30, guess * 0.05);
     };
     const onEnded = () => {
       setPlaying(false);
       if (playingCb.current) playingCb.current(false);
-      goNext();
+      if (atEnd()) goNext();
+      else fail();
     };
     const onWaiting = () => {
       setBuffering(true);
@@ -455,10 +495,35 @@ export function PlayerShell({
     const onReady = () => {
       if (!started && startRef.current) startRef.current();
       started = true;
-      window.clearTimeout(startTimer);
       setBuffering(false);
       setStarted(true);
     };
+
+    // Relógio da fonte. Até o tempo andar, ela tem `startTimeout` para começar
+    // ("canplay" sem o vídeo andar não basta); depois, parada querendo tocar por
+    // mais que STALL_MS (ou TORRENT_STALL_MS), é dada como ruim: o player troca
+    // de fonte no mesmo segundo. Pausa do espectador ou autoplay recusado não contam.
+    let waited = 0;
+    let stuck = 0;
+    let mark = media.currentTime;
+    const stallLimit = torrentRef.current ? TORRENT_STALL_MS : STALL_MS;
+    const watchdog = window.setInterval(() => {
+      const at = media.currentTime;
+      const went = at !== mark;
+      mark = at;
+      if (!holding && media.paused) {
+        stuck = 0;
+        return;
+      }
+      if (!moving) {
+        waited += WATCH_TICK_MS;
+        const silent = !torrentRef.current && media.readyState === 0 && waited >= NO_ANSWER_MS;
+        if (waited >= startTimeout || silent) fail();
+        return;
+      }
+      stuck = went && !media.seeking ? 0 : stuck + WATCH_TICK_MS;
+      if (stuck >= stallLimit) fail();
+    }, WATCH_TICK_MS);
 
     media.addEventListener('loadedmetadata', onMeta);
     media.addEventListener('durationchange', onMeta);
@@ -476,7 +541,7 @@ export function PlayerShell({
     if (autoplay && autoplay.catch) autoplay.catch(() => undefined);
 
     return () => {
-      window.clearTimeout(startTimer);
+      window.clearInterval(watchdog);
       holding = false;
       window.clearTimeout(holdTimer);
       media.removeEventListener('loadedmetadata', onMeta);
@@ -710,7 +775,8 @@ export function PlayerShell({
   /** posição mostrada: o destino da passada em andamento, ou onde o vídeo está */
   const shown = seeking ? seeking.target : time;
   const remaining = length > 0 ? length - shown : Infinity;
-  const showUpNext = !!upNext && !!onNext && started && !failed && remaining <= UPNEXT_S;
+  // só com a duração do arquivo: a estimativa (catálogo, progresso salvo) pode ser menor que o episódio
+  const showUpNext = !!upNext && !!onNext && started && !failed && lengthKnown && remaining <= UPNEXT_S;
 
   // O cartão do próximo episódio chega com o foco; a contagem chegando a zero começa o episódio.
   useEffect(() => {
@@ -720,8 +786,9 @@ export function PlayerShell({
   }, [showUpNext, wake]);
 
   useEffect(() => {
-    if (showUpNext && !seeking && remaining <= 0.5) goNext();
-  }, [showUpNext, seeking, remaining, goNext]);
+    // vídeo com erro pode dizer que está no fim; o fim conta só com ele tocando
+    if (showUpNext && !seeking && remaining <= 0.5 && media && !media.error) goNext();
+  }, [showUpNext, seeking, remaining, goNext, media]);
 
   const showToast = (message: string) => {
     setToast(message);
