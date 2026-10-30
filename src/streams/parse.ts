@@ -35,6 +35,18 @@ const PRE_RELEASE = /\bpre-?dvd(-?rip)?\b|\bhq[ ._-]?pre\b/i;
 const isCam = (text: string, filename: string) =>
   CAM_TAGS.test(text) || TELESYNC.test(text) || PRE_RELEASE.test(text) || CAM_AFTER_YEAR.test(afterYear(filename));
 
+/**
+ * Cabeçalhos que o <video> não manda. Pedir só um User-Agent de navegador
+ * ("Mozilla/…") não conta: o do navegador e o da TV já começam assim.
+ */
+function needsHeaders(request: Record<string, string> | undefined): boolean {
+  if (!request) return false;
+  return Object.keys(request).some((name) => !(name.toLowerCase() === 'user-agent' && /^Mozilla\//.test(request[name])));
+}
+
+/** player embutido de site ("MegaEmbed", ".../embed/123") */
+const EMBED = /embed/i;
+
 /** arquivo que não é vídeo (aplicativo, compactado) */
 const NOT_VIDEO = /\.(apk|exe|msi|dmg|zip|rar|7z|iso)(\b|$)/i;
 
@@ -133,9 +145,10 @@ export function parseStream(stream: AddonStream, addon: string): ParsedStream {
   let unplayable: Unplayable | undefined;
   if (!stream.url) unplayable = stream.infoHash ? 'torrent' : 'external';
   // <video> não deixa mandar cabeçalhos próprios na requisição
-  else if (hints.proxyHeaders && hints.proxyHeaders.request && Object.keys(hints.proxyHeaders.request).length > 0) {
-    unplayable = 'headers';
-  } else if (NOT_VIDEO.test(filename)) unplayable = 'not-video';
+  else if (needsHeaders(hints.proxyHeaders && hints.proxyHeaders.request)) unplayable = 'headers';
+  // página de player embutido (não é o arquivo de vídeo)
+  else if (!containerOf(stream.url, filename, '') && EMBED.test(`${stream.url}\n${text}`)) unplayable = 'external';
+  else if (NOT_VIDEO.test(filename)) unplayable = 'not-video';
   else if (isCam(text, filename)) unplayable = 'cam';
 
   const languages: string[] = [];

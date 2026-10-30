@@ -78,6 +78,15 @@ describe('parseStream', () => {
         .unplayable,
     ).toBe('headers');
   });
+
+  it('aceita User-Agent de navegador e descarta página de player embutido', () => {
+    const ua = (agent: string) => ({ behaviorHints: { proxyHeaders: { request: { 'User-Agent': agent } } } });
+    expect(parseStream(stream('4K', 'x', { url: 'http://h/v.mp4', ...ua('Mozilla/5.0 (Stremio M3U Addon)') }), 'T').unplayable).toBeUndefined();
+    expect(parseStream(stream('4K', 'x', { url: 'http://h/v.mp4', ...ua('VLC/3.0') }), 'T').unplayable).toBe('headers');
+    expect(
+      parseStream(stream('Auto', 'Servidor: MegaEmbed', { url: 'https://viewplayer.online/filme/tt1' }), 'T').unplayable,
+    ).toBe('external');
+  });
 });
 
 describe('rankStreams', () => {
