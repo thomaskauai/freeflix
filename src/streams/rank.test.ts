@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AddonStream } from '../data/addonClient';
-import { parseStream } from './parse';
-import { srtToVtt } from './subtitles';
+import { parseStream, readStructured } from './parse';
+import { srtToVtt, streamRelease } from './subtitles';
 import {
   audioChoice,
   audioOptions,
@@ -15,6 +15,7 @@ import {
   rankStreams,
   rankTorrents,
   resolutionCap,
+  wrongDuration,
   type RankContext,
   type TorrentStream,
 } from './rank';
@@ -600,5 +601,122 @@ describe('arquivo de outro título', () => {
     expect(file('1080pHLS4.7Mbps1080phls4.7mbps.pad-Cinejoy', '', bb)).toBeUndefined();
     expect(file('video.mp4', '', bb)).toBeUndefined();
     expect(file('Lilo.and.Stitch.2002.1080p.mp4', '', [])).toBe('other-title');
+  });
+});
+
+describe('linha estruturada ff: (PlavioHD com Custom formatter)', () => {
+  // respostas reais do PlavioHD com a descrição de src/sources.json (o " [HF]" no fim é dele)
+  const plavio = (title: string, filename?: string): AddonStream => ({
+    name: 'PlavioHD',
+    title,
+    url: 'https://cdn.example/video.mkv?t=1',
+    behaviorHints: filename ? { notWebReady: false, filename } : { notWebReady: false },
+  });
+  const interstellar1080 = plavio(
+    'PlavioHD\nInterstellar (2014) IMAX\n1080p · BluRay · HEVC · English, Hindi · 24.8 GB\nff:lang=HINDI, ENGLISH,EN,HI;res=1080p;q=BluRay;enc=HEVC;size=24750000000;file=Interstellar (2014) IMAX 1080p UHD BluRay DV HDR 10bit HEVC x265 (HiDt-LUMiX).mkv Size:; [HF]',
+    'Interstellar (2014) IMAX 1080p UHD BluRay DV HDR 10bit HEVC (Hindi DDP 5.1 + English DDP',
+  );
+
+  it('lê os campos e ignora o que vem depois do último ";"', () => {
+    const r = readStructured(interstellar1080.title as string);
+    expect(r?.info).toEqual({
+      languages: ['hi', 'en'],
+      resolution: 1080,
+      quality: 'BluRay',
+      encode: 'HEVC',
+      sizeBytes: 24750000000,
+      file: 'Interstellar (2014) IMAX 1080p UHD BluRay DV HDR 10bit HEVC x265 (HiDt-LUMiX).mkv Size:',
+    });
+    expect(r?.rest).toBe('PlavioHD\nInterstellar (2014) IMAX\n1080p · BluRay · HEVC · English, Hindi · 24.8 GB');
+  });
+
+  it('idiomas e resolução da linha valem mais que o nome ("1080p UHD" não é 4K)', () => {
+    const p = parseStream(interstellar1080, 'PlavioHD');
+    expect(p.languages).toEqual(['hi', 'en']);
+    expect(p.exactLanguages).toBe(true);
+    expect(p.multiAudio).toBe(true);
+    expect(p.dualAudio).toBe(false);
+    expect(p.resolution).toBe(1080);
+    expect(p.sizeBytes).toBe(24750000000);
+    expect(describeStream(p)).toBe('1080p, dual: híndi e inglês, PlavioHD');
+  });
+
+  it('nome junto com códigos: o idioma esquecido nos códigos soltos entra', () => {
+    const p = parseStream(
+      plavio(
+        'PlavioHD\nInception-\n1080p · English, French · 2.41 GB\nff:lang=ENGLISH, JAPANESE, FRENCH,EN,FR;res=1080p;size=2410000000;grp=1080P;file=Inception-1080P; [MB]',
+        'Inception-1080P',
+      ),
+      'PlavioHD',
+    );
+    expect(p.languages).toEqual(['en', 'ja', 'fr']);
+  });
+
+  it('"RUSSIAN (SUB)" é legenda: sem áudio russo', () => {
+    const t = 'PlavioHD\nInterstellar\n1080p · 3.33 GB\nff:lang=RUSSIAN (SUB);res=1080p;size=3330000000;file=Interstellar; [MB]';
+    expect(readStructured(t)?.info.subtitles).toEqual(['ru']);
+    const p = parseStream(plavio(t, 'Interstellar'), 'PlavioHD');
+    expect(p.languages).toEqual([]);
+    expect(p.exactLanguages).toBeUndefined();
+    // pelo nome antigo ("Russian (Sub)") virava dublagem russa
+    expect(parseStream(plavio('Interstellar\n1080p · Russian (Sub) · 3.33 GB [MB]', 'Interstellar'), 'PlavioHD').languages).toEqual(['ru']);
+  });
+
+  it('acha a linha mesmo colada na anterior', () => {
+    const p = parseStream(plavio('PlavioHD\n1080p · English ff:lang=EN;res=1080p;file= 1080p; [CV]', '1080p'), 'PlavioHD');
+    expect(p.languages).toEqual(['en']);
+    expect(p.multiAudio).toBe(false);
+  });
+
+  it('episódio: legenda, S01E01 e o nome do arquivo para casar legenda', () => {
+    const s = plavio(
+      'PlavioHD\nBreaking Bad\nS01E01\n1080p · BluRay · x264 · English, Hindi · 1.61 GB\nff:lang=HINDI, ENGLISH,EN,HI;sub=EN;res=1080p;q=BluRay;enc=x264;size=1610000000;se=S01E01;file=Breaking.Bad.S01.E01.1080p.BluRay.Hindi.DD2.0-English.5.1.ESub.x264- .to.mkv; [CV]',
+      'Breaking.Bad.S01.E01.1080p.BluRay.Hindi.DD2.0-English.5.1.ESub.x264- .to.mkv(1.5…',
+    );
+    expect(readStructured(s.title as string)?.info).toMatchObject({ subtitles: ['en'], seasonEpisode: 'S01E01' });
+    expect(streamRelease(s)).toBe('Breaking.Bad.S01.E01.1080p.BluRay.Hindi.DD2.0-English.5.1.ESub.x264- .to.mkv');
+    expect(streamRelease(interstellar1080)).toBe('Interstellar (2014) IMAX 1080p UHD BluRay DV HDR 10bit HEVC x265 (HiDt-LUMiX).mkv');
+  });
+
+  it('o nome do release não leva a linha ff:', () => {
+    const s = plavio('PlavioHD\nPlavioHD\n1080p · English, Hindi · 4.7 GB\nff:lang=HINDI, ENGLISH,EN,HI;res=1080p;size=4700000000;file=PlavioHD; [VM]');
+    expect(streamRelease(s)).not.toContain('ff:');
+  });
+
+  it('lista exata não deixa o original implícito', () => {
+    const exact = parseStream(plavio('Filme\nff:lang=hi,ta;res=1080p;'), 'P');
+    const vague = parseStream(plavio('Filme 1080p Multi Audio'), 'P');
+    expect(offersAudio(exact, { audio: 'original', originalLanguage: 'en' })).toBe(false);
+    expect(foreignOnly(exact, { audio: 'original', originalLanguage: 'en' })).toBe(true);
+    expect(offersAudio(vague, { audio: 'original', originalLanguage: 'en' })).toBe(true);
+    // com o original na lista, serve
+    expect(offersAudio(parseStream(plavio('Filme\nff:lang=hi,en;'), 'P'), { audio: 'original', originalLanguage: 'en' })).toBe(true);
+  });
+
+  it('campo omitido: vale a dedução pelo nome', () => {
+    const p = parseStream(plavio('Filme.2020.1080p.Dublado\nff:res=720p;size=1000;', 'Filme.2020.1080p.Dublado.mkv'), 'P');
+    expect(p.languages).toEqual(['pt']);
+    expect(p.exactLanguages).toBeUndefined();
+    expect(p.resolution).toBe(720);
+  });
+
+  it('qualidade CAM na linha é gravação de cinema', () => {
+    expect(parseStream(plavio('Filme\nff:q=CAM;res=720p;'), 'P').unplayable).toBe('cam');
+  });
+
+  it('duração: lê e descarta arquivo de outro tamanho só com folga grande', () => {
+    const p = parseStream(plavio('Filme\nff:dur=2h:49m:0s;'), 'P');
+    expect(p.durationSec).toBe(10140);
+    expect(readStructured('ff:dur=169m;')?.info.durationSec).toBe(10140);
+    expect(readStructured('ff:dur=5400;')?.info.durationSec).toBe(5400);
+    expect(wrongDuration(p, 169)).toBe(false);
+    // versão estendida (+30%) passa
+    expect(wrongDuration({ durationSec: 169 * 60 * 1.3 }, 169)).toBe(false);
+    // episódio de 45 min na fonte de um filme de 169 min
+    expect(wrongDuration({ durationSec: 45 * 60 }, 169)).toBe(true);
+    expect(wrongDuration({ durationSec: 300 * 60 }, 169)).toBe(true);
+    // sem duração do arquivo ou do catálogo, nada muda
+    expect(wrongDuration({}, 169)).toBe(false);
+    expect(wrongDuration(p, undefined)).toBe(false);
   });
 });

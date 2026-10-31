@@ -1,4 +1,5 @@
 import type { AddonStream } from '../data/addonClient';
+import { normalizeLanguage } from '../data/language';
 
 // Cada addon descreve a fonte em texto livre (nome, título, descrição). Aqui
 // esse texto vira dados para o ranking. É heurística: cobre os formatos comuns.
@@ -119,7 +120,118 @@ export interface ParsedStream {
    * legenda, e a do app ficaria por cima dela.
    */
   hardSubs?: boolean;
+  /**
+   * Os idiomas vieram da linha estruturada (ff:) e são a lista completa do
+   * arquivo: "dual"/"multi" não deixa idioma implícito (o original) de fora.
+   */
+  exactLanguages?: boolean;
+  /** duração do arquivo em segundos, quando o addon informa (linha ff:) */
+  durationSec?: number;
+  /** nome do arquivo que o addon informa na linha ff: */
+  file?: string;
 }
+
+/**
+ * Linha estruturada que um addon pode mandar no texto da fonte (no PlavioHD,
+ * pelo "Custom formatter" da descrição), para o app não adivinhar pelo nome:
+ *
+ *   ff:lang=en,hi;sub=en;res=1080p;q=BluRay;enc=HEVC;dur=2h:49m:0s;size=15020000000;grp=LUMiX;se=S01E01;file=Nome.do.arquivo.mkv;
+ *
+ * Cada campo é `chave=valor;` (o `;` fecha o campo, então o que vier depois
+ * do último, como o " [FB]" que o PlavioHD cola no fim, é ignorado). Listas
+ * separadas por vírgula; idiomas em ISO 639-1, maiúsculas ou minúsculas (nome
+ * em inglês e código de três letras também valem; o resto é descartado). Campo vazio vem omitido, e
+ * campo omitido é "não sei": aí vale a dedução pelo nome.
+ */
+export interface StructuredInfo {
+  /** idiomas do áudio; presente só se o addon mandou `lang` */
+  languages?: string[];
+  subtitles?: string[];
+  resolution?: number;
+  quality?: string;
+  encode?: string;
+  durationSec?: number;
+  sizeBytes?: number;
+  group?: string;
+  seasonEpisode?: string;
+  file?: string;
+}
+
+const STRUCTURED = /(^|\s)ff:((?:[a-z]+=[^;\n]*;)+)/i;
+
+/**
+ * Lista de idiomas → ISO 639-1. Aceita também nome ("ENGLISH") e código de três
+ * letras: o PlavioHD manda o grupo inteiro junto ("ENGLISH, JAPANESE, FRENCH")
+ * e às vezes esquece um deles nos códigos soltos. "X (SUB)" é legenda, não áudio.
+ */
+function languageList(value: string): { audio: string[]; subs: string[] } {
+  const audio: string[] = [];
+  const subs: string[] = [];
+  value.split(',').forEach((part) => {
+    const sub = /\(\s*sub(s|titles?)?\s*\)/i.test(part);
+    const code = normalizeLanguage(part.replace(/\(.*?\)/g, '').trim());
+    const list = sub ? subs : audio;
+    if (code && list.indexOf(code) < 0) list.push(code);
+  });
+  return { audio, subs };
+}
+
+/** "2h:49m:0s", "169m", "10140" (segundos) → segundos */
+function durationOf(value: string): number {
+  if (/^\d+(\.\d+)?$/.test(value)) return Math.round(Number(value));
+  let total = 0;
+  let found = false;
+  value.replace(/(\d+)\s*([hms])/gi, (_m, n: string, unit: string) => {
+    found = true;
+    total += Number(n) * (unit.toLowerCase() === 'h' ? 3600 : unit.toLowerCase() === 'm' ? 60 : 1);
+    return '';
+  });
+  return found ? total : 0;
+}
+
+function heightOf(value: string): number {
+  if (/^(4k|uhd)$/i.test(value)) return 2160;
+  const m = value.match(/^(\d{3,4})[pi]$/i);
+  return m ? Number(m[1]) : 0;
+}
+
+/** A linha ff: do texto, se houver, e o texto sem ela. */
+export function readStructured(text: string): { info: StructuredInfo; rest: string } | null {
+  const m = text.match(STRUCTURED);
+  if (!m) return null;
+  const info: StructuredInfo = {};
+  m[2].split(';').forEach((pair) => {
+    const eq = pair.indexOf('=');
+    if (eq <= 0) return;
+    const key = pair.slice(0, eq).trim().toLowerCase();
+    const value = pair.slice(eq + 1).trim();
+    if (!value) return;
+    if (key === 'lang' || key === 'sub') {
+      const { audio, subs } = languageList(value);
+      if (key === 'lang') info.languages = audio;
+      const subtitles = (info.subtitles ?? []).concat(key === 'sub' ? audio.concat(subs) : subs);
+      if (subtitles.length) info.subtitles = subtitles.filter((c, i) => subtitles.indexOf(c) === i);
+    }
+    else if (key === 'res') info.resolution = heightOf(value) || undefined;
+    else if (key === 'q') info.quality = value;
+    else if (key === 'enc') info.encode = value;
+    else if (key === 'dur') info.durationSec = durationOf(value) || undefined;
+    else if (key === 'size') info.sizeBytes = Math.round(Number(value)) || undefined;
+    else if (key === 'grp') info.group = value;
+    else if (key === 'se') info.seasonEpisode = value;
+    else if (key === 'file') info.file = value;
+  });
+  const start = (m.index ?? 0) + m[1].length;
+  const end = text.indexOf('\n', start);
+  const rest = (text.slice(0, start) + (end < 0 ? '' : text.slice(end))).replace(/[ \t]+\n/g, '\n').trim();
+  return { info, rest };
+}
+
+/** Texto da fonte sem a linha ff: (para mostrar ou casar legenda). */
+export const withoutStructured = (text: string) => readStructured(text)?.rest ?? text;
+
+/** qualidade de gravação de cinema, como o AIOStreams escreve (CAM, TS, TC, SCR) */
+const CAM_QUALITY = /^(hd-?)?(cam|ts|tc|scr|telesync|telecine)(rip)?$/i;
 
 const RESOLUTIONS: [RegExp, number][] = [
   [/\b(2160p|4k|uhd)\b/i, 2160],
@@ -195,7 +307,11 @@ function containerOf(url: string | undefined, filename: string, text: string): C
 export function parseStream(stream: AddonStream, addon: string, names?: string[]): ParsedStream {
   const hints = stream.behaviorHints ?? {};
   const filename = hints.filename ?? '';
-  const text = [stream.name, stream.title, stream.description, filename].filter(Boolean).join('\n');
+  const raw = [stream.name, stream.title, stream.description].filter(Boolean).join('\n');
+  const structured = readStructured(raw);
+  const ff = structured?.info ?? {};
+  // a dedução pelo nome não lê a linha ff:, só o nome do arquivo que ela traz
+  const text = [structured ? structured.rest : raw, filename, ff.file ?? ''].filter(Boolean).join('\n');
 
   let unplayable: Unplayable | undefined;
   if (!stream.url) unplayable = stream.infoHash ? 'torrent' : 'external';
@@ -204,23 +320,32 @@ export function parseStream(stream: AddonStream, addon: string, names?: string[]
   // página de player embutido (não é o arquivo de vídeo)
   else if (!containerOf(stream.url, filename, '') && EMBED.test(`${stream.url}\n${text}`)) unplayable = 'external';
   else if (NOT_VIDEO.test(filename)) unplayable = 'not-video';
-  else if (isCam(text, filename)) unplayable = 'cam';
-  else if (names && otherTitle(filename, [stream.name, stream.title, stream.description].join(' '), names))
+  else if (isCam(text, filename) || CAM_QUALITY.test(ff.quality ?? '')) unplayable = 'cam';
+  else if (names && otherTitle(filename, structured ? structured.rest : raw, names))
     unplayable = 'other-title';
 
-  const languages: string[] = [];
+  // Idiomas: a lista da linha ff: é a resposta; sem ela (ou sem código que
+  // valha, como "RUSSIAN (SUB)"), o que o texto cita.
+  const exactLanguages = !!ff.languages && ff.languages.length > 0;
+  const languages: string[] = exactLanguages && ff.languages ? ff.languages.slice() : [];
   const add = (code: string) => languages.indexOf(code) < 0 && languages.push(code);
-  Object.keys(FLAGS).forEach((flag) => text.indexOf(flag) >= 0 && add(FLAGS[flag]));
-  LANGUAGE_WORDS.forEach(([pattern, code]) => pattern.test(text) && add(code));
+  if (!exactLanguages) {
+    Object.keys(FLAGS).forEach((flag) => text.indexOf(flag) >= 0 && add(FLAGS[flag]));
+    LANGUAGE_WORDS.forEach(([pattern, code]) => pattern.test(text) && add(code));
+  }
 
   // "Dual Áudio", "Multi", "Multi-Lang". "Multi-Sub" é sobre legendas, não áudio.
-  const multiAudio = /\b(dual|multi)(?![- .]?subs?\b)([- .]?(audio|áudio|lang))?\b/i.test(text);
+  const multiAudio = exactLanguages
+    ? languages.length > 1
+    : /\b(dual|multi)(?![- .]?subs?\b)([- .]?(audio|áudio|lang))?\b/i.test(text);
 
-  let resolution = 0;
-  for (const [pattern, height] of RESOLUTIONS) {
-    if (pattern.test(text)) {
-      resolution = height;
-      break;
+  let resolution = ff.resolution ?? 0;
+  if (!resolution) {
+    for (const [pattern, height] of RESOLUTIONS) {
+      if (pattern.test(text)) {
+        resolution = height;
+        break;
+      }
     }
   }
 
@@ -229,10 +354,11 @@ export function parseStream(stream: AddonStream, addon: string, names?: string[]
     url: stream.url,
     unplayable,
     resolution,
-    sizeBytes: sizeOf(text, hints.videoSize),
+    sizeBytes: sizeOf(text, hints.videoSize || ff.sizeBytes),
     languages,
     multiAudio,
-    dualAudio: multiAudio && /\bdual\b/i.test(text),
+    // lista exata: nada fica implícito
+    dualAudio: !exactLanguages && multiAudio && /\bdual\b/i.test(text),
     codec: /\b(hevc|[hx][. ]?265)\b/i.test(text)
       ? 'hevc'
       : /\bav1\b/i.test(text)
@@ -244,5 +370,8 @@ export function parseStream(stream: AddonStream, addon: string, names?: string[]
     container: containerOf(stream.url, filename, text),
     notWebReady: !!hints.notWebReady,
     hardSubs: /\blegendad[oa]s?\b|\bhard[- ]?sub(s|bed)?\b|\blegendas?\s+embutidas?\b/i.test(text),
+    ...(exactLanguages ? { exactLanguages } : {}),
+    ...(ff.durationSec ? { durationSec: ff.durationSec } : {}),
+    ...(ff.file ? { file: ff.file } : {}),
   };
 }

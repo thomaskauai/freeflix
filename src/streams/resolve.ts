@@ -3,7 +3,16 @@ import type { Title } from '../data/types';
 import { audioFor } from './audioMemory';
 import { getSpeed } from './network';
 import { parseStream, type ParsedStream } from './parse';
-import { describeStream, foreignOnly, offersAudio, pickStreams, rankStreams, type RankContext, type SourceProfile } from './rank';
+import {
+  describeStream,
+  foreignOnly,
+  offersAudio,
+  pickStreams,
+  rankStreams,
+  wrongDuration,
+  type RankContext,
+  type SourceProfile,
+} from './rank';
 import { installDefaultSources, listSources, sourcePriority, type SourceAddon } from './sources';
 import { releaseOf, rememberRelease } from './subtitles';
 
@@ -104,6 +113,9 @@ export async function resolvePlayback(
           const priority = sourcePriority(addon, listSources());
           lists[i] = streams.map((s) => {
             const parsed = { ...parseStream(s, addon.name, names), priority, base: addon.base };
+            // filme com arquivo de duração bem diferente da do catálogo: outro título
+            if (title.type === 'movie' && !parsed.unplayable && wrongDuration(parsed, title.runtime))
+              parsed.unplayable = 'other-title';
             rememberRelease(parsed, s);
             return parsed;
           });
@@ -174,7 +186,14 @@ function toCandidate(s: ParsedStream): Candidate {
     url: s.url as string,
     hls: s.container === 'hls',
     label,
-    profile: { base: s.base ?? '', label, languages: s.languages, multiAudio: s.multiAudio, dualAudio: s.dualAudio },
+    profile: {
+      base: s.base ?? '',
+      label,
+      languages: s.languages,
+      multiAudio: s.multiAudio,
+      dualAudio: s.dualAudio,
+      ...(s.exactLanguages ? { exactLanguages: true } : {}),
+    },
     hardSubs: !!s.hardSubs,
     release: releaseOf(s),
   };

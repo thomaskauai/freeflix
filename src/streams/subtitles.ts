@@ -1,6 +1,7 @@
 import { getJson, type AddonStream } from '../data/addonClient';
 import { subtitleCodes } from '../data/language';
 import { audioName } from './rank';
+import { readStructured, withoutStructured } from './parse';
 
 // Legendas do OpenSubtitles, por dois caminhos:
 //  - o addon v3 do Stremio (/subtitles/{tipo}/{id}.json): rápido, mas a lista
@@ -96,6 +97,11 @@ const releases = new WeakMap<object, string>();
  * Sem isso, o texto da fonte (às vezes diz BluRay, WEB-DL…).
  */
 export function streamRelease(stream: AddonStream): string {
+  const own = [stream.title, stream.description].filter(Boolean).join('\n');
+  const structured = readStructured(own);
+  // nome de arquivo de verdade na linha ff: (o PlavioHD corta o filename e cola lixo depois do .mkv)
+  const file = structured && structured.info.file && structured.info.file.match(/^(.+?\.(mkv|mp4|avi|m4v|webm))(?=\s|\)|$)/i);
+  if (file && /(^|[^0-9])((19|20)\d\d|\d{3,4}p)([^0-9]|$)/i.test(file[1])) return file[1].trim();
   const hinted = stream.behaviorHints && stream.behaviorHints.filename;
   // o PenguPlay cola "|^|" e outras marcas depois do nome
   if (hinted) return hinted.split('|')[0].trim();
@@ -107,7 +113,7 @@ export function streamRelease(stream: AddonStream): string {
     /* fica como veio */
   }
   if (/\.(mkv|mp4|avi|m4v|webm)$/i.test(last) && /(^|[^0-9])((19|20)\d\d|\d{3,4}p)([^0-9]|$)/i.test(last)) return last;
-  return [stream.title || stream.description || '', stream.name || ''].join(' ').replace(/\s+/g, ' ').trim();
+  return [withoutStructured(stream.title || stream.description || ''), stream.name || ''].join(' ').replace(/\s+/g, ' ').trim();
 }
 
 /** Guarda o nome do release junto da fonte já lida (sem mexer no tipo dela). */

@@ -350,7 +350,7 @@ export default function Watch() {
   const originalLanguage = title.originalLanguage;
   const prefs = { audio, originalLanguage };
   const audioOf = plan.candidates.map((c) => audioChoice(c.profile, originalLanguage, audio));
-  const serves = (want: AudioChoice, s: Pick<SourceProfile, 'languages' | 'multiAudio' | 'dualAudio'>) =>
+  const serves = (want: AudioChoice, s: Pick<SourceProfile, 'languages' | 'multiAudio' | 'dualAudio' | 'exactLanguages'>) =>
     servesAudio(want, s, originalLanguage);
   /** áudios das fontes que ainda não falharam */
   const freshAudios = () =>

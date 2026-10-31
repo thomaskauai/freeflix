@@ -13,17 +13,22 @@ export interface SourceProfile {
   languages: string[];
   multiAudio: boolean;
   dualAudio?: boolean;
+  /** idiomas da linha ff: (lista completa; parse.ts) */
+  exactLanguages?: boolean;
 }
 
 /** O que a fonte diz do áudio. */
-type AudioInfo = { languages: string[]; multiAudio: boolean; dualAudio?: boolean };
+type AudioInfo = { languages: string[]; multiAudio: boolean; dualAudio?: boolean; exactLanguages?: boolean };
+
+/** "multi" que pode esconder idioma: o original fica implícito (não vale para lista exata) */
+const vagueMulti = (s: AudioInfo) => s.multiAudio && !s.exactLanguages;
 
 /**
  * Idiomas da fonte, completando o que "dual"/"multi" deixa implícito: "Dual
  * Áudio" de release brasileiro é português e o original; "multi" traz o original.
  */
 export function effectiveLanguages(s: AudioInfo, originalLanguage?: string): string[] {
-  if (!s.multiAudio) return s.languages;
+  if (!vagueMulti(s)) return s.languages;
   const languages = s.languages.length ? s.languages.slice() : s.dualAudio ? ['pt'] : [];
   if (originalLanguage && languages.indexOf(originalLanguage) < 0) languages.push(originalLanguage);
   return languages;
@@ -84,7 +89,7 @@ export function offersAudio(s: AudioInfo, ctx: Pick<RankContext, 'audio' | 'orig
   const languages = effectiveLanguages(s, ctx.originalLanguage);
   const tagged = s.languages.length > 0;
   const hasOriginal =
-    !tagged || s.multiAudio || (!!ctx.originalLanguage && s.languages.indexOf(ctx.originalLanguage) >= 0);
+    !tagged || vagueMulti(s) || (!!ctx.originalLanguage && s.languages.indexOf(ctx.originalLanguage) >= 0);
   if (ctx.audio === 'original') return hasOriginal;
   return languages.indexOf(ctx.audio) >= 0 || (ctx.originalLanguage === ctx.audio && hasOriginal);
 }
@@ -96,7 +101,7 @@ export function offersAudio(s: AudioInfo, ctx: Pick<RankContext, 'audio' | 'orig
 function languageTier(s: ParsedStream, ctx: RankContext): number {
   const tagged = s.languages.length > 0;
   const hasOriginal =
-    !tagged || s.multiAudio || (!!ctx.originalLanguage && s.languages.indexOf(ctx.originalLanguage) >= 0);
+    !tagged || vagueMulti(s) || (!!ctx.originalLanguage && s.languages.indexOf(ctx.originalLanguage) >= 0);
 
   if (ctx.audio !== 'original') {
     if (effectiveLanguages(s, ctx.originalLanguage).indexOf(ctx.audio) >= 0) return 5;
@@ -131,7 +136,7 @@ function cleanAudioTier(s: ParsedStream, ctx: Pick<RankContext, 'audio' | 'origi
  * sem português, inglês, o original da obra ou o preferido.
  */
 export function foreignOnly(s: ParsedStream, ctx: Pick<RankContext, 'audio' | 'originalLanguage'>): boolean {
-  if (s.multiAudio || s.languages.length === 0) return false;
+  if (vagueMulti(s) || s.languages.length === 0) return false;
   const wanted = ['pt', 'en'];
   if (ctx.originalLanguage) wanted.push(ctx.originalLanguage);
   if (ctx.audio !== 'original') wanted.push(ctx.audio);
@@ -215,6 +220,20 @@ export function rankStreams(streams: ParsedStream[], ctx: RankContext): ParsedSt
       return a.i - b.i;
     })
     .map((entry) => entry.s);
+}
+
+/**
+ * Duração do arquivo muito diferente da do catálogo: é outro título (o PenguPlay
+ * já mandou Lilo & Stitch na fonte de A Viagem de Chihiro), um trailer, uma
+ * amostra ou um episódio. Só para filme, e só com folga grande: versão
+ * estendida, IMAX ou corte do diretor passam de +30% e a duração do catálogo
+ * às vezes erra uns minutos; abaixo de 60% ou acima de 160% já não é o filme.
+ * Sem a duração do arquivo (só a linha ff: informa) ou do catálogo, nada muda.
+ */
+export function wrongDuration(s: Pick<ParsedStream, 'durationSec'>, runtimeMinutes?: number): boolean {
+  if (!s.durationSec || !runtimeMinutes || runtimeMinutes <= 0) return false;
+  const ratio = s.durationSec / 60 / runtimeMinutes;
+  return ratio < 0.6 || ratio > 1.6;
 }
 
 /** Um torrent do Torrentio, já lido pelo parse. */
