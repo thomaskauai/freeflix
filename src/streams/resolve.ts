@@ -1,4 +1,5 @@
-import { fetchStreams } from '../data/addonClient';
+import { fetchMeta, fetchStreams } from '../data/addonClient';
+import { CATALOG } from '../settings';
 import type { Title } from '../data/types';
 import { audioFor } from './audioMemory';
 import { getSpeed } from './network';
@@ -100,15 +101,23 @@ export async function resolvePlayback(
   if (listSources().length === 0) return { reason: 'no-addons' };
   if (addons.length === 0) return { reason: 'not-found' };
 
-  const names = [title.title, title.originalTitle ?? ''];
+  // nome em inglês também vale ("Spirited.Away…" para A Viagem de Chihiro); o
+  // catálogo em inglês já veio nos detalhes, então costuma estar em cache
+  const english = CATALOG.fallback
+    ? fetchMeta(CATALOG.fallback, title.type, title.id).then(
+        (meta) => (meta ? meta.name : ''),
+        () => '',
+      )
+    : Promise.resolve('');
   let answered = 0;
   let pending = addons.length;
   const lists: ParsedStream[][] = addons.map(() => []);
   let arrived: () => void = () => undefined;
   const all = Promise.all(
     addons.map((addon, i) =>
-      fetchStreams(addon.base, title.type, videoId).then(
-        (streams) => {
+      Promise.all([fetchStreams(addon.base, title.type, videoId), english]).then(
+        ([streams, englishName]) => {
+          const names = [title.title, title.originalTitle ?? '', englishName];
           answered++;
           const priority = sourcePriority(addon, listSources());
           lists[i] = streams.map((s) => {

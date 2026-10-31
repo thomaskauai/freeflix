@@ -319,9 +319,10 @@ export function parseStream(stream: AddonStream, addon: string, names?: string[]
   else if (needsHeaders(hints.proxyHeaders && hints.proxyHeaders.request)) unplayable = 'headers';
   // página de player embutido (não é o arquivo de vídeo)
   else if (!containerOf(stream.url, filename, '') && EMBED.test(`${stream.url}\n${text}`)) unplayable = 'external';
-  else if (NOT_VIDEO.test(filename)) unplayable = 'not-video';
+  else if (NOT_VIDEO.test(filename || ff.file || '')) unplayable = 'not-video';
   else if (isCam(text, filename) || CAM_QUALITY.test(ff.quality ?? '')) unplayable = 'cam';
-  else if (names && otherTitle(filename, structured ? structured.rest : raw, names))
+  // com a linha ff:, o título no texto é o lido do próprio arquivo: não confirma nada
+  else if (names && otherTitle(filename || ff.file || '', structured ? '' : raw, names))
     unplayable = 'other-title';
 
   // Idiomas: a lista da linha ff: é a resposta; sem ela (ou sem código que
