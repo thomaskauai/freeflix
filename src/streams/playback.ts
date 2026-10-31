@@ -3,7 +3,6 @@ import {
   getEpisodeProgress,
   getProgress,
   isFinished,
-  preferredSource,
   rememberSource,
 } from '../data/storage';
 import type { Title } from '../data/types';
@@ -19,7 +18,7 @@ import {
   torrentCandidate,
   torrentInPreferredAudio,
 } from './torrent';
-import { audioFor } from './audioMemory';
+import { audioFor, sourceFor } from './audioMemory';
 
 /** fontes encontradas valem por este tempo; links de streaming costumam expirar */
 const PLAN_TTL_MS = 10 * 60 * 1000;
@@ -110,6 +109,20 @@ const keyOf = (title: Title, season?: number, episode?: number) => `${title.type
 
 /** o plano depende do idioma preferido: com outro, a busca é outra */
 const plans: Record<string, { at: number; plan: Promise<Plan> }> = {};
+/** todas as fontes já achadas de cada episódio, de qualquer idioma: a reserva do vídeo guardado */
+const sources: Record<string, { at: number; candidates: Candidate[] }> = {};
+
+/** a lista inteira, com os addons lentos, quando chegarem */
+const everything = (p: Plan): Promise<Candidate[]> =>
+  p.status !== 'play' ? Promise.resolve([]) : p.more ? p.more : Promise.resolve(p.candidates);
+
+function keepFound(key: string, list: Candidate[]) {
+  const before = sources[key];
+  sources[key] = {
+    at: before ? before.at : Date.now(),
+    candidates: before && Date.now() - before.at < PLAN_TTL_MS ? mergeCandidates(before.candidates, list) : list,
+  };
+}
 
 /**
  * De onde sai o vídeo: embed configurado ou as fontes instaladas. A busca nas
@@ -128,16 +141,13 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
     'reason' in found
       ? { status: 'none', reason: found.reason }
       : { status: 'play', candidates: found.candidates, index: 0, more: found.later };
-  // a lista inteira, com os addons lentos, quando chegarem
-  const everything = (p: Plan): Promise<Candidate[]> =>
-    p.status !== 'play' ? Promise.resolve([]) : p.more ? p.more : Promise.resolve(p.candidates);
   const unreachable = (): Plan => ({ status: 'none', reason: 'unreachable' });
 
-  // Episódio de série que já tocou outro: pergunta primeiro só ao addon que
-  // funcionou, pela mesma opção (resolução e áudio). Os outros addons respondem
-  // em paralelo e entram como reserva, sem atrasar o play.
+  // Episódio de série que já tocou outro, ou filme em andamento: pergunta
+  // primeiro só ao addon que funcionou, pela mesma opção (resolução e áudio). Os
+  // outros addons respondem em paralelo e entram como reserva, sem atrasar o play.
   // Fonte de outro áudio (o espectador trocou a preferência depois) não vale mais.
-  const remembered = season != null ? preferredSource(title.id) : undefined;
+  const remembered = sourceFor(title);
   const prefer: SourceProfile | undefined =
     remembered && offersAudio(remembered, { audio: audioFor(title), originalLanguage: title.originalLanguage })
       ? remembered
@@ -189,6 +199,12 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
         : httpPlan.then((p) => (p.status === 'none' ? torrentBackup(p) : p)),
   );
   plans[key] = { at: Date.now(), plan };
+  const episodeKey = keyOf(title, season, episode);
+  plan.then((p) => {
+    if (p.status !== 'play') return;
+    keepFound(episodeKey, p.candidates);
+    if (p.more) p.more.then((more) => keepFound(episodeKey, more));
+  });
   // sem fonte, a próxima tentativa pergunta de novo
   plan.then((p) => p.status === 'none' && plans[key] && plans[key].plan === plan && delete plans[key]);
   return plan;
@@ -248,6 +264,7 @@ export function discardVideo(video: HTMLVideoElement, detach: () => void) {
 interface Preloaded {
   key: string;
   url: string;
+  candidate: Candidate;
   /** idioma preferido quando foi guardado */
   audio: string;
   video: HTMLVideoElement;
@@ -328,7 +345,7 @@ function preloadCandidate(
     unhook();
   };
   const unhook = attachSource(video, candidate.url, candidate.hls);
-  preloaded = { key, url: candidate.url, audio: audioFor(title), video, detach };
+  preloaded = { key, url: candidate.url, candidate, audio: audioFor(title), video, detach };
 }
 
 /**
@@ -370,7 +387,7 @@ export function parkVideo(
   title: Title,
   season: number | undefined,
   episode: number | undefined,
-  url: string,
+  candidate: Candidate,
   video: HTMLVideoElement,
   detach: () => void,
 ): boolean {
@@ -379,8 +396,25 @@ export function parkVideo(
   dropPreloaded();
   video.pause();
   if (video.parentNode) video.parentNode.removeChild(video);
-  preloaded = { key, url, audio: audioFor(title), video, detach };
+  preloaded = { key, url: candidate.url, candidate, audio: audioFor(title), video, detach };
   window.clearTimeout(releaseTimer);
   releaseTimer = window.setTimeout(dropPreloaded, PARK_MS);
   return true;
+}
+
+/**
+ * Play de novo no episódio cujo vídeo ficou guardado (ou pré-carregado): o
+ * plano sai na hora, começando por ele, sem procurar as fontes outra vez. A
+ * reserva são as fontes já achadas; sem elas, a busca vem depois. O link do
+ * guardado pode nem estar na busca nova (links assinados mudam a cada pedido).
+ */
+export function keptPlan(title: Title, season?: number, episode?: number): Plan | null {
+  const key = keyOf(title, season, episode);
+  if (!preloaded || preloaded.key !== key || preloaded.audio !== audioFor(title)) return null;
+  if (embedUrlFor(title.tmdbId, season, episode)) return null;
+  const known = sources[key] && Date.now() - sources[key].at < PLAN_TTL_MS ? sources[key].candidates : null;
+  const candidates = mergeCandidates([preloaded.candidate], known || []);
+  return known
+    ? { status: 'play', candidates, index: 0 }
+    : { status: 'play', candidates, index: 0, more: planFor(title, season, episode).then(everything) };
 }

@@ -14,6 +14,7 @@ import {
 } from '../streams/subtitles';
 import { audioName, type AudioChoice } from '../streams/rank';
 import { normalizeLanguage } from '../data/language';
+import type { SubtitleChoice } from '../data/storage';
 import { torrentBuffer } from '../streams/torrent';
 import { Icon, type IconName } from './Icon';
 
@@ -271,6 +272,10 @@ interface PlayerShellProps {
   preferredAudio?: string;
   /** o espectador escolheu uma faixa de áudio do arquivo (vira a preferência) */
   onChooseAudio?: (audio: AudioChoice) => void;
+  /** legenda lembrada neste título (idioma, versão e ajuste); sem ela, vale a última usada no player */
+  subtitleMemory?: { read: () => SubtitleChoice | undefined; write: (choice: SubtitleChoice) => void };
+  /** o espectador recomeçou do início */
+  onRestart?: () => void;
 }
 
 export function PlayerShell({
@@ -301,6 +306,8 @@ export function PlayerShell({
   originalLanguage,
   preferredAudio,
   onChooseAudio,
+  subtitleMemory,
+  onRestart,
 }: PlayerShellProps) {
   const [time, setTime] = useState(startAt);
   const [length, setLength] = useState(duration);
@@ -833,6 +840,25 @@ export function PlayerShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notice && notice.at]);
 
+  const memory = useRef(subtitleMemory);
+  memory.current = subtitleMemory;
+  /** Guarda no título a legenda em uso: o idioma e, neste vídeo, a versão e o ajuste. */
+  const keepSubtitle = (option: SubtitleOption | null, loaded?: LoadedSubtitle, offset = 0) => {
+    if (!memory.current) return;
+    const version = option && loaded ? option.candidates[loaded.index] : undefined;
+    memory.current.write(
+      option && version && subtitlesFor
+        ? {
+            language: option.language,
+            videoId: subtitlesFor.videoId,
+            release: subtitlesFor.release,
+            url: version.url,
+            offset: offset || undefined,
+          }
+        : { language: option ? option.language : null },
+    );
+  };
+
   // Tira a legenda em uso: a faixa que este shell pôs no <video> e o arquivo dela.
   const clearSubtitle = () => {
     if (!media) return;
@@ -865,8 +891,11 @@ export function PlayerShell({
     });
   };
 
-  /** `from`: a partir de qual candidata do idioma (a 0 é a que mais parece deste vídeo) */
-  const applySubtitle = (option: SubtitleOption | null, announce: boolean, from = 0) => {
+  /**
+   * `from`: a partir de qual candidata do idioma (a 0 é a que mais parece deste
+   * vídeo); `offset`: o ajuste de sincronia com que entra
+   */
+  const applySubtitle = (option: SubtitleOption | null, announce: boolean, from = 0, offset = 0) => {
     if (!media) return;
     const request = ++subtitleRequest.current;
     clearSubtitle();
@@ -875,6 +904,7 @@ export function PlayerShell({
     setSubtitleLang(option ? option.language : null);
     if (!option) {
       setSubtitleBusy(false);
+      keepSubtitle(null);
       if (announce) showToast('Legendas desligadas.');
       return;
     }
@@ -883,8 +913,10 @@ export function PlayerShell({
       (loaded) => {
         if (request !== subtitleRequest.current) return;
         loadedSubtitle.current = { option, loaded };
-        showSubtitle(option, loaded, 0);
+        setSubtitleOffset(offset);
+        showSubtitle(option, loaded, offset);
         setSubtitleBusy(false);
+        keepSubtitle(option, loaded, offset);
         if (announce) {
           const which = from > 0 ? ` (versão ${loaded.index + 1} de ${option.candidates.length})` : '';
           showToast(`Legendas: ${option.label}${which}`);
@@ -906,6 +938,7 @@ export function PlayerShell({
     const offset = Math.round((subtitleOffset + delta) * 10) / 10;
     setSubtitleOffset(offset);
     showSubtitle(current.option, current.loaded, offset);
+    keepSubtitle(current.option, current.loaded, offset);
     showToast(`Sincronia da legenda: ${offset ? formatOffset(offset) : 'original'}`);
   };
 
@@ -926,9 +959,15 @@ export function PlayerShell({
         setSubtitles(found);
         // legenda gravada no vídeo: ligar a do app deixaria duas, uma sobre a outra
         if (burnedSubtitles) return;
-        const wanted = rememberedSubtitle();
+        // a deste título (com a versão e o ajuste, no mesmo vídeo), senão a última usada
+        const kept = memory.current ? memory.current.read() : undefined;
+        const wanted = kept ? kept.language : rememberedSubtitle();
         const match = found.filter((o) => o.language === wanted)[0];
-        if (match) applySubtitle(match, false);
+        if (!match) return;
+        const sameVideo =
+          !!kept && !!kept.url && kept.videoId === subtitlesFor.videoId && kept.release === subtitlesFor.release;
+        const version = sameVideo && kept ? match.candidates.map((c) => c.url).indexOf(kept.url as string) : -1;
+        applySubtitle(match, false, Math.max(0, version), version >= 0 && kept ? kept.offset || 0 : 0);
       },
       () => alive && setSubtitles([]),
     );
@@ -1001,6 +1040,7 @@ export function PlayerShell({
       if ((option ? option.language : null) !== subtitleLang) pickSubtitle(option);
     } else if (preset.audio !== audioIndex && onPickAudio) {
       rememberSubtitle(option ? option.language : null);
+      keepSubtitle(option);
       pickAudio(preset.audio);
     } else if ((option ? option.language : null) !== subtitleLang) {
       pickSubtitle(option);
@@ -1065,7 +1105,14 @@ export function PlayerShell({
         </div>
         {hasControls && (
           <div className="shell__top shell__top--right" data-focus-group="">
-            <ShellButton icon="restart" label="Recomeçar do início" onClick={() => seekTo(0)} />
+            <ShellButton
+              icon="restart"
+              label="Recomeçar do início"
+              onClick={() => {
+                seekTo(0);
+                if (onRestart) onRestart();
+              }}
+            />
           </div>
         )}
 

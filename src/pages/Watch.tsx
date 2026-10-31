@@ -7,7 +7,7 @@ import { PlayerShell } from '../components/PlayerShell';
 import { EmbedPlayer, VideoPlayer } from '../components/VideoPlayer';
 import { findEpisode, followingEpisode } from '../data/episodes';
 import { catalog, previewTitle } from '../data/provider';
-import { clearPlayerSession, markPlayerSession, preferredSource, rememberSource, saveProgress } from '../data/storage';
+import { clearPlayerSession, markPlayerSession, saveProgress } from '../data/storage';
 import { syncProgress, syncStarted } from '../data/sync';
 import type { Season, Title, TitleType } from '../data/types';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
@@ -16,6 +16,7 @@ import { TORRENT_LABEL, TORRENT_START_MS, torrentAvailable, torrentCandidate } f
 import {
   firstWorking,
   hasFailed,
+  keptPlan,
   markFailed,
   mergeCandidates,
   parkVideo,
@@ -33,7 +34,16 @@ import {
   type AudioChoice,
   type SourceProfile,
 } from '../streams/rank';
-import { audioFor, forgetMovieAudio, rememberAudio } from '../streams/audioMemory';
+import {
+  audioFor,
+  forgetMovieChoices,
+  rememberAudio,
+  rememberSourceOf,
+  rememberTitleSubtitle,
+  sourceFor,
+  subtitleFor,
+  undoTitleSubtitle,
+} from '../streams/audioMemory';
 import { undoSubtitle } from '../streams/subtitles';
 import { resolvePlayback, type Candidate, type NoSourceReason } from '../streams/resolve';
 
@@ -100,6 +110,11 @@ export default function Watch() {
   /** null enquanto procura a fonte */
   const [plan, setPlan] = useState<Plan | null>(null);
   /**
+   * de que episódio é o plano: trocando de episódio, o do anterior não chega
+   * a montar vídeo (o guardado ao sair ficaria com a chave do novo)
+   */
+  const [planKey, setPlanKey] = useState('');
+  /**
    * <video> em uso, com a chave de quem o criou: trocando de episódio ou de
    * fonte, o shell novo não pode pegar o anterior (que fica guardado, vivo).
    */
@@ -126,12 +141,9 @@ export default function Watch() {
   const liveKey = useRef('');
   /** idioma preferido: o escolhido no player para este título, senão o de Configurações */
   const [audioPref, setAudioPref] = useState(() => audioFor({ id, type }));
-  // outro título, outro áudio; o do filme é esquecido quando o player fecha
+  // outro título, outro áudio
   useEffect(() => {
     setAudioPref(audioFor({ id, type }));
-    return () => {
-      if (type === 'movie') forgetMovieAudio(id);
-    };
   }, [id, type]);
   /** busca nova já feita neste episódio e idioma ("chave/idioma") */
   const refetched = useRef('');
@@ -183,8 +195,15 @@ export default function Watch() {
           return;
         }
         setTitle(t);
+        // Vídeo deste episódio guardado ao sair do player: continua nele, sem procurar de novo.
+        const kept = keptPlan(t, season, episode);
+        const show = (next: Plan) => {
+          setPlanKey(key);
+          setPlan(next);
+        };
+        if (kept) return show(kept);
         // Se a página de detalhes já procurou (e até pré-carregou), isto volta na hora.
-        planFor(t, season, episode).then((next) => alive && setPlan(firstWorking(next, t, season, episode)));
+        planFor(t, season, episode).then((next) => alive && show(firstWorking(next, t, season, episode)));
       },
       () => alive && navigate('/', { replace: true }),
     );
@@ -290,7 +309,7 @@ export default function Watch() {
     </div>
   );
 
-  if (!title || !plan) {
+  if (!title || !plan || planKey !== key) {
     return (
       <div className="page player" data-focus-main="">
         {veil}
@@ -409,7 +428,7 @@ export default function Watch() {
   // Nenhuma fonte com o áudio das Configurações: não troca sozinho, pergunta.
   // Episódio que segue a fonte do anterior (no mesmo áudio) já teve a escolha feita.
   const rememberedInAudio = () => {
-    const remembered = preferredSource(title.id);
+    const remembered = sourceFor(title);
     return !!remembered && offersAudio(remembered, prefs);
   };
   const missingAudio =
@@ -607,6 +626,7 @@ export default function Watch() {
     // o atalho "original com legendas" não liga a legenda sobre o áudio de agora
     const missing = () => {
       undoSubtitle();
+      undoTitleSubtitle(title);
       say(`Nenhuma fonte com áudio ${name}. Continua na atual.`);
     };
     const viaTorrent = () => {
@@ -747,7 +767,7 @@ export default function Watch() {
         url={candidate.url}
         hls={candidate.hls}
         onMedia={(el) => setMediaOf((m) => (el ? { key: videoKey, el } : m && m.key === videoKey ? null : m))}
-        onRelease={(video, detach) => parkVideo(title, season, episode, candidate.url, video, detach)}
+        onRelease={(video, detach) => parkVideo(title, season, episode, candidate, video, detach)}
       />
       {/* por cima do vídeo e por baixo dos controles e do carregamento */}
       {veil}
@@ -776,8 +796,8 @@ export default function Watch() {
         onChooseAudio={chooseAudio}
         // a fonte que tocou vale para os outros episódios: mesmo addon, mesmo áudio
         onStart={() => {
-          // torrent não vira a fonte padrão dos próximos episódios
-          if (isEpisode && !candidate.torrent) rememberSource(title.id, candidate.profile);
+          // torrent não vira a fonte padrão (dos próximos episódios ou da próxima abertura)
+          if (!candidate.torrent) rememberSourceOf(title, candidate.profile);
           syncStarted(title, season, episode);
         }}
         onProgress={(time, length, moment) => {
@@ -800,6 +820,13 @@ export default function Watch() {
         preferredAudio={
           trackLang && trackLang.key === key ? trackLang.lang : audio === 'original' ? title.originalLanguage : audio
         }
+        // legenda escolhida neste título (idioma, versão e ajuste): volta com Continuar assistindo
+        subtitleMemory={{
+          read: () => subtitleFor(title),
+          write: (choice) => rememberTitleSubtitle(title, choice),
+        }}
+        // filme recomeçado do início: a próxima abertura volta ao de Configurações
+        onRestart={() => forgetMovieChoices(title)}
         onExit={goBack}
       />
     </div>

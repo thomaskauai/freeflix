@@ -183,6 +183,52 @@ export function rememberSource(id: string, profile: SourceProfile) {
   write('sources', [{ id, profile }, ...rest].slice(0, SOURCE_CHOICES));
 }
 
+/** Legenda escolhida no player: o idioma (null: desligada) e, no mesmo vídeo, a versão e o ajuste. */
+export interface SubtitleChoice {
+  language: string | null;
+  /** vídeo (id IMDb, com :temporada:episódio) e release da fonte em que versão e ajuste valem */
+  videoId?: string;
+  release?: string;
+  /** a versão escolhida (endereço da legenda) */
+  url?: string;
+  /** ajuste de sincronia, em segundos */
+  offset?: number;
+}
+
+/**
+ * Escolhas do player para um título, junto do progresso dele: Continuar
+ * assistindo volta com elas. Ficam no aparelho (não vão para a casa).
+ */
+export interface TitleChoice {
+  /** áudio do filme (o da série fica em audioMemory) */
+  audio?: string;
+  subtitle?: SubtitleChoice;
+  /** fonte do filme (a da série fica em preferredSource) */
+  source?: SourceProfile;
+  /** quando mudou por último */
+  at: number;
+}
+
+/** quantos títulos guardam escolhas; os mais antigos saem */
+const TITLE_CHOICES = 100;
+
+export const getChoice = (id: string): TitleChoice | undefined => read<Record<string, TitleChoice>>('choices', {})[id];
+
+export function saveChoice(id: string, change: Partial<Omit<TitleChoice, 'at'>>) {
+  const all = read<Record<string, TitleChoice>>('choices', {});
+  all[id] = { ...all[id], ...change, at: Date.now() };
+  const ids = Object.keys(all).sort((a, b) => all[b].at - all[a].at);
+  ids.slice(TITLE_CHOICES).forEach((old) => delete all[old]);
+  write('choices', all);
+}
+
+export function forgetChoice(id: string) {
+  const all = read<Record<string, TitleChoice>>('choices', {});
+  if (!all[id]) return;
+  delete all[id];
+  write('choices', all);
+}
+
 export function getMyList(): TitleSnapshot[] {
   return read<TitleSnapshot[]>('mylist', []);
 }
