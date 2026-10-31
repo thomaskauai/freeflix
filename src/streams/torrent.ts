@@ -12,7 +12,7 @@
 import { fetchStreams, getJson, type AddonStream } from '../data/addonClient';
 import type { Title } from '../data/types';
 import { isTizen, startTorrentService } from '../platform/tizen';
-import { getSettings } from '../settings';
+import { audioFor } from './audioMemory';
 import { getSpeed } from './network';
 import { parseStream } from './parse';
 import { offersAudio, preferAudio, rankTorrents, type TorrentStream } from './rank';
@@ -144,7 +144,7 @@ export async function noStreamingInBrazil(title: Title): Promise<boolean> {
 
 /** O torrent tem o áudio preferido (o original da obra, se a preferência é o original)? */
 export const torrentInPreferredAudio = (title: Title) => (t: TorrentStream) =>
-  offersAudio(t, { audio: getSettings().audio, originalLanguage: title.originalLanguage });
+  offersAudio(t, { audio: audioFor(title), originalLanguage: title.originalLanguage });
 
 /** Os torrents do título, do melhor para o pior, sem gravação de cinema. */
 export async function findTorrents(title: Title, season?: number, episode?: number): Promise<TorrentStream[]> {
@@ -155,7 +155,7 @@ export async function findTorrents(title: Title, season?: number, episode?: numb
   const torrents = (streams as TorrentioStream[]).map(toTorrent).filter((t): t is TorrentStream => !!t);
   return rankTorrents(torrents, {
     mbps: speed.mbps,
-    audio: getSettings().audio,
+    audio: audioFor(title),
     originalLanguage: title.originalLanguage,
     runtime: title.runtime,
     canPlay: deviceCanPlay,
@@ -238,7 +238,7 @@ export async function torrentCandidate(
   const found = await findTorrents(title, season, episode);
   const list = accept
     ? found.filter(accept)
-    : preferAudio(found, { audio: getSettings().audio, originalLanguage: title.originalLanguage });
+    : preferAudio(found, { audio: audioFor(title), originalLanguage: title.originalLanguage });
   for (const t of list.slice(0, TRIES)) {
     try {
       const url = await openInEngine(t, season, episode);

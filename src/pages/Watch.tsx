@@ -33,7 +33,7 @@ import {
   type AudioChoice,
   type SourceProfile,
 } from '../streams/rank';
-import { getSettings, saveSettings } from '../settings';
+import { audioFor, forgetMovieAudio, rememberAudio } from '../streams/audioMemory';
 import { undoSubtitle } from '../streams/subtitles';
 import { resolvePlayback, type Candidate, type NoSourceReason } from '../streams/resolve';
 
@@ -124,8 +124,15 @@ export default function Watch() {
   /** idioma do áudio escolhido no player: a faixa do arquivo que toca primeiro (chave da abertura) */
   const [trackLang, setTrackLang] = useState<{ key: string; lang: string } | null>(null);
   const liveKey = useRef('');
-  /** idioma preferido: o de Configurações, e o que o espectador escolher no player */
-  const [audioPref, setAudioPref] = useState(() => getSettings().audio);
+  /** idioma preferido: o escolhido no player para este título, senão o de Configurações */
+  const [audioPref, setAudioPref] = useState(() => audioFor({ id, type }));
+  // outro título, outro áudio; o do filme é esquecido quando o player fecha
+  useEffect(() => {
+    setAudioPref(audioFor({ id, type }));
+    return () => {
+      if (type === 'movie') forgetMovieAudio(id);
+    };
+  }, [id, type]);
   /** busca nova já feita neste episódio e idioma ("chave/idioma") */
   const refetched = useRef('');
 
@@ -363,26 +370,30 @@ export default function Watch() {
     const found = (pure.length ? pure : list)[0];
     return found === undefined ? -1 : found;
   };
-  /** A escolha de áudio no player vira a preferência, a mesma de Configurações. */
+  /**
+   * A escolha de áudio no player vale para este título (a série toda, ou o
+   * filme enquanto o player está aberto): troca de fonte não muda o idioma.
+   * Configurações não muda.
+   */
   const chooseAudio = (a: AudioChoice) => {
     const pref = preferenceOf(a);
     if (!pref) return;
     setAudioAccepted(key);
-    if (pref === getSettings().audio) return;
-    saveSettings({ audio: pref });
+    if (pref === audioFor(title)) return;
+    rememberAudio(title, pref);
     setAudioPref(pref);
   };
   // Só a melhor fonte de cada outro áudio vem na lista: escolhido um deles, as
   // fontes são procuradas de novo com a preferência nova (uma vez por idioma).
   const refetch = () => {
-    refetched.current = `${key}/${getSettings().audio}`;
+    refetched.current = `${key}/${audioFor(title)}`;
     return resolvePlayback(title, season, episode).then(
       (r) => ('reason' in r ? [] : r.later || r.candidates),
       () => [] as Candidate[],
     );
   };
   const fetchMore = (want: AudioChoice) => {
-    if (refetched.current === `${key}/${getSettings().audio}`) return;
+    if (refetched.current === `${key}/${audioFor(title)}`) return;
     if (plan.candidates.filter((c) => serves(want, c.profile) && !hasFailed(c.url)).length >= 2) return;
     const extra = refetch();
     setPlan((p) =>

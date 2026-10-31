@@ -19,7 +19,7 @@ import {
   torrentCandidate,
   torrentInPreferredAudio,
 } from './torrent';
-import { getSettings } from '../settings';
+import { audioFor } from './audioMemory';
 
 /** fontes encontradas valem por este tempo; links de streaming costumam expirar */
 const PLAN_TTL_MS = 10 * 60 * 1000;
@@ -53,7 +53,7 @@ export function firstWorking(plan: Plan, title: Title, season?: number, episode?
   const urls = plan.candidates.map((c) => c.url);
   // guardado com outro idioma preferido não serve: o espectador trocou o áudio
   const kept =
-    preloaded && preloaded.key === key && preloaded.audio === getSettings().audio ? urls.indexOf(preloaded.url) : -1;
+    preloaded && preloaded.key === key && preloaded.audio === audioFor(title) ? urls.indexOf(preloaded.url) : -1;
   const index = kept >= 0 ? kept : plan.candidates.map((c) => !failedUrls[c.url]).indexOf(true);
   return index > 0 ? { ...plan, index } : plan;
 }
@@ -120,7 +120,7 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
   const embed = embedUrlFor(title.tmdbId, season, episode);
   if (embed) return Promise.resolve({ status: 'embed', url: embed });
 
-  const key = `${keyOf(title, season, episode)}/${getSettings().audio}`;
+  const key = `${keyOf(title, season, episode)}/${audioFor(title)}`;
   const cached = plans[key];
   if (cached && Date.now() - cached.at < PLAN_TTL_MS) return cached.plan;
 
@@ -139,7 +139,7 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
   // Fonte de outro áudio (o espectador trocou a preferência depois) não vale mais.
   const remembered = season != null ? preferredSource(title.id) : undefined;
   const prefer: SourceProfile | undefined =
-    remembered && offersAudio(remembered, { audio: getSettings().audio, originalLanguage: title.originalLanguage })
+    remembered && offersAudio(remembered, { audio: audioFor(title), originalLanguage: title.originalLanguage })
       ? remembered
       : undefined;
   const full = resolvePlayback(title, season, episode, { prefer }).then(toPlan, unreachable);
@@ -276,7 +276,7 @@ export function preloadPlayback(title: Title, season?: number, episode?: number)
   window.clearTimeout(releaseTimer);
   wanted = key;
   // o vídeo guardado ao sair do player deste mesmo episódio já serve, se do mesmo idioma
-  if (preloaded && preloaded.key === key && preloaded.audio === getSettings().audio) return;
+  if (preloaded && preloaded.key === key && preloaded.audio === audioFor(title)) return;
   dropPreloaded();
   planFor(title, season, episode).then((plan) => {
     if (plan.status === 'play') preloadCandidate(key, title, plan.candidates, season, episode, PRELOAD_TRIES);
@@ -328,7 +328,7 @@ function preloadCandidate(
     unhook();
   };
   const unhook = attachSource(video, candidate.url, candidate.hls);
-  preloaded = { key, url: candidate.url, audio: getSettings().audio, video, detach };
+  preloaded = { key, url: candidate.url, audio: audioFor(title), video, detach };
 }
 
 /**
@@ -379,7 +379,7 @@ export function parkVideo(
   dropPreloaded();
   video.pause();
   if (video.parentNode) video.parentNode.removeChild(video);
-  preloaded = { key, url, audio: getSettings().audio, video, detach };
+  preloaded = { key, url, audio: audioFor(title), video, detach };
   window.clearTimeout(releaseTimer);
   releaseTimer = window.setTimeout(dropPreloaded, PARK_MS);
   return true;

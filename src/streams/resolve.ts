@@ -1,6 +1,6 @@
 import { fetchStreams } from '../data/addonClient';
 import type { Title } from '../data/types';
-import { getSettings } from '../settings';
+import { audioFor } from './audioMemory';
 import { getSpeed } from './network';
 import { parseStream, type ParsedStream } from './parse';
 import { describeStream, foreignOnly, offersAudio, pickStreams, rankStreams, type RankContext, type SourceProfile } from './rank';
@@ -120,7 +120,7 @@ export async function resolvePlayback(
   const rank = () => rankAll(([] as ParsedStream[]).concat(...lists), title, speed.mbps, options);
 
   // Espera todos, ou só os que chegaram até QUICK_MS se a melhor fonte já tem o áudio escolhido.
-  const audio = { audio: getSettings().audio, originalLanguage: title.originalLanguage };
+  const audio = { audio: audioFor(title), originalLanguage: title.originalLanguage };
   const ready = () => {
     const ranked = rank();
     return ranked.length > 0 && offersAudio(ranked[0], audio);
@@ -156,7 +156,7 @@ export async function resolvePlayback(
 function rankAll(all: ParsedStream[], title: Title, mbps: number, options: ResolveOptions): ParsedStream[] {
   const context: RankContext = {
     mbps,
-    audio: getSettings().audio,
+    audio: audioFor(title),
     originalLanguage: title.originalLanguage,
     runtime: title.runtime,
     canPlay: deviceCanPlay,
@@ -181,5 +181,5 @@ function toCandidate(s: ParsedStream): Candidate {
 }
 
 function pick(ranked: ParsedStream[], title: Title): ParsedStream[] {
-  return pickStreams(ranked, { audio: getSettings().audio, originalLanguage: title.originalLanguage });
+  return pickStreams(ranked, { audio: audioFor(title), originalLanguage: title.originalLanguage });
 }
