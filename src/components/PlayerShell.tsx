@@ -269,6 +269,8 @@ interface PlayerShellProps {
   originalLanguage?: string;
   /** áudio preferido ("pt", "en"…): arquivo com várias faixas começa nela */
   preferredAudio?: string;
+  /** o espectador escolheu uma faixa de áudio do arquivo (vira a preferência) */
+  onChooseAudio?: (audio: AudioChoice) => void;
 }
 
 export function PlayerShell({
@@ -298,6 +300,7 @@ export function PlayerShell({
   torrentUrl,
   originalLanguage,
   preferredAudio,
+  onChooseAudio,
 }: PlayerShellProps) {
   const [time, setTime] = useState(startAt);
   const [length, setLength] = useState(duration);
@@ -314,6 +317,11 @@ export function PlayerShell({
   const [torrentPercent, setTorrentPercent] = useState<number | null>(null);
   /** o vídeo já mostrou imagem uma vez */
   const [started, setStarted] = useState(false);
+  /**
+   * o tempo já andou tocando: antes disso (fonte nova carregando, pulo para o
+   * segundo da troca) a legenda não aparece
+   */
+  const [rolling, setRolling] = useState(false);
   /** passada em andamento: de onde partiu e aonde vai (o vídeo ainda não pulou) */
   const [seeking, setSeeking] = useState<{ from: number; target: number } | null>(null);
   /** quanto a última passada moveu, para o aviso no meio da tela */
@@ -438,6 +446,7 @@ export function PlayerShell({
       const step = media.currentTime - last;
       if (!moving && !media.paused && !media.seeking && step > 0.05 && step < 2) {
         moving = true;
+        setRolling(true);
         onReady();
       }
       last = media.currentTime;
@@ -937,31 +946,40 @@ export function PlayerShell({
   };
 
   // Com faixas no arquivo, o áudio escolhido é uma delas; senão, uma das fontes.
-  const fileAudios: AudioChoice[] | null = tracks.length
-    ? tracks.map((t, i) => {
-        const name = t.lang ? audioName(t.lang) : t.label;
-        const twin = tracks.filter((o, j) => j < i && o.lang === t.lang && !!t.lang).length;
-        const original = !!t.lang && t.lang === originalLanguage;
-        return {
-          key: `track:${t.id}`,
-          label: `${name}${original ? ' [original]' : ''}${twin ? ` (${twin + 1})` : ''}`,
-          lang: t.lang || undefined,
-          original,
-        };
-      })
-    : null;
+  // Só as que alguém aqui ouve: português, o original e o preferido (híndi,
+  // tâmil e afins de pacote ficam de fora), uma por idioma; a que toca sempre.
+  const heard = (lang: string) =>
+    lang === 'pt' || lang === originalLanguage || lang === preferredAudio || (!lang && originalLanguage === 'en');
+  const shownTracks = tracks.filter(
+    (t, i) =>
+      t.enabled ||
+      (heard(t.lang) && !tracks.some((o, j) => o.lang === t.lang && (o.enabled || j < i) && o !== t)),
+  );
+  const fileAudios: AudioChoice[] | null =
+    shownTracks.length > 1
+      ? shownTracks.map((t) => {
+          const original = !!t.lang && t.lang === originalLanguage;
+          return {
+            key: `track:${t.id}`,
+            label: `${t.lang ? audioName(t.lang) : t.label}${original ? ' [original]' : ''}`,
+            lang: t.lang || undefined,
+            original,
+          };
+        })
+      : null;
   // arquivo sem a faixa original: o original das fontes continua no fim da lista
   const sourceOriginal = sourceAudios.map((a) => a.original).indexOf(true);
   const extraOriginal =
     fileAudios && sourceOriginal >= 0 && !fileAudios.some((a) => a.original) ? sourceAudios[sourceOriginal] : null;
   const audios = fileAudios ? (extraOriginal ? fileAudios.concat(extraOriginal) : fileAudios) : sourceAudios;
-  const audioIndex = fileAudios ? Math.max(0, tracks.map((t) => t.enabled).indexOf(true)) : sourceAudioIndex;
+  const audioIndex = fileAudios ? Math.max(0, shownTracks.map((t) => t.enabled).indexOf(true)) : sourceAudioIndex;
   /** faixa do arquivo; depois delas, o original que é outra fonte */
-  const isTrack = (index: number) => !!fileAudios && index < tracks.length;
+  const isTrack = (index: number) => !!fileAudios && index < shownTracks.length;
   const selectTrack = (index: number) => {
     const list = media ? audioTracksOf(media) : undefined;
     if (!list) return;
-    for (let i = 0; i < list.length; i++) list[i].enabled = list[i].id === tracks[index].id;
+    for (let i = 0; i < list.length; i++) list[i].enabled = list[i].id === shownTracks[index].id;
+    if (onChooseAudio && fileAudios) onChooseAudio(fileAudios[index]);
   };
   const onPickAudio = fileAudios
     ? (index: number) =>
@@ -1022,7 +1040,7 @@ export function PlayerShell({
 
   return (
     <>
-      {caption && (
+      {caption && rolling && (
         <div className={`captions${visible || failed ? ' is-raised' : ''}`} aria-live="polite">
           <span>{caption}</span>
         </div>

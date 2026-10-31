@@ -8,7 +8,7 @@ import { SyncSection } from '../components/SyncSection';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
 import { AUDIO_LANGUAGES, getSettings, saveSettings, type AudioLanguage } from '../settings';
 import { lastSpeed, measureSpeed, type SpeedReading } from '../streams/network';
-import { resolutionCap } from '../streams/rank';
+import { audioName, resolutionCap } from '../streams/rank';
 import {
   INSTALL_ERRORS,
   installDefaultSources,
@@ -165,10 +165,16 @@ export default function Settings() {
           <h2 className="settings__title">Idioma preferido</h2>
           <p className="settings__note">
             O Freeflix toca de preferência a fonte com áudio neste idioma. Sem ela, usa o áudio original e depois o
-            inglês. Na lista Fontes do player sempre fica uma opção no idioma original, quando existe.
+            inglês. Na lista Fontes do player sempre fica uma opção no idioma original, quando existe. O áudio
+            escolhido no player passa a valer aqui.
           </p>
           <div className="settings__options">
-            {AUDIO_LANGUAGES.map((a) => (
+            {/* idioma escolhido no player fora da lista também aparece, marcado */}
+            {AUDIO_LANGUAGES.concat(
+              AUDIO_LANGUAGES.some((a) => a.id === settings.audio)
+                ? []
+                : [{ id: settings.audio, label: audioName(settings.audio) }],
+            ).map((a) => (
               <Button
                 key={a.id}
                 variant="pill"

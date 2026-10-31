@@ -27,14 +27,15 @@ import {
   audioChoice,
   audioName,
   audioOptions,
-  effectiveLanguages,
   offersAudio,
+  preferenceOf,
+  servesAudio,
   type AudioChoice,
   type SourceProfile,
 } from '../streams/rank';
-import { getSettings } from '../settings';
+import { getSettings, saveSettings } from '../settings';
 import { undoSubtitle } from '../streams/subtitles';
-import type { Candidate, NoSourceReason } from '../streams/resolve';
+import { resolvePlayback, type Candidate, type NoSourceReason } from '../streams/resolve';
 
 const MESSAGES: Record<NoSourceReason | 'all-failed', { title: string; text: string; settings?: boolean }> = {
   'no-addons': {
@@ -123,6 +124,10 @@ export default function Watch() {
   /** idioma do áudio escolhido no player: a faixa do arquivo que toca primeiro (chave da abertura) */
   const [trackLang, setTrackLang] = useState<{ key: string; lang: string } | null>(null);
   const liveKey = useRef('');
+  /** idioma preferido: o de Configurações, e o que o espectador escolher no player */
+  const [audioPref, setAudioPref] = useState(() => getSettings().audio);
+  /** busca nova já feita neste episódio e idioma ("chave/idioma") */
+  const refetched = useRef('');
 
   const key = `${type}/${id}/${season}/${episode}`;
   liveKey.current = key;
@@ -332,25 +337,78 @@ export default function Watch() {
     );
   }
 
-  // Áudios: um por tipo entre as fontes (dublada, original, dual), na ordem da melhor fonte de cada.
-  const audioOf = plan.candidates.map((c) => audioChoice(c.profile, title.originalLanguage));
-  const loadedAudios = audioOptions(audioOf);
-  // no player, o original aparece sempre: escolhido sem fonte carregada, é procurado
-  const audios = audioOptions(audioOf, title.originalLanguage);
-  const audioKeys = audios.map((a) => a.key);
+  // Áudios: o idioma que se ouve em cada fonte (o preferido, se ela tem; dual com
+  // português conta como português). Opções: o preferido, o original e o português.
+  const audio = audioPref;
+  const originalLanguage = title.originalLanguage;
+  const prefs = { audio, originalLanguage };
+  const audioOf = plan.candidates.map((c) => audioChoice(c.profile, originalLanguage, audio));
+  const serves = (want: AudioChoice, s: Pick<SourceProfile, 'languages' | 'multiAudio' | 'dualAudio'>) =>
+    servesAudio(want, s, originalLanguage);
+  /** áudios das fontes que ainda não falharam */
+  const freshAudios = () =>
+    audioOptions(
+      plan.candidates.filter((c) => !hasFailed(c.url)).map((c) => c.profile),
+      prefs,
+    );
+  /**
+   * A fonte para ouvir `want`: a primeira com ele que não falhou (`skip` fica de
+   * fora). No original, a pura antes da dual, cuja faixa inicial varia.
+   */
+  const indexFor = (want: AudioChoice, skip = -1) => {
+    const all = plan.candidates.map((c, i) => (i !== skip && serves(want, c.profile) ? i : -1)).filter((i) => i >= 0);
+    const fresh = all.filter((i) => !hasFailed(plan.candidates[i].url));
+    const list = fresh.length ? fresh : all;
+    const pure = want.original ? list.filter((i) => !plan.candidates[i].profile.multiAudio) : [];
+    const found = (pure.length ? pure : list)[0];
+    return found === undefined ? -1 : found;
+  };
+  /** A escolha de áudio no player vira a preferência, a mesma de Configurações. */
+  const chooseAudio = (a: AudioChoice) => {
+    const pref = preferenceOf(a);
+    if (!pref) return;
+    setAudioAccepted(key);
+    if (pref === getSettings().audio) return;
+    saveSettings({ audio: pref });
+    setAudioPref(pref);
+  };
+  // Só a melhor fonte de cada outro áudio vem na lista: escolhido um deles, as
+  // fontes são procuradas de novo com a preferência nova (uma vez por idioma).
+  const refetch = () => {
+    refetched.current = `${key}/${getSettings().audio}`;
+    return resolvePlayback(title, season, episode).then(
+      (r) => ('reason' in r ? [] : r.later || r.candidates),
+      () => [] as Candidate[],
+    );
+  };
+  const fetchMore = (want: AudioChoice) => {
+    if (refetched.current === `${key}/${getSettings().audio}`) return;
+    if (plan.candidates.filter((c) => serves(want, c.profile) && !hasFailed(c.url)).length >= 2) return;
+    const extra = refetch();
+    setPlan((p) =>
+      p && p.status === 'play'
+        ? {
+            ...p,
+            more: p.more ? Promise.all([p.more, extra]).then((both) => mergeCandidates(both[0], both[1])) : extra,
+          }
+        : p,
+    );
+  };
 
   // Nenhuma fonte com o áudio das Configurações: não troca sozinho, pergunta.
-  // Episódio que segue a fonte do anterior já teve a escolha feita.
-  const audio = getSettings().audio;
+  // Episódio que segue a fonte do anterior (no mesmo áudio) já teve a escolha feita.
+  const rememberedInAudio = () => {
+    const remembered = preferredSource(title.id);
+    return !!remembered && offersAudio(remembered, prefs);
+  };
   const missingAudio =
     audioAccepted !== key &&
     !plan.more &&
-    !(isEpisode && preferredSource(title.id)) &&
-    !plan.candidates.some((c) => offersAudio(c.profile, { audio, originalLanguage: title.originalLanguage }));
+    !(isEpisode && rememberedInAudio()) &&
+    !plan.candidates.some((c) => offersAudio(c.profile, prefs));
   if (missingAudio) {
     const wantedName = audio === 'original' ? 'original' : `em ${audioName(audio)}`;
-    // o original primeiro: é a troca mais natural
-    const offered = loadedAudios.filter((a) => a.original).concat(loadedAudios.filter((a) => !a.original));
+    const offered = freshAudios();
     return (
       <div className="page player" data-focus-main="">
         <Backdrop title={title} />
@@ -366,8 +424,10 @@ export default function Watch() {
                 id={`watch-audio-${i}`}
                 autoFocus={i === 0}
                 onClick={() => {
-                  setAudioAccepted(key);
-                  setPlan({ ...plan, index: audioOf.map((b) => b.key).indexOf(a.key) });
+                  // escolha explícita: vira a preferência
+                  chooseAudio(a);
+                  setPlan({ ...plan, index: Math.max(0, indexFor(a)) });
+                  fetchMore(a);
                 }}
               >
                 {`Assistir: ${a.label}`}
@@ -393,14 +453,7 @@ export default function Watch() {
   }
   if (lost && lost.key === key) {
     const want = lost.want;
-    const others = loadedAudios.filter((a) => a.key !== want.key);
-    const offered = others.filter((a) => a.original).concat(others.filter((a) => !a.original));
-    // a primeira fonte daquele áudio que ainda não falhou
-    const indexFor = (a: AudioChoice) => {
-      const all = audioOf.map((b, i) => (b.key === a.key ? i : -1)).filter((i) => i >= 0);
-      const fresh = all.filter((i) => !hasFailed(plan.candidates[i].url));
-      return (fresh.length ? fresh : all)[0];
-    };
+    const offered = freshAudios().filter((a) => a.key !== want.key);
     return (
       <div className="page player" data-focus-main="">
         <Backdrop title={title} />
@@ -419,7 +472,9 @@ export default function Watch() {
                 autoFocus={i === 0}
                 onClick={() => {
                   setLost(null);
-                  setPlan({ ...plan, index: indexFor(a) });
+                  chooseAudio(a);
+                  setPlan({ ...plan, index: Math.max(0, indexFor(a)) });
+                  fetchMore(a);
                 }}
               >
                 {`Assistir: ${a.label}`}
@@ -435,6 +490,13 @@ export default function Watch() {
   }
 
   const candidate = plan.candidates[plan.index];
+  // no player, o original aparece sempre (escolhido sem fonte carregada, é procurado), e o que toca também
+  const audios = audioOptions(
+    plan.candidates.map((c) => c.profile),
+    prefs,
+    { withOriginal: true, current: audioOf[plan.index] },
+  );
+  const audioKeys = audios.map((a) => a.key);
   const saved = resumePoint(title, season, episode);
   // Depois de uma troca de fonte, a nova começa no segundo em que a troca
   // começou, não no progresso salvo (que anda de 5 em 5 s).
@@ -443,9 +505,16 @@ export default function Watch() {
   // Legendas são buscadas pelo id IMDb; títulos sem ele ficam sem.
   const imdbId = title.imdbId ?? (/^tt\d+$/.test(title.id) ? title.id : undefined);
   const subtitleId = imdbId ? (isEpisode ? `${imdbId}:${season}:${episode}` : imdbId) : undefined;
-  // A lista mostra uma linha por opção distinta. Espelhos da mesma opção não
-  // aparecem: são a reserva que o player usa sozinho se o primeiro falhar.
-  const labels = plan.candidates.map((c) => c.label).filter((label, i, all) => all.indexOf(label) === i);
+  // A lista mostra uma linha por opção distinta, só as do áudio preferido (todas,
+  // se nenhuma tem); a que toca aparece sempre. As de outro áudio ficam para os
+  // atalhos. Espelhos da mesma opção não aparecem: são a reserva que o player
+  // usa sozinho se o primeiro falhar.
+  const inAudio = plan.candidates.filter((c) => offersAudio(c.profile, prefs));
+  const listed = inAudio.length ? inAudio : plan.candidates;
+  const labels = plan.candidates
+    .filter((c) => c === candidate || listed.indexOf(c) >= 0)
+    .map((c) => c.label)
+    .filter((label, i, all) => all.indexOf(label) === i);
   // "Torrent" no fim da lista enquanto não foi escolhido; escolhido, vira uma fonte como as outras
   const hasTorrent = plan.candidates.some((c) => !!c.torrent);
   const options = torrentOk && !hasTorrent ? labels.concat(TORRENT_LABEL) : labels;
@@ -483,18 +552,17 @@ export default function Watch() {
     torrentCandidate(title, season, episode).then(done, () => done(null));
   };
   // Fonte ruim fica marcada: a próxima abertura deste título já começa pela
-  // seguinte. O áudio em uso se mantém: a próxima fonte é uma com ele; acabou a
-  // lista e as outras fontes ainda vão chegar, espera por elas; nenhuma com ele,
-  // tenta o torrent desse áudio e, por fim, pergunta se troca de áudio.
-  const sameAudio = (want: AudioChoice, s: Pick<SourceProfile, 'languages' | 'multiAudio' | 'dualAudio'>) => {
-    if (audioChoice(s, title.originalLanguage).key === want.key) return true;
-    if (want.original) return offersAudio(s, { audio: 'original', originalLanguage: title.originalLanguage });
-    return !!want.lang && effectiveLanguages(s, title.originalLanguage).indexOf(want.lang) >= 0;
-  };
+  // seguinte. O áudio em uso se mantém: a próxima fonte é uma com ele (pura ou
+  // dual); acabou a lista e as outras fontes ainda vão chegar (ou podem ser
+  // procuradas de novo neste idioma), espera por elas; nenhuma com ele, tenta o
+  // torrent desse áudio e, por fim, pergunta se troca de áudio.
   // fonte que já falhou não volta: torrent que caiu para HTTP não pode voltar a ele (laço)
   const nextWith = (want: AudioChoice, list: typeof plan.candidates, from: number) => {
     for (let i = from + 1; i < list.length; i++) {
-      if (!hasFailed(list[i].url) && sameAudio(want, list[i].profile)) return i;
+      if (!hasFailed(list[i].url) && serves(want, list[i].profile)) return i;
+    }
+    for (let i = 0; i < from; i++) {
+      if (!hasFailed(list[i].url) && serves(want, list[i].profile)) return i;
     }
     return -1;
   };
@@ -509,7 +577,7 @@ export default function Watch() {
       if (!found) return setLost({ key: forKey, want });
       addAndPlay(found);
     };
-    torrentCandidate(title, season, episode, (t) => sameAudio(want, t)).then(done, () => done(null));
+    torrentCandidate(title, season, episode, (t) => serves(want, t)).then(done, () => done(null));
   };
   // O original sem fonte carregada: uma das que chegam depois (dual/multi conta)
   // ou um torrent com ele; nada disso, segue na atual com o aviso.
@@ -519,9 +587,11 @@ export default function Watch() {
     const from = plan.index;
     // a pura (só o original) antes da dual; a que está tocando não conta
     const find = (list: typeof plan.candidates) => {
-      const fresh = list.map((c, j) => (j !== from && !c.torrent && !hasFailed(c.url) ? j : -1)).filter((j) => j >= 0);
-      const pure = fresh.filter((j) => audioChoice(list[j].profile, title.originalLanguage).original)[0];
-      return pure ?? fresh.filter((j) => sameAudio(want, list[j].profile))[0] ?? -1;
+      const fresh = list
+        .map((c, j) => (j !== from && !c.torrent && !hasFailed(c.url) && serves(want, c.profile) ? j : -1))
+        .filter((j) => j >= 0);
+      const pure = fresh.filter((j) => !list[j].profile.multiAudio)[0];
+      return pure ?? fresh[0] ?? -1;
     };
     // o atalho "original com legendas" não liga a legenda sobre o áudio de agora
     const missing = () => {
@@ -540,7 +610,7 @@ export default function Watch() {
         if (!found) return missing();
         addAndPlay(found);
       };
-      torrentCandidate(title, season, episode, (t) => sameAudio(want, t)).then(done, () => done(null));
+      torrentCandidate(title, season, episode, (t) => serves(want, t)).then(done, () => done(null));
     };
     const loaded = find(plan.candidates);
     if (loaded >= 0) return switchTo(loaded);
@@ -562,19 +632,31 @@ export default function Watch() {
       viaTorrent();
     });
   };
-  // No torrent, trocar o áudio busca outro torrent com ele; nunca cai numa fonte HTTP.
+  // A escolha vira a preferência. No torrent, trocar o áudio busca outro torrent
+  // com ele; nunca cai numa fonte HTTP.
   const pickAudio = (i: number) => {
     const want = audios[i];
+    chooseAudio(want);
     // o arquivo novo começa na faixa deste idioma (dual com o original, por exemplo)
     if (want.lang) setTrackLang({ key, lang: want.lang });
-    const loadedIndex = audioOf.map((a) => a.key).indexOf(want.key);
-    if (!candidate.torrent && loadedIndex < 0 && want.original) return pickOriginal(want);
-    if (!candidate.torrent) return switchTo(loadedIndex);
+    if (!candidate.torrent) {
+      // a fonte atual já tem só este áudio: nada a trocar
+      if (serves(want, candidate.profile) && !candidate.profile.multiAudio) return;
+      const other = indexFor(want, plan.index);
+      if (other >= 0) {
+        fetchMore(want);
+        return switchTo(other);
+      }
+      // dual que já tem o áudio: a faixa do arquivo é que muda (TV)
+      if (serves(want, candidate.profile)) return;
+      if (want.original) return pickOriginal(want);
+      return say(`Nenhuma fonte com áudio ${want.label}. Continua na atual.`);
+    }
     const torrents = plan.candidates.map((c, j) => (c.torrent && j !== plan.index ? j : -1)).filter((j) => j >= 0);
     const loaded =
-      torrents.find((j) => audioOf[j].key === want.key) ?? torrents.find((j) => sameAudio(want, plan.candidates[j].profile));
+      torrents.find((j) => audioOf[j].key === want.key) ?? torrents.find((j) => serves(want, plan.candidates[j].profile));
     if (loaded !== undefined) return switchTo(loaded);
-    const name = want.lang && !want.label.startsWith('Dual') ? audioName(want.lang) : want.label;
+    const name = want.lang ? audioName(want.lang) : want.label;
     const current = candidate.torrent.infoHash;
     const forKey = key;
     waitFor(`Procurando torrent em ${name}…`);
@@ -584,7 +666,7 @@ export default function Watch() {
       if (!found) return say(`Nenhum torrent em ${name}. Continua no atual.`);
       addAndPlay(found);
     };
-    torrentCandidate(title, season, episode, (t) => t.infoHash !== current && sameAudio(want, t)).then(done, () =>
+    torrentCandidate(title, season, episode, (t) => t.infoHash !== current && serves(want, t)).then(done, () =>
       done(null),
     );
   };
@@ -595,16 +677,13 @@ export default function Watch() {
   const httpAfterTorrent = (want: AudioChoice, list: typeof plan.candidates) => {
     const fresh = list.map((c, i) => (!c.torrent && !hasFailed(c.url) ? i : -1)).filter((i) => i >= 0);
     const first = (ok: (c: (typeof list)[number]) => boolean) => fresh.filter((i) => ok(list[i]))[0];
-    const i =
-      first((c) => sameAudio(want, c.profile)) ??
-      first((c) => offersAudio(c.profile, { audio, originalLanguage: title.originalLanguage })) ??
-      fresh[0];
+    const i = first((c) => serves(want, c.profile)) ?? first((c) => offersAudio(c.profile, prefs)) ?? fresh[0];
     return i === undefined ? -1 : i;
   };
   const leaveTorrent = (want: AudioChoice, list: typeof plan.candidates) => {
     const index = httpAfterTorrent(want, list);
     if (index < 0) return setPlan({ status: 'none', reason: 'all-failed' });
-    if (!sameAudio(want, list[index].profile)) say(`O torrent não tocou. Seguindo em ${list[index].label}.`);
+    if (!serves(want, list[index].profile)) say(`O torrent não tocou. Seguindo em ${list[index].label}.`);
     setPlan((p) => (p && p.status === 'play' ? { ...p, candidates: list, index, more: undefined } : p));
   };
   const next = () => {
@@ -613,9 +692,9 @@ export default function Watch() {
     const want = audioOf[plan.index];
     const forKey = key;
     const from = plan.index;
-    const { candidates, more } = plan;
+    const { candidates } = plan;
     // fontes que ainda vão chegar: espera por elas com o carregamento na tela
-    const later = (then: (merged: Candidate[]) => void) => {
+    const later = (more: Promise<Candidate[]> | undefined, then: (merged: Candidate[]) => void) => {
       if (!more) return then(candidates);
       setSwitching({ key, text: 'Procurando outra fonte…' });
       more.then((list) => {
@@ -624,11 +703,13 @@ export default function Watch() {
         then(mergeCandidates(candidates, list));
       });
     };
-    if (candidate.torrent) return later((merged) => leaveTorrent(want, merged));
+    if (candidate.torrent) return later(plan.more, (merged) => leaveTorrent(want, merged));
     const found = nextWith(want, plan.candidates, from);
     if (found >= 0) return setPlan({ ...plan, index: found });
-    if (!plan.more) return lastResort(want);
-    later((merged) => {
+    // acabou a lista deste áudio: as que ainda chegam ou, uma vez, uma busca nova neste idioma
+    const more = plan.more || (refetched.current !== `${key}/${audio}` ? refetch() : undefined);
+    if (!more) return lastResort(want);
+    later(more, (merged) => {
       const index = nextWith(want, merged, from);
       setPlan((p) =>
         p && p.status === 'play' ? { ...p, candidates: merged, index: index >= 0 ? index : p.index, more: undefined } : p,
@@ -636,7 +717,6 @@ export default function Watch() {
       if (index < 0) lastResort(want);
     });
   };
-
   const upNext = following
     ? {
         label: `Temporada ${following.season}, episódio ${following.episode.number}`,
@@ -681,6 +761,8 @@ export default function Watch() {
         }
         // fonte ruim: passa para a próxima sem perguntar
         onFail={next}
+        // faixa escolhida dentro do arquivo também vira a preferência
+        onChooseAudio={chooseAudio}
         // a fonte que tocou vale para os outros episódios: mesmo addon, mesmo áudio
         onStart={() => {
           // torrent não vira a fonte padrão dos próximos episódios

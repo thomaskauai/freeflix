@@ -5,6 +5,9 @@ import { srtToVtt } from './subtitles';
 import {
   audioChoice,
   audioOptions,
+  pickStreams,
+  preferAudio,
+  preferenceOf,
   describeStream,
   foreignOnly,
   hasOriginalAudio,
@@ -226,28 +229,48 @@ describe('srtToVtt', () => {
 });
 
 describe('audioChoice', () => {
-  it('nomeia como a Netflix', () => {
+  it('é o idioma que se ouve, não a combinação do pacote', () => {
     expect(audioChoice({ languages: [], multiAudio: false }, 'en')).toMatchObject({ key: 'original', label: 'Inglês [original]', original: true });
     expect(audioChoice({ languages: ['en'], multiAudio: false }, 'en').key).toBe('original');
-    expect(audioChoice({ languages: ['pt'], multiAudio: false }, 'en')).toMatchObject({ label: 'Português', lang: 'pt', original: false });
-    expect(audioChoice({ languages: ['pt', 'en'], multiAudio: true }, 'en').label).toBe('Dual: Português e Inglês');
+    expect(audioChoice({ languages: ['pt'], multiAudio: false }, 'en')).toMatchObject({ key: 'pt', label: 'Português', lang: 'pt', original: false });
     expect(audioChoice({ languages: [], multiAudio: false }).label).toBe('Original');
   });
 
-  it('"Dual Áudio" sem idiomas é português e o original, nunca "Dual áudio"', () => {
-    const dual = { languages: [], multiAudio: true, dualAudio: true };
-    expect(audioChoice(dual, 'en')).toMatchObject({ key: 'multi:en+pt', label: 'Dual: Português e Inglês' });
-    expect(audioChoice(dual).label).toBe('Dual: Português e original');
-    expect(audioChoice(dual, 'pt').label).toBe('Dual: Português e original');
-    expect(audioChoice({ languages: ['pt'], multiAudio: true, dualAudio: true }, 'en').key).toBe('multi:en+pt');
-    expect(audioChoice(parseStream(stream('1080p', 'Filme DUAL AUDIO'), 'T'), 'ja').label).toBe('Dual: Português e Japonês');
+  it('dual com português é Português; com o original preferido, é o original', () => {
+    const dual = { languages: ['pt', 'en'], multiAudio: true };
+    expect(audioChoice(dual, 'en', 'pt').label).toBe('Português');
+    expect(audioChoice(dual, 'en', 'es').label).toBe('Português');
+    expect(audioChoice(dual, 'en', 'original').label).toBe('Inglês [original]');
+    const dualAudio = { languages: [], multiAudio: true, dualAudio: true };
+    expect(audioChoice(dualAudio, 'en', 'pt').key).toBe('pt');
+    expect(audioChoice(parseStream(stream('1080p', 'Filme DUAL AUDIO'), 'T'), 'ja', 'pt').label).toBe('Português');
   });
 
-  it('"multi" sem idiomas diz o original e outros idiomas', () => {
-    const multi = { languages: [], multiAudio: true };
-    expect(audioChoice(multi, 'en').label).toBe('Inglês e outros idiomas');
-    expect(audioChoice(multi).label).toBe('Original e outros idiomas');
-    expect(audioChoice(parseStream(stream('1080p', 'Filme MULTI'), 'T'), 'en').key).not.toBe('multi:en+pt');
+  it('"Inglês e Híndi", "Dual: Inglês e Híndi", "Inglês e mais 3 idiomas" = Inglês [original]', () => {
+    expect(audioChoice({ languages: ['en', 'hi'], multiAudio: false }, 'en').label).toBe('Inglês [original]');
+    expect(audioChoice({ languages: ['en', 'hi'], multiAudio: true }, 'en').label).toBe('Inglês [original]');
+    expect(audioChoice({ languages: ['en', 'hi', 'ta', 'te'], multiAudio: false }, 'en').label).toBe('Inglês [original]');
+    expect(audioChoice({ languages: ['hi'], multiAudio: true }, 'en').label).toBe('Inglês [original]');
+  });
+
+  it('"multi" sem dizer quais é o original', () => {
+    expect(audioChoice({ languages: [], multiAudio: true }, 'en').label).toBe('Inglês [original]');
+    expect(audioChoice({ languages: [], multiAudio: true }).label).toBe('Original');
+  });
+
+  it('o preferido vem primeiro quando a fonte tem', () => {
+    const multi = { languages: ['en', 'pt', 'es', 'fr'], multiAudio: false };
+    expect(audioChoice(multi, 'en', 'es').label).toBe('Espanhol');
+    expect(audioChoice(multi, 'en', 'original').label).toBe('Inglês [original]');
+    expect(audioChoice(multi, 'en', 'pt').label).toBe('Português');
+  });
+});
+
+describe('preferenceOf', () => {
+  it('o original vira "original"; o resto, o código', () => {
+    expect(preferenceOf(audioChoice({ languages: [], multiAudio: false }, 'en'))).toBe('original');
+    expect(preferenceOf(audioChoice({ languages: ['pt', 'en'], multiAudio: true }, 'en', 'pt'))).toBe('pt');
+    expect(preferenceOf(audioChoice({ languages: ['es'], multiAudio: false }, 'ja', 'es'))).toBe('es');
   });
 });
 
@@ -407,16 +430,6 @@ describe('rankTorrents', () => {
 });
 
 
-describe('audioChoice com muitos idiomas', () => {
-  it('mostra o português na frente e conta o resto', () => {
-    const choice = audioChoice({ languages: ['en', 'pt', 'es', 'fr', 'de', 'it'], multiAudio: false }, 'en');
-    expect(choice.label).toBe('Português e mais 5 idiomas');
-  });
-  it('dois idiomas seguem por extenso', () => {
-    expect(audioChoice({ languages: ['pt', 'en'], multiAudio: true }, 'en').label).toBe('Dual: Português e Inglês');
-  });
-});
-
 describe('PenguPlay: dublagem estrangeira no pacote', () => {
   // nomes reais (out/2026); ffprobe: a primeira faixa é a híndi, a inglesa vem depois
   const pengu = (filename: string, description = '') =>
@@ -437,14 +450,15 @@ describe('PenguPlay: dublagem estrangeira no pacote', () => {
     expect(pengu('The.Bad.Guys.Breaking.In.S01E01.1080p.10bit.HIN.ENG.x265.ESub.Luffy.mkv').languages).toEqual(['en', 'hi']);
     expect(pengu('Weapons (2025) 1080p BluRay [Hindi (Studio-Dub) DDP 5.1 + English DDP 7.1 Atmos] x264 (ZoroSenpai-4kHDHub.com).mkv').languages).toEqual(['en', 'hi']);
     expect(hasOriginalAudio(pengu(hindiEnglish), 'en')).toBe(false);
-    expect(audioChoice(pengu(hindiEnglish), 'en').original).toBe(false);
+    // quem escolhe esse pacote ouve o inglês
+    expect(audioChoice(pengu(hindiEnglish), 'en').original).toBe(true);
   });
 
   it('"Dual Audio" híndi não vira português', () => {
     const dual = pengu('AnimeDubHindi.The.Bad.Guys.Breaking.In.S01E01.720p.HD.NF.WEB.DL.Dual.Audio.ESub.mkv');
     expect(dual.languages).toEqual(['hi']);
     expect(offersAudio(dual, { audio: 'pt', originalLanguage: 'en' })).toBe(false);
-    expect(audioChoice(dual, 'en').label).toBe('Dual: Híndi e Inglês');
+    expect(audioChoice(dual, 'en').label).toBe('Inglês [original]');
   });
 
   it('dublagem só estrangeira (russo, ucraniano, tâmil) fica de fora', () => {
@@ -483,21 +497,76 @@ describe('PenguPlay: dublagem estrangeira no pacote', () => {
 
 describe('audioOptions', () => {
   const pt = { languages: ['pt'], multiAudio: false };
+  const labels = (list: { label: string }[]) => list.map((a) => a.label);
   it('só dublada: o original entra no fim, mesmo sem fonte', () => {
-    const list = audioOptions([audioChoice(pt, 'ja'), audioChoice(pt, 'ja')], 'ja');
-    expect(list.map((a) => a.label)).toEqual(['Português', 'Japonês [original]']);
+    const list = audioOptions([pt, pt], { audio: 'pt', originalLanguage: 'ja' }, { withOriginal: true });
+    expect(labels(list)).toEqual(['Português', 'Japonês [original]']);
     expect(list[1]).toMatchObject({ key: 'original', lang: 'ja', original: true });
   });
-  it('fonte com o original já carregada: não repete', () => {
-    const list = audioOptions([audioChoice(pt, 'en'), audioChoice({ languages: [], multiAudio: false }, 'en')], 'en');
-    expect(list.map((a) => a.label)).toEqual(['Português', 'Inglês [original]']);
+  it('a foto da TV: dual pt falhou, sobram inglês e pacotes com híndi', () => {
+    // "Inglês [original]", "Inglês e mais 3 idiomas", "Inglês e Híndi", "Dual: Inglês e Híndi", "Português"
+    const sources = [
+      { languages: [], multiAudio: false },
+      { languages: ['en', 'hi', 'ta', 'te'], multiAudio: false },
+      { languages: ['en', 'hi'], multiAudio: false },
+      { languages: ['en', 'hi'], multiAudio: true },
+      pt,
+    ];
+    expect(labels(audioOptions(sources, { audio: 'pt', originalLanguage: 'en' }))).toEqual(['Português', 'Inglês [original]']);
+    expect(labels(audioOptions(sources, { audio: 'original', originalLanguage: 'en' }))).toEqual(['Inglês [original]', 'Português']);
   });
-  it('dual com o original ainda oferece o original sozinho', () => {
-    const dual = audioChoice({ languages: ['pt', 'en'], multiAudio: true }, 'en');
-    expect(audioOptions([dual], 'en').map((a) => a.label)).toEqual(['Dual: Português e Inglês', 'Inglês [original]']);
+  it('dual com português e o original serve aos dois, sem repetir', () => {
+    const dual = { languages: ['pt', 'en'], multiAudio: true };
+    expect(labels(audioOptions([dual, dual], { audio: 'original', originalLanguage: 'en' }))).toEqual([
+      'Inglês [original]',
+      'Português',
+    ]);
+  });
+  it('preferência salva primeiro, depois o original, depois o português; no máximo três', () => {
+    const sources = [pt, { languages: ['es'], multiAudio: false }, { languages: [], multiAudio: false }, { languages: ['fr'], multiAudio: false }];
+    expect(labels(audioOptions(sources, { audio: 'es', originalLanguage: 'en' }))).toEqual([
+      'Espanhol',
+      'Inglês [original]',
+      'Português',
+    ]);
+  });
+  it('híndi, tâmil e afins nunca viram opção; o que toca entra sempre', () => {
+    const hindi = { languages: ['hi'], multiAudio: false };
+    expect(labels(audioOptions([pt, hindi], { audio: 'pt', originalLanguage: 'en' }))).toEqual(['Português']);
+    const current = audioChoice(hindi, 'en', 'pt');
+    expect(labels(audioOptions([pt, hindi], { audio: 'pt', originalLanguage: 'en' }, { current }))).toEqual([
+      'Português',
+      'Híndi',
+    ]);
+  });
+  it('nenhum dos pedidos nas fontes: o áudio de cada uma', () => {
+    const fr = { languages: ['fr'], multiAudio: false };
+    expect(labels(audioOptions([fr, fr], { audio: 'pt', originalLanguage: 'en' }))).toEqual(['Francês']);
   });
   it('sem idioma original conhecido: só as fontes', () => {
-    expect(audioOptions([audioChoice(pt)]).map((a) => a.label)).toEqual(['Português']);
+    expect(labels(audioOptions([pt], { audio: 'original' }))).toEqual(['Português']);
+  });
+});
+
+describe('pickStreams', () => {
+  const s = (lang: string[], res: number, addon = 'A') =>
+    ({ ...parseStream(stream(`${res}p`, 'x'), addon), languages: lang, multiAudio: false, url: `${addon}${lang.join()}${res}` }) as ReturnType<typeof parseStream>;
+  it('lista só o preferido e uma de cada outro áudio', () => {
+    const ranked = [s(['pt'], 1080), s(['pt'], 720), s([], 1080), s([], 720), s(['es'], 1080)];
+    const kept = pickStreams(ranked, { audio: 'pt', originalLanguage: 'en' });
+    expect(kept.map((k) => k.url)).toEqual(['Apt1080', 'Apt720', 'A1080', 'Aes1080']);
+  });
+  it('nenhuma com o preferido: todas', () => {
+    const ranked = [s([], 1080), s([], 720)];
+    expect(pickStreams(ranked, { audio: 'pt', originalLanguage: 'en' })).toHaveLength(2);
+  });
+});
+
+describe('preferAudio', () => {
+  it('o áudio preferido antes, sem perder os outros', () => {
+    const list = [{ languages: ['pt'], multiAudio: false }, { languages: [], multiAudio: false }];
+    expect(preferAudio(list, { audio: 'original', originalLanguage: 'en' })).toEqual([list[1], list[0]]);
+    expect(preferAudio(list, { audio: 'pt', originalLanguage: 'en' })).toEqual(list);
   });
 });
 

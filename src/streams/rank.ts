@@ -317,75 +317,135 @@ const AUDIO_NAMES: Record<string, string> = {
 
 export const audioName = (code: string) => AUDIO_NAMES[code] ?? code.toUpperCase();
 
-/** Um áudio que dá para escolher no player: fontes com o mesmo áudio viram uma opção só. */
+/**
+ * Um áudio que dá para escolher no player: o idioma que o espectador ouve, não
+ * a combinação do pacote. Uma fonte dual/multi serve a mais de um.
+ */
 export interface AudioChoice {
+  /** "original" ou o código do idioma */
   key: string;
   label: string;
-  /** idioma principal, quando se sabe */
+  /** idioma, quando se sabe */
   lang?: string;
-  /** só o áudio original da obra */
+  /** o áudio original da obra */
   original: boolean;
 }
 
-/** O áudio de uma fonte, como a Netflix mostra: "Português", "Inglês [original]", "Dual: …". */
-/**
- * Nome curto de uma lista de idiomas: até dois por extenso; mais que isso
- * (pacotes com seis áudios), português ou o original na frente e "e mais N".
- */
-function languagesLabel(languages: string[], originalLanguage?: string): string {
-  if (languages.length <= 2) return languages.map(audioName).join(' e ');
-  return `${audioName(leadLanguage(languages, originalLanguage))} e mais ${languages.length - 1} idiomas`;
-}
-
-/** O idioma que representa a lista: português, senão o original, senão o primeiro. */
-function leadLanguage(languages: string[], originalLanguage?: string): string {
-  if (languages.indexOf('pt') >= 0) return 'pt';
-  if (originalLanguage && languages.indexOf(originalLanguage) >= 0) return originalLanguage;
-  return languages[0];
-}
-
-export function audioChoice(s: AudioInfo, originalLanguage?: string): AudioChoice {
-  const sorted = s.languages.slice().sort().join('+');
-  if (s.multiAudio) {
-    const languages = effectiveLanguages(s, originalLanguage);
-    const key = languages.slice().sort().join('+');
-    // "multi" sem dizer quais: só o original é certo
-    if (!s.languages.length && !s.dualAudio) {
-      const lead = originalLanguage ? audioName(originalLanguage) : 'Original';
-      return { key: `multi+:${key}`, label: `${lead} e outros idiomas`, original: false };
-    }
-    // o original sem nome: "Dual: Português e original"
-    const named = languages.length === 1 ? `${audioName(languages[0])} e original` : languagesLabel(languages, originalLanguage);
-    return { key: `multi:${key}`, label: `Dual: ${named}`, original: false };
-  }
-  if (!s.languages.length || (!!originalLanguage && s.languages.length === 1 && s.languages[0] === originalLanguage)) {
-    const lang = originalLanguage;
-    return { key: 'original', label: lang ? `${audioName(lang)} [original]` : 'Original', lang, original: true };
-  }
-  return {
-    key: sorted,
-    label: languagesLabel(s.languages, originalLanguage),
-    lang: leadLanguage(s.languages, originalLanguage),
-    original: false,
-  };
-}
+type AudioPrefs = Pick<RankContext, 'audio' | 'originalLanguage'>;
 
 /** O áudio original da obra como opção do player, mesmo sem fonte carregada com ele. */
-export const originalChoice = (lang: string): AudioChoice => ({
+export const originalChoice = (lang?: string): AudioChoice => ({
   key: 'original',
-  label: `${audioName(lang)} [original]`,
+  label: lang ? `${audioName(lang)} [original]` : 'Original',
   lang,
   original: true,
 });
 
+/** Opção de um idioma; o da obra vira a opção "[original]". */
+function languageChoice(lang: string, originalLanguage?: string): AudioChoice {
+  if (lang === 'original' || lang === originalLanguage) return originalChoice(originalLanguage);
+  return { key: lang, label: audioName(lang), lang, original: false };
+}
+
+/** A fonte tem esse áudio? Dual/multi com ele conta. */
+export function servesAudio(choice: AudioChoice, s: AudioInfo, originalLanguage?: string): boolean {
+  if (choice.original) return offersAudio(s, { audio: 'original', originalLanguage });
+  return !!choice.lang && offersAudio(s, { audio: choice.lang, originalLanguage });
+}
+
 /**
- * Opções de áudio do player: uma por tipo entre as fontes, na ordem da melhor
- * de cada, e o original no fim quando nenhuma fonte carregada o traz sozinho.
- * Escolhido, ele vem de uma fonte dual/multi, das que chegam depois ou do torrent.
+ * O áudio que se ouve nesta fonte: o preferido, se ela tem; senão português;
+ * senão o original; senão inglês; senão o primeiro idioma dela.
  */
-export function audioOptions(choices: AudioChoice[], originalLanguage?: string): AudioChoice[] {
-  const keys = choices.map((a) => a.key);
-  const list = choices.filter((a, i) => keys.indexOf(a.key) === i);
-  if (originalLanguage && !list.some((a) => a.original)) list.push(originalChoice(originalLanguage));
+export function audioChoice(s: AudioInfo, originalLanguage?: string, audio: AudioLanguage = 'original'): AudioChoice {
+  const preferred = languageChoice(audio, originalLanguage);
+  if (servesAudio(preferred, s, originalLanguage)) return preferred;
+  const languages = effectiveLanguages(s, originalLanguage);
+  if (languages.indexOf('pt') >= 0) return languageChoice('pt', originalLanguage);
+  if (offersAudio(s, { audio: 'original', originalLanguage })) return originalChoice(originalLanguage);
+  return languageChoice(languages.indexOf('en') >= 0 ? 'en' : languages[0] || 'original', originalLanguage);
+}
+
+/** Preferência que a escolha vira: "original" ou o código do idioma. */
+export const preferenceOf = (choice: AudioChoice): AudioLanguage | null =>
+  choice.original ? 'original' : choice.lang || null;
+
+/** no máximo três: o preferido, o original e o português */
+const MAX_AUDIOS = 3;
+
+/**
+ * Opções de áudio do player: o preferido, o original e o português, os que
+ * alguma fonte tem; híndi, tâmil e afins de pacote nunca viram opção. Com
+ * `withOriginal`, o original entra mesmo sem fonte (escolhido, é procurado).
+ * Nenhum deles nas fontes: o áudio de cada uma. O que está tocando entra sempre.
+ */
+export function audioOptions(
+  sources: AudioInfo[],
+  ctx: AudioPrefs,
+  extra: { withOriginal?: boolean; current?: AudioChoice } = {},
+): AudioChoice[] {
+  const { originalLanguage } = ctx;
+  let list: AudioChoice[] = [];
+  const add = (c: AudioChoice) => {
+    if (!list.some((a) => a.key === c.key)) list.push(c);
+  };
+  [languageChoice(ctx.audio, originalLanguage), originalChoice(originalLanguage), languageChoice('pt', originalLanguage)].forEach(
+    (c) => {
+      const loaded = sources.some((s) => servesAudio(c, s, originalLanguage));
+      if (loaded || (extra.withOriginal && c.original && !!originalLanguage)) add(c);
+    },
+  );
+  if (!list.length) sources.forEach((s) => add(audioChoice(s, originalLanguage, ctx.audio)));
+  list = list.slice(0, MAX_AUDIOS);
+  const current = extra.current;
+  if (current && !list.some((a) => a.key === current.key)) {
+    if (list.length >= MAX_AUDIOS) list.pop();
+    list.push(current);
+  }
   return list;
+}
+
+/** quantas fontes o player guarda para tentar em sequência */
+const MAX_CANDIDATES = 12;
+/**
+ * Uma fonte costuma devolver vários espelhos do mesmo arquivo (mesma resolução
+ * e idioma, servidores diferentes). Alguns ficam como reserva; o resto só
+ * tiraria o lugar de opções realmente diferentes.
+ */
+const MAX_MIRRORS = 3;
+/** áudios a mais (um de cada) além da lista, para os atalhos de áudio do player */
+const MAX_EXTRA_AUDIOS = 4;
+
+/**
+ * As fontes que o player guarda: as com o áudio preferido (todas, se nenhuma
+ * tem) e, de cada outro áudio, só a melhor, para os atalhos oferecerem a troca.
+ */
+export function pickStreams<T extends ParsedStream>(ranked: T[], ctx: AudioPrefs): T[] {
+  const wanted = ranked.filter((s) => offersAudio(s, ctx));
+  const kept: T[] = [];
+  const mirrors: Record<string, number> = {};
+  for (const s of wanted.length ? wanted : ranked) {
+    if (kept.length >= MAX_CANDIDATES) break;
+    const label = describeStream(s);
+    mirrors[label] = (mirrors[label] ?? 0) + 1;
+    if (mirrors[label] > MAX_MIRRORS) continue;
+    kept.push(s);
+  }
+  const audioKey = (s: ParsedStream) => audioChoice(s, ctx.originalLanguage, ctx.audio).key;
+  const present = kept.map(audioKey);
+  let extras = 0;
+  ranked.forEach((s) => {
+    const k = audioKey(s);
+    if (extras >= MAX_EXTRA_AUDIOS || present.indexOf(k) >= 0) return;
+    present.push(k);
+    kept.push(s);
+    extras++;
+  });
+  return kept;
+}
+
+/** Torrents com o áudio preferido primeiro; os outros, na mesma ordem, depois. */
+export function preferAudio<T extends AudioInfo>(list: T[], ctx: AudioPrefs): T[] {
+  const yes = list.filter((t) => offersAudio(t, ctx));
+  return yes.concat(list.filter((t) => yes.indexOf(t) < 0));
 }

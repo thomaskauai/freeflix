@@ -3,7 +3,7 @@ import type { Title } from '../data/types';
 import { getSettings } from '../settings';
 import { getSpeed } from './network';
 import { parseStream, type ParsedStream } from './parse';
-import { audioChoice, describeStream, foreignOnly, offersAudio, rankStreams, type RankContext, type SourceProfile } from './rank';
+import { describeStream, foreignOnly, offersAudio, pickStreams, rankStreams, type RankContext, type SourceProfile } from './rank';
 import { installDefaultSources, listSources, sourcePriority, type SourceAddon } from './sources';
 import { releaseOf, rememberRelease } from './subtitles';
 
@@ -47,16 +47,6 @@ export type Resolution =
     }
   | { reason: NoSourceReason };
 
-/** quantas fontes o player guarda para tentar em sequência */
-const MAX_CANDIDATES = 12;
-/**
- * Uma fonte costuma devolver vários espelhos do mesmo arquivo (mesma resolução
- * e idioma, servidores diferentes). Alguns ficam como reserva; o resto só
- * tiraria o lugar de opções realmente diferentes.
- */
-const MAX_MIRRORS = 3;
-/** áudios a mais (um de cada) além da lista, para dar o que escolher no player */
-const MAX_EXTRA_AUDIOS = 4;
 /**
  * Passado esse tempo, o play sai com as fontes que já responderam (os addons
  * rápidos levam menos de 1 s; alguns levam 10 s ou mais). Os lentos entram
@@ -191,26 +181,5 @@ function toCandidate(s: ParsedStream): Candidate {
 }
 
 function pick(ranked: ParsedStream[], title: Title): ParsedStream[] {
-  const kept: ParsedStream[] = [];
-  const mirrors: Record<string, number> = {};
-  for (const s of ranked) {
-    if (kept.length >= MAX_CANDIDATES) break;
-    const label = describeStream(s);
-    mirrors[label] = (mirrors[label] ?? 0) + 1;
-    if (mirrors[label] > MAX_MIRRORS) continue;
-    kept.push(s);
-  }
-
-  // Um áudio pode ocupar a lista inteira (as dubladas, com um idioma preferido,
-  // ou o original). A melhor fonte de cada áudio entra sempre, para o player
-  // oferecer a troca, como a Netflix.
-  const audioKey = (s: ParsedStream) => audioChoice(s, title.originalLanguage).key;
-  const present = kept.map(audioKey);
-  ranked.forEach((s) => {
-    const k = audioKey(s);
-    if (present.indexOf(k) >= 0 || present.length >= MAX_CANDIDATES + MAX_EXTRA_AUDIOS) return;
-    present.push(k);
-    kept.push(s);
-  });
-  return kept;
+  return pickStreams(ranked, { audio: getSettings().audio, originalLanguage: title.originalLanguage });
 }

@@ -8,7 +8,7 @@ import {
 } from '../data/storage';
 import type { Title } from '../data/types';
 import { loadHls } from './loadHls';
-import type { SourceProfile } from './rank';
+import { offersAudio, type SourceProfile } from './rank';
 import { resolvePlayback, type Candidate, type NoSourceReason, type Resolution } from './resolve';
 import {
   dropTorrent,
@@ -17,7 +17,9 @@ import {
   sweepTorrents,
   torrentAvailable,
   torrentCandidate,
+  torrentInPreferredAudio,
 } from './torrent';
+import { getSettings } from '../settings';
 
 /** fontes encontradas valem por este tempo; links de streaming costumam expirar */
 const PLAN_TTL_MS = 10 * 60 * 1000;
@@ -49,7 +51,9 @@ export function firstWorking(plan: Plan, title: Title, season?: number, episode?
   if (plan.status !== 'play') return plan;
   const key = keyOf(title, season, episode);
   const urls = plan.candidates.map((c) => c.url);
-  const kept = preloaded && preloaded.key === key ? urls.indexOf(preloaded.url) : -1;
+  // guardado com outro idioma preferido não serve: o espectador trocou o áudio
+  const kept =
+    preloaded && preloaded.key === key && preloaded.audio === getSettings().audio ? urls.indexOf(preloaded.url) : -1;
   const index = kept >= 0 ? kept : plan.candidates.map((c) => !failedUrls[c.url]).indexOf(true);
   return index > 0 ? { ...plan, index } : plan;
 }
@@ -104,6 +108,7 @@ export function resumePoint(title: Title, season?: number, episode?: number) {
 
 const keyOf = (title: Title, season?: number, episode?: number) => `${title.type}/${title.id}/${season}/${episode}`;
 
+/** o plano depende do idioma preferido: com outro, a busca é outra */
 const plans: Record<string, { at: number; plan: Promise<Plan> }> = {};
 
 /**
@@ -115,7 +120,7 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
   const embed = embedUrlFor(title.tmdbId, season, episode);
   if (embed) return Promise.resolve({ status: 'embed', url: embed });
 
-  const key = keyOf(title, season, episode);
+  const key = `${keyOf(title, season, episode)}/${getSettings().audio}`;
   const cached = plans[key];
   if (cached && Date.now() - cached.at < PLAN_TTL_MS) return cached.plan;
 
@@ -131,7 +136,12 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
   // Episódio de série que já tocou outro: pergunta primeiro só ao addon que
   // funcionou, pela mesma opção (resolução e áudio). Os outros addons respondem
   // em paralelo e entram como reserva, sem atrasar o play.
-  const prefer: SourceProfile | undefined = season != null ? preferredSource(title.id) : undefined;
+  // Fonte de outro áudio (o espectador trocou a preferência depois) não vale mais.
+  const remembered = season != null ? preferredSource(title.id) : undefined;
+  const prefer: SourceProfile | undefined =
+    remembered && offersAudio(remembered, { audio: getSettings().audio, originalLanguage: title.originalLanguage })
+      ? remembered
+      : undefined;
   const full = resolvePlayback(title, season, episode, { prefer }).then(toPlan, unreachable);
   const httpPlan = prefer
     ? resolvePlayback(title, season, episode, { prefer, only: prefer.base })
@@ -151,16 +161,22 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
     ? Promise.resolve(null)
     : torrentAvailable()
         .then((ok) => ok && noStreamingInBrazil(title))
-        .then((yes) => (yes ? ((torrentTried = true), torrentCandidate(title, season, episode)) : null))
+        // só no áudio preferido: sem ele, as fontes HTTP vêm primeiro
+        .then((yes) =>
+          yes ? ((torrentTried = true), torrentCandidate(title, season, episode, torrentInPreferredAudio(title))) : null,
+        )
         .catch(() => null);
   // Nenhuma fonte HTTP: o torrent é a reserva antes de dizer que não há o título.
+  // Já tentado no áudio preferido (torrentFirst), sobram os de outro áudio.
   const torrentBackup = (none: Plan): Promise<Plan> =>
-    torrentTried
-      ? Promise.resolve(none)
-      : torrentAvailable()
-          .then((ok) => (ok ? torrentCandidate(title, season, episode) : null))
-          .then((torrent): Plan => (torrent ? { status: 'play', candidates: [torrent], index: 0 } : none))
-          .catch(() => none);
+    torrentAvailable()
+      .then((ok) => {
+        if (!ok) return null;
+        const preferred = torrentInPreferredAudio(title);
+        return torrentCandidate(title, season, episode, torrentTried ? (t) => !preferred(t) : undefined);
+      })
+      .then((torrent): Plan => (torrent ? { status: 'play', candidates: [torrent], index: 0 } : none))
+      .catch(() => none);
   const plan = torrentFirst.then(
     (torrent): Plan | Promise<Plan> =>
       torrent
@@ -232,6 +248,8 @@ export function discardVideo(video: HTMLVideoElement, detach: () => void) {
 interface Preloaded {
   key: string;
   url: string;
+  /** idioma preferido quando foi guardado */
+  audio: string;
   video: HTMLVideoElement;
   detach: () => void;
 }
@@ -257,8 +275,8 @@ export function preloadPlayback(title: Title, season?: number, episode?: number)
   const key = keyOf(title, season, episode);
   window.clearTimeout(releaseTimer);
   wanted = key;
-  // o vídeo guardado ao sair do player deste mesmo episódio já serve
-  if (preloaded && preloaded.key === key) return;
+  // o vídeo guardado ao sair do player deste mesmo episódio já serve, se do mesmo idioma
+  if (preloaded && preloaded.key === key && preloaded.audio === getSettings().audio) return;
   dropPreloaded();
   planFor(title, season, episode).then((plan) => {
     if (plan.status === 'play') preloadCandidate(key, title, plan.candidates, season, episode, PRELOAD_TRIES);
@@ -310,7 +328,7 @@ function preloadCandidate(
     unhook();
   };
   const unhook = attachSource(video, candidate.url, candidate.hls);
-  preloaded = { key, url: candidate.url, video, detach };
+  preloaded = { key, url: candidate.url, audio: getSettings().audio, video, detach };
 }
 
 /**
@@ -361,7 +379,7 @@ export function parkVideo(
   dropPreloaded();
   video.pause();
   if (video.parentNode) video.parentNode.removeChild(video);
-  preloaded = { key, url, video, detach };
+  preloaded = { key, url, audio: getSettings().audio, video, detach };
   window.clearTimeout(releaseTimer);
   releaseTimer = window.setTimeout(dropPreloaded, PARK_MS);
   return true;

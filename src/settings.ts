@@ -1,6 +1,7 @@
 // Preferências do espectador, guardadas no aparelho.
 
-export type AudioLanguage = 'original' | 'pt' | 'en' | 'es';
+/** 'original' ou o código do idioma; a escolha no player pode trazer um fora da lista de Configurações */
+export type AudioLanguage = string;
 
 const ADDON_PT = 'https://catalog.nuvio.tv/%7B%22language%22%3A%22pt-BR%22%2C%22region%22%3A%22BR%22%7D';
 const ADDON_EN = 'https://catalog.nuvio.tv';
@@ -54,6 +55,10 @@ export const AUDIO_LANGUAGES: { id: AudioLanguage; label: string }[] = [
   { id: 'es', label: 'Español' },
 ];
 
+/** 'original' ou um código de idioma ("pt", "ja") */
+export const isAudioLanguage = (value: unknown): value is AudioLanguage =>
+  typeof value === 'string' && (value === 'original' || /^[a-z]{2,3}$/.test(value));
+
 export interface Settings {
   audio: AudioLanguage;
   /** animes no catálogo (fileiras, destaques, semelhantes) e as fileiras do Crunchyroll */
@@ -67,7 +72,7 @@ export function getSettings(): Settings {
   try {
     // "crunchyroll" era o nome da opção antes de valer para todos os animes
     const saved = JSON.parse(window.localStorage.getItem(KEY) || '{}') as Partial<Settings> & { crunchyroll?: boolean };
-    const audio = AUDIO_LANGUAGES.some((a) => a.id === saved.audio) ? (saved.audio as AudioLanguage) : DEFAULTS.audio;
+    const audio = isAudioLanguage(saved.audio) ? saved.audio : DEFAULTS.audio;
     return { audio, animes: saved.animes != null ? saved.animes === true : saved.crunchyroll === true };
   } catch {
     return DEFAULTS;
