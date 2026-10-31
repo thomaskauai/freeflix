@@ -600,7 +600,7 @@ export default function Watch() {
         media={media}
         duration={duration}
         startAt={startAt}
-        subtitlesFor={subtitleId ? { type: title.type, videoId: subtitleId } : undefined}
+        subtitlesFor={subtitleId ? { type: title.type, videoId: subtitleId, release: candidate.release } : undefined}
         sources={options}
         sourceIndex={options.indexOf(candidate.label)}
         audios={audios}

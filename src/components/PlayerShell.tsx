@@ -7,6 +7,8 @@ import {
   loadSubtitle,
   rememberedSubtitle,
   rememberSubtitle,
+  subtitleSrc,
+  type LoadedSubtitle,
   type SubtitleLanguage,
   type SubtitleOption,
 } from '../streams/subtitles';
@@ -15,6 +17,11 @@ import { torrentBuffer } from '../streams/torrent';
 import { Icon, type IconName } from './Icon';
 
 const HIDE_AFTER_MS = 4000;
+/** passo do ajuste manual de sincronia da legenda, em segundos */
+const SUBTITLE_STEP_S = 0.5;
+
+/** "+1,5 s" */
+const formatOffset = (s: number) => `${s > 0 ? '+' : s < 0 ? '−' : ''}${Math.abs(s).toFixed(1).replace('.', ',')} s`;
 /** toques no mesmo sentido com menos que isso entre eles (ou a tecla segurada) aceleram a passada */
 const SEEK_CHAIN_MS = 700;
 /**
@@ -223,8 +230,11 @@ interface PlayerShellProps {
   duration: number;
   startAt: number;
   /** fontes encontradas para este título, da melhor para a pior */
-  /** onde buscar legendas: tipo e id IMDb (com :temporada:episódio em séries) */
-  subtitlesFor?: { type: string; videoId: string };
+  /**
+   * onde buscar legendas: tipo e id IMDb (com :temporada:episódio em séries) e
+   * o nome do arquivo que toca, para achar a legenda da mesma versão
+   */
+  subtitlesFor?: { type: string; videoId: string; release?: string };
   sources?: string[];
   sourceIndex?: number;
   onPickSource?: (index: number) => void;
@@ -315,6 +325,12 @@ export function PlayerShell({
   const [subtitles, setSubtitles] = useState<SubtitleOption[] | null>(null);
   const [subtitleLang, setSubtitleLang] = useState<SubtitleLanguage | null>(null);
   const [subtitleBusy, setSubtitleBusy] = useState(false);
+  /** ajuste manual de sincronia (s); + mostra a legenda mais tarde */
+  const [subtitleOffset, setSubtitleOffset] = useState(0);
+  /** legenda em uso: de que opção e qual das candidatas dela */
+  const loadedSubtitle = useRef<{ option: SubtitleOption; loaded: LoadedSubtitle } | null>(null);
+  /** só o último pedido de legenda vale (trocas rápidas não se atropelam) */
+  const subtitleRequest = useRef(0);
   const menuOpenRef = useRef(false);
   menuOpenRef.current = menuOpen;
 
@@ -811,37 +827,55 @@ export function PlayerShell({
     setCaption('');
   };
 
-  const applySubtitle = (option: SubtitleOption | null, announce: boolean) => {
+  // Põe no <video> a faixa com a legenda já baixada, com o ajuste de tempo.
+  const showSubtitle = (option: SubtitleOption, loaded: LoadedSubtitle, offset: number) => {
     if (!media) return;
     clearSubtitle();
+    const track = document.createElement('track');
+    track.kind = 'subtitles';
+    track.label = option.label;
+    track.srclang = option.language;
+    track.src = subtitleSrc(loaded, offset);
+    track.setAttribute('data-freeflix', '');
+    media.appendChild(track);
+    // Escondida: o navegador (e a TV) desenharia com tarja própria, que CSS
+    // não tira. O app lê a fala da vez e desenha como a Netflix.
+    track.track.mode = 'hidden';
+    track.track.addEventListener('cuechange', () => {
+      const active = track.track.activeCues;
+      const lines: string[] = [];
+      for (let i = 0; active && i < active.length; i++) lines.push(cueText(active[i] as VTTCue));
+      setCaption(lines.join('\n'));
+    });
+  };
+
+  /** `from`: a partir de qual candidata do idioma (a 0 é a que mais parece deste vídeo) */
+  const applySubtitle = (option: SubtitleOption | null, announce: boolean, from = 0) => {
+    if (!media) return;
+    const request = ++subtitleRequest.current;
+    clearSubtitle();
+    loadedSubtitle.current = null;
+    setSubtitleOffset(0);
     setSubtitleLang(option ? option.language : null);
     if (!option) {
+      setSubtitleBusy(false);
       if (announce) showToast('Legendas desligadas.');
       return;
     }
     setSubtitleBusy(true);
-    loadSubtitle(option.url).then(
-      (src) => {
-        const track = document.createElement('track');
-        track.kind = 'subtitles';
-        track.label = option.label;
-        track.srclang = option.language;
-        track.src = src;
-        track.setAttribute('data-freeflix', '');
-        media.appendChild(track);
-        // Escondida: o navegador (e a TV) desenharia com tarja própria, que CSS
-        // não tira. O app lê a fala da vez e desenha como a Netflix.
-        track.track.mode = 'hidden';
-        track.track.addEventListener('cuechange', () => {
-          const active = track.track.activeCues;
-          const lines: string[] = [];
-          for (let i = 0; active && i < active.length; i++) lines.push(cueText(active[i] as VTTCue));
-          setCaption(lines.join('\n'));
-        });
+    loadSubtitle(option, () => media.duration, from).then(
+      (loaded) => {
+        if (request !== subtitleRequest.current) return;
+        loadedSubtitle.current = { option, loaded };
+        showSubtitle(option, loaded, 0);
         setSubtitleBusy(false);
-        if (announce) showToast(`Legendas: ${option.label}`);
+        if (announce) {
+          const which = from > 0 ? ` (versão ${loaded.index + 1} de ${option.candidates.length})` : '';
+          showToast(`Legendas: ${option.label}${which}`);
+        }
       },
       () => {
+        if (request !== subtitleRequest.current) return;
         setSubtitleLang(null);
         setSubtitleBusy(false);
         showToast('A legenda não carregou. Tente outro idioma.');
@@ -849,11 +883,28 @@ export function PlayerShell({
     );
   };
 
+  /** Ajuste manual: a legenda aparece `delta` segundos mais tarde (negativo: mais cedo). */
+  const nudgeSubtitle = (delta: number) => {
+    const current = loadedSubtitle.current;
+    if (!current) return;
+    const offset = Math.round((subtitleOffset + delta) * 10) / 10;
+    setSubtitleOffset(offset);
+    showSubtitle(current.option, current.loaded, offset);
+    showToast(`Sincronia da legenda: ${offset ? formatOffset(offset) : 'original'}`);
+  };
+
+  /** A legenda escolhida não bate: a próxima candidata do mesmo idioma. */
+  const nextSubtitleVersion = () => {
+    const current = loadedSubtitle.current;
+    if (!current || current.option.candidates.length < 2) return;
+    applySubtitle(current.option, true, (current.loaded.index + 1) % current.option.candidates.length);
+  };
+
   // Procura as legendas do título assim que há vídeo e religa o idioma usado da última vez.
   useEffect(() => {
     if (mode !== 'video' || !media || !subtitlesFor) return;
     let alive = true;
-    findSubtitles(subtitlesFor.type, subtitlesFor.videoId).then(
+    findSubtitles(subtitlesFor.type, subtitlesFor.videoId, subtitlesFor.release).then(
       (found) => {
         if (!alive) return;
         setSubtitles(found);
@@ -867,6 +918,7 @@ export function PlayerShell({
     );
     return () => {
       alive = false;
+      subtitleRequest.current++;
       clearSubtitle();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1010,6 +1062,26 @@ export function PlayerShell({
                 onPick={() => pickSubtitle(option)}
               />
             ))}
+            {subtitleLang && !subtitleBusy && loadedSubtitle.current && (
+              <>
+                <div className="shell__menu-title shell__menu-title--section">
+                  Sincronia da legenda{subtitleOffset ? `: ${formatOffset(subtitleOffset)}` : ''}
+                </div>
+                <SourceOption
+                  label={`Legenda mais cedo (−${formatOffset(SUBTITLE_STEP_S).slice(1)})`}
+                  current={false}
+                  onPick={() => nudgeSubtitle(-SUBTITLE_STEP_S)}
+                />
+                <SourceOption
+                  label={`Legenda mais tarde (${formatOffset(SUBTITLE_STEP_S)})`}
+                  current={false}
+                  onPick={() => nudgeSubtitle(SUBTITLE_STEP_S)}
+                />
+                {loadedSubtitle.current.option.candidates.length > 1 && (
+                  <SourceOption label="Outra versão da legenda" current={false} onPick={nextSubtitleVersion} />
+                )}
+              </>
+            )}
           </div>
         )}
 

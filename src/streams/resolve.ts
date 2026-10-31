@@ -5,6 +5,7 @@ import { getSpeed } from './network';
 import { parseStream, type ParsedStream } from './parse';
 import { audioChoice, describeStream, foreignOnly, offersAudio, rankStreams, type RankContext, type SourceProfile } from './rank';
 import { installDefaultSources, listSources, sourcePriority, type SourceAddon } from './sources';
+import { releaseOf, rememberRelease } from './subtitles';
 
 export interface Candidate {
   url: string;
@@ -15,6 +16,8 @@ export interface Candidate {
   profile: SourceProfile;
   /** a legenda já vem gravada no vídeo: o app não liga a dele sozinho */
   hardSubs?: boolean;
+  /** nome do arquivo (release), para buscar a legenda da mesma versão */
+  release?: string;
   /** fonte "Torrent": o vídeo sai do motor local (streams/torrent.ts) */
   torrent?: { infoHash: string; seeds: number; resolution: number };
 }
@@ -108,7 +111,11 @@ export async function resolvePlayback(
         (streams) => {
           answered++;
           const priority = sourcePriority(addon, listSources());
-          lists[i] = streams.map((s) => ({ ...parseStream(s, addon.name), priority, base: addon.base }));
+          lists[i] = streams.map((s) => {
+            const parsed = { ...parseStream(s, addon.name), priority, base: addon.base };
+            rememberRelease(parsed, s);
+            return parsed;
+          });
         },
         () => undefined,
       ).then(() => {
@@ -178,6 +185,7 @@ function toCandidate(s: ParsedStream): Candidate {
     label,
     profile: { base: s.base ?? '', label, languages: s.languages, multiAudio: s.multiAudio, dualAudio: s.dualAudio },
     hardSubs: !!s.hardSubs,
+    release: releaseOf(s),
   };
 }
 

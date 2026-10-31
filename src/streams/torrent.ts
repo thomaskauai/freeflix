@@ -17,6 +17,7 @@ import { getSpeed } from './network';
 import { parseStream } from './parse';
 import { rankTorrents, type TorrentStream } from './rank';
 import { deviceCanPlay, type Candidate } from './resolve';
+import { releaseOf, rememberRelease } from './subtitles';
 
 export const ENGINE = 'http://127.0.0.1:2710';
 export const TORRENT_LABEL = 'Torrent';
@@ -103,7 +104,7 @@ function toTorrent(s: TorrentioStream): TorrentStream | null {
   const parsed = parseStream({ ...s, url: `${ENGINE}/${s.infoHash}` }, TORRENT_LABEL);
   const text = `${s.name ?? ''}\n${s.title ?? ''}\n${s.description ?? ''}`;
   const seeds = SEEDS.exec(text);
-  return {
+  const torrent: TorrentStream = {
     ...parsed,
     base: 'torrent',
     infoHash: s.infoHash.toLowerCase(),
@@ -111,6 +112,9 @@ function toTorrent(s: TorrentioStream): TorrentStream | null {
     trackers: (s.sources ?? []).filter((t) => t.indexOf('tracker:') === 0).map((t) => t.slice('tracker:'.length)),
     seeds: seeds ? Number(seeds[1]) : 0,
   };
+  // o Torrentio põe o nome do release na primeira linha do título
+  rememberRelease(torrent, { ...s, title: (s.title || '').split('\n')[0] });
+  return torrent;
 }
 
 /**
@@ -234,6 +238,7 @@ export async function torrentCandidate(
         label: TORRENT_LABEL,
         profile: { base: 'torrent', label: TORRENT_LABEL, languages: t.languages, multiAudio: t.multiAudio, dualAudio: t.dualAudio },
         hardSubs: !!t.hardSubs,
+        release: releaseOf(t),
         torrent: { infoHash: t.infoHash, seeds: t.seeds, resolution: t.resolution },
       };
     } catch {
