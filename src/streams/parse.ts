@@ -7,9 +7,10 @@ export type Codec = 'h264' | 'hevc' | 'av1' | '';
 export type Container = 'mp4' | 'mkv' | 'webm' | 'hls' | '';
 /**
  * Por que a fonte fica de fora: torrent, link externo, cabeçalhos próprios,
- * gravação de cinema (não é exibida de jeito nenhum) ou arquivo que nem é vídeo.
+ * gravação de cinema (não é exibida de jeito nenhum), arquivo que nem é vídeo
+ * ou arquivo de outro título.
  */
-export type Unplayable = 'torrent' | 'external' | 'headers' | 'cam' | 'not-video';
+export type Unplayable = 'torrent' | 'external' | 'headers' | 'cam' | 'not-video' | 'other-title';
 
 /**
  * Gravação de cinema (câmera na sala ou áudio puxado do som da sala). Nos nomes
@@ -47,8 +48,47 @@ function needsHeaders(request: Record<string, string> | undefined): boolean {
 /** player embutido de site ("MegaEmbed", ".../embed/123") */
 const EMBED = /embed/i;
 
-/** arquivo que não é vídeo (aplicativo, compactado) */
-const NOT_VIDEO = /\.(apk|exe|msi|dmg|zip|rar|7z|iso)(\b|$)/i;
+/** arquivo que não é vídeo (aplicativo, compactado, só a faixa de áudio: "…Tamil.Audio.GTM.m4a.mkv") */
+const NOT_VIDEO = /\.(apk|exe|msi|dmg|zip|rar|7z|iso)(\b|$)|\.(m4a|mka|mp3)(\.\w{3,4})?$/i;
+
+/** Minúsculas, sem acento, só letras e números separados por um espaço. */
+const fold = (text: string) =>
+  text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+/** onde o título acaba no nome do arquivo: ano, S01E01, resolução */
+const TITLE_END = /(^|[ ._\-[(])((19|20)\d\d|s\d{1,2}[ ._]?e\d{1,3}|s\d{1,2}|\d{3,4}p)(?=[ ._\-\])]|$)/i;
+
+/**
+ * Título no começo do nome do arquivo ("The.Bad.Guys.Breaking.In.S01E01…" →
+ * "the bad guys breaking in"). Vazio quando o nome não tem esse formato.
+ */
+export function fileTitle(filename: string): string {
+  const name = filename.split('|')[0].replace(/\.[a-z0-9]{2,4}$/i, '');
+  const m = name.match(TITLE_END);
+  return m && m.index ? fold(name.slice(0, m.index)) : '';
+}
+
+/**
+ * Arquivo de outro título: o PenguPlay às vezes manda, na fonte de A Viagem de
+ * Chihiro, "Lilo.and.Stitch.2002…" e, em Breaking Bad, "The.Bad.Guys.Breaking.In…".
+ * Conta como certo o nome que contém um dos nomes do título (ou está contido
+ * nele) ou que o próprio addon cita no texto da fonte ("🍿 Spirited Away").
+ */
+function otherTitle(filename: string, text: string, names: string[]): boolean {
+  const part = fileTitle(filename);
+  if (!part) return false;
+  const has = (a: string, b: string) => !!a && !!b && ` ${a} `.indexOf(` ${b} `) >= 0;
+  if (has(fold(text), part)) return false;
+  return !names.some((name) => {
+    const n = fold(name || '');
+    return has(part, n) || has(n, part);
+  });
+}
 
 export interface ParsedStream {
   addon: string;
@@ -151,7 +191,8 @@ function containerOf(url: string | undefined, filename: string, text: string): C
   return '';
 }
 
-export function parseStream(stream: AddonStream, addon: string): ParsedStream {
+/** `names`: nomes do título (traduzido e original); com eles, arquivo de outro título fica de fora */
+export function parseStream(stream: AddonStream, addon: string, names?: string[]): ParsedStream {
   const hints = stream.behaviorHints ?? {};
   const filename = hints.filename ?? '';
   const text = [stream.name, stream.title, stream.description, filename].filter(Boolean).join('\n');
@@ -164,6 +205,8 @@ export function parseStream(stream: AddonStream, addon: string): ParsedStream {
   else if (!containerOf(stream.url, filename, '') && EMBED.test(`${stream.url}\n${text}`)) unplayable = 'external';
   else if (NOT_VIDEO.test(filename)) unplayable = 'not-video';
   else if (isCam(text, filename)) unplayable = 'cam';
+  else if (names && otherTitle(filename, [stream.name, stream.title, stream.description].join(' '), names))
+    unplayable = 'other-title';
 
   const languages: string[] = [];
   const add = (code: string) => languages.indexOf(code) < 0 && languages.push(code);

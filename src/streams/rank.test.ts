@@ -350,6 +350,9 @@ describe('gravação de cinema e arquivos que não são vídeo', () => {
 
   it('exclui arquivo que não é vídeo', () => {
     expect(file('ShowBox_2024-06-04-19-27_11.7_131_webRelease_sign.apk|^|ORGMKV').unplayable).toBe('not-video');
+    // só a faixa de áudio; AAC/FLAC como codec no nome do vídeo não conta
+    expect(file('F1.The.Movie.2025.Tamil.Audio.GTM.m4a.mkv').unplayable).toBe('not-video');
+    expect(file('Movie.2025.1080p.WEB-DL.DDP5.1.AAC.FLAC.x264.mkv').unplayable).toBeUndefined();
   });
 
   it('nenhuma gravação de cinema entra no ranking', () => {
@@ -495,5 +498,38 @@ describe('audioOptions', () => {
   });
   it('sem idioma original conhecido: só as fontes', () => {
     expect(audioOptions([audioChoice(pt)]).map((a) => a.label)).toEqual(['Português']);
+  });
+});
+
+describe('arquivo de outro título', () => {
+  const file = (filename: string, text: string, names: string[]) =>
+    parseStream(
+      { name: '🐧 PenguPlay 1080p', description: text, url: 'https://pengu.example/v.mp4', behaviorHints: { filename } },
+      'PenguPlay',
+      names,
+    ).unplayable;
+  const chihiro = ['A Viagem de Chihiro', '千と千尋の神隠し'];
+  const bb = ['Breaking Bad: A Química do Mal', 'Breaking Bad'];
+
+  it('fica de fora quando o nome do arquivo é de outro título', () => {
+    expect(file('Lilo.and.Stitch.2002.1080p.BluRay.x264.YIFY.mp4|^|1080pMP4', '🍿 Spirited Away (2003) 🎞️ 1080p', chihiro)).toBe(
+      'other-title',
+    );
+    expect(file('The.Bad.Guys.Breaking.In.S01E01.1080p.NF.WEB.DL.mkv', '📡 Breaking Bad S01E01 🎞️ 1080p', bb)).toBe('other-title');
+    expect(file('AnimeDubHindi.The.Bad.Guys.Breaking.In.S01E01.720p.mkv', '📡 Breaking Bad S01E01', bb)).toBe('other-title');
+  });
+
+  it('o nome do título, o original ou o que o addon cita valem', () => {
+    expect(file('Spirited.Away.2001.1080p.BluRay.mp4', '🍿 Spirited Away (2001)', chihiro)).toBeUndefined();
+    expect(file('Breaking.Bad.2012.S01.E01.1080p.mp4', '📡 Breaking Bad • S01E01', bb)).toBeUndefined();
+    expect(file('breaking.bad.s01e01.1080p.bluray.x264-ingot.mkv', '', bb)).toBeUndefined();
+    expect(file('moviesdrives.com.Interstellar.2014.BluRay.IMAX.1080p.mkv', '', ['Interestelar', 'Interstellar'])).toBeUndefined();
+    expect(file('Interstellar (2014) IMAX 1080p BluRay.mkv', '', ['Interestelar', 'Interstellar'])).toBeUndefined();
+  });
+
+  it('nome sem título na frente não é julgado', () => {
+    expect(file('1080pHLS4.7Mbps1080phls4.7mbps.pad-Cinejoy', '', bb)).toBeUndefined();
+    expect(file('video.mp4', '', bb)).toBeUndefined();
+    expect(file('Lilo.and.Stitch.2002.1080p.mp4', '', [])).toBe('other-title');
   });
 });

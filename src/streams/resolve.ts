@@ -101,6 +101,7 @@ export async function resolvePlayback(
   if (listSources().length === 0) return { reason: 'no-addons' };
   if (addons.length === 0) return { reason: 'not-found' };
 
+  const names = [title.title, title.originalTitle ?? ''];
   let answered = 0;
   let pending = addons.length;
   const lists: ParsedStream[][] = addons.map(() => []);
@@ -112,7 +113,7 @@ export async function resolvePlayback(
           answered++;
           const priority = sourcePriority(addon, listSources());
           lists[i] = streams.map((s) => {
-            const parsed = { ...parseStream(s, addon.name), priority, base: addon.base };
+            const parsed = { ...parseStream(s, addon.name, names), priority, base: addon.base };
             rememberRelease(parsed, s);
             return parsed;
           });
