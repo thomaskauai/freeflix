@@ -1,4 +1,6 @@
 import { getJson, type AddonStream } from '../data/addonClient';
+import { subtitleCodes } from '../data/language';
+import { audioName } from './rank';
 
 // Legendas do OpenSubtitles, por dois caminhos:
 //  - o addon v3 do Stremio (/subtitles/{tipo}/{id}.json): rápido, mas a lista
@@ -20,14 +22,28 @@ const KEY = 'freeflix.subtitles';
 /** legendas tentadas ao carregar, até uma ter a duração do vídeo */
 const LOAD_TRIES = 3;
 
-export type SubtitleLanguage = 'pt' | 'en' | 'es';
+/** ISO 639-1: pt, en, es e o idioma original da obra (ja, ko…) */
+export type SubtitleLanguage = string;
+
+interface SubtitleLanguageInfo {
+  id: SubtitleLanguage;
+  label: string;
+  codes: string[];
+}
 
 /** Idiomas oferecidos, com os códigos que o addon usa; o primeiro código é o preferido. */
-export const SUBTITLE_LANGUAGES: { id: SubtitleLanguage; label: string; codes: string[] }[] = [
+export const SUBTITLE_LANGUAGES: SubtitleLanguageInfo[] = [
   { id: 'pt', label: 'Português (Brasil)', codes: ['pob', 'por'] },
   { id: 'en', label: 'English', codes: ['eng'] },
   { id: 'es', label: 'Español', codes: ['spa'] },
 ];
+
+/** Os idiomas fixos e, se for outro, o original da obra (com os códigos do OpenSubtitles: jpn, kor…). */
+export function subtitleLanguages(original?: string): SubtitleLanguageInfo[] {
+  const codes = original ? subtitleCodes(original) : [];
+  if (!original || !codes.length || SUBTITLE_LANGUAGES.some((l) => l.id === original)) return SUBTITLE_LANGUAGES;
+  return SUBTITLE_LANGUAGES.concat({ id: original, label: `${audioName(original)} [original]`, codes });
+}
 
 /** Uma legenda achada para o título. */
 export interface SubtitleCandidate {
@@ -247,11 +263,11 @@ function fromRest(videoId: string, code: string): Promise<SubtitleCandidate[]> {
 const found = new Map<string, Promise<SubtitleCandidate[]>>();
 
 /** Todas as legendas dos idiomas oferecidos, das duas buscas, sem repetir arquivo. */
-function allSubtitles(type: string, videoId: string): Promise<SubtitleCandidate[]> {
-  const key = `${type}/${videoId}`;
+function allSubtitles(type: string, videoId: string, languages: SubtitleLanguageInfo[]): Promise<SubtitleCandidate[]> {
+  const codes = ([] as string[]).concat(...languages.map((l) => l.codes));
+  const key = `${type}/${videoId}/${codes.join()}`;
   const hit = found.get(key);
   if (hit) return hit;
-  const codes = ([] as string[]).concat(...SUBTITLE_LANGUAGES.map((l) => l.codes));
   const none = () => [] as SubtitleCandidate[];
   const rest = Promise.all(codes.map((code) => fromRest(videoId, code).catch(none)));
   const addon = fromAddon(type, videoId);
@@ -275,14 +291,20 @@ function allSubtitles(type: string, videoId: string): Promise<SubtitleCandidate[
 }
 
 /**
- * Uma opção por idioma oferecido, para o título ou episódio. `videoId` é o id
+ * Uma opção por idioma oferecido (e o original da obra), para o título ou episódio. `videoId` é o id
  * IMDb (tt…), com :temporada:episódio em séries; `videoRelease`, o nome do
  * arquivo que vai tocar (streamRelease), para escolher a legenda da mesma versão.
  */
-export async function findSubtitles(type: string, videoId: string, videoRelease?: string): Promise<SubtitleOption[]> {
-  const all = await allSubtitles(type, videoId);
+export async function findSubtitles(
+  type: string,
+  videoId: string,
+  videoRelease?: string,
+  originalLanguage?: string,
+): Promise<SubtitleOption[]> {
+  const languages = subtitleLanguages(originalLanguage);
+  const all = await allSubtitles(type, videoId, languages);
   const options: SubtitleOption[] = [];
-  SUBTITLE_LANGUAGES.forEach((language) => {
+  languages.forEach((language) => {
     // a ordem dos códigos manda: pt-BR antes de pt-PT
     const candidates = ([] as SubtitleCandidate[]).concat(
       ...language.codes.map((code) => rankSubtitles(all.filter((s) => s.lang === code), videoRelease)),
@@ -428,17 +450,27 @@ export function subtitleSrc(loaded: LoadedSubtitle, offset: number): string {
 export function rememberedSubtitle(): SubtitleLanguage | null {
   try {
     const saved = window.localStorage.getItem(KEY);
-    return SUBTITLE_LANGUAGES.some((l) => l.id === saved) ? (saved as SubtitleLanguage) : null;
+    // fixo ou o original de algum título (ja, ko): só liga se este título tiver
+    return saved && /^[a-z]{2}$/.test(saved) ? saved : null;
   } catch {
     return null;
   }
 }
 
+/** a legenda de antes da última escolha: troca de áudio que não deu certo volta a ela */
+let previous: SubtitleLanguage | null = null;
+
 export function rememberSubtitle(language: SubtitleLanguage | null) {
+  previous = rememberedSubtitle();
   try {
     if (language) window.localStorage.setItem(KEY, language);
     else window.localStorage.removeItem(KEY);
   } catch {
     /* sem persistência nesta sessão */
   }
+}
+
+/** Desfaz a última escolha de legenda (o áudio pedido junto com ela não existe). */
+export function undoSubtitle() {
+  rememberSubtitle(previous);
 }

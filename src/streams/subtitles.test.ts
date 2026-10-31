@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   FILM_ON_PAL,
   findSubtitles,
+  subtitleLanguages,
   lastSpeech,
   rankSubtitles,
   releaseKind,
@@ -207,5 +208,31 @@ describe('findSubtitles', () => {
     expect(fetchMock.mock.calls.map((c) => c[0])).toContain(
       'https://rest.opensubtitles.org/search/episode-2/imdbid-0903747/season-1/sublanguageid-eng',
     );
+  });
+
+  it('idioma original da obra entra na busca e vira opção (jpn → ja)', async () => {
+    vi.stubGlobal('window', { setTimeout, clearTimeout });
+    const fetchMock = vi.fn((url: string) => {
+      let body: unknown = [];
+      if (url.indexOf('opensubtitles-v3') >= 0) {
+        body = { subtitles: [{ url: 'https://x/file/7', lang: 'jpn', movieReleaseName: 'Chihiro' }] };
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const options = await findSubtitles('movie', 'tt0245429', undefined, 'ja');
+    expect(options.map((o) => [o.language, o.label])).toEqual([['ja', 'Japonês [original]']]);
+    expect(fetchMock.mock.calls.map((c) => c[0])).toContain(
+      'https://rest.opensubtitles.org/search/imdbid-0245429/sublanguageid-jpn',
+    );
+  });
+});
+
+describe('subtitleLanguages', () => {
+  it('o original entra só se não for um dos fixos', () => {
+    expect(subtitleLanguages('ko').map((l) => l.id)).toEqual(['pt', 'en', 'es', 'ko']);
+    expect(subtitleLanguages('en').map((l) => l.id)).toEqual(['pt', 'en', 'es']);
+    expect(subtitleLanguages(undefined).map((l) => l.id)).toEqual(['pt', 'en', 'es']);
   });
 });

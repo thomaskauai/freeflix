@@ -1,3 +1,4 @@
+import { normalizeLanguage } from './language';
 import { fetchCached, fetchCatalog, fetchManifest, fetchMeta, getJson, type AddonMeta } from './addonClient';
 import { withoutAnime, withoutCinema, withoutHidden } from './hidden';
 import { API_BASE } from './site';
@@ -124,7 +125,8 @@ function toTitle(meta: AddonMeta): Title {
     backdrop: meta.background,
     logo: meta.logo,
     rating: meta.imdbRating,
-    originalLanguage: meta.language,
+    // o catálogo manda o original_language do TMDB ("en", "ja"); normalizado por garantia
+    originalLanguage: normalizeLanguage(meta.language) || undefined,
   };
 }
 
@@ -209,6 +211,7 @@ export function fillFrom(meta: AddonMeta, other: AddonMeta | null): AddonMeta {
   return {
     ...meta,
     description: meta.description || other.description,
+    language: meta.language || other.language,
     videos: (meta.videos ?? []).map((v) => {
       const o = byNumber[`${v.season}:${v.episode}`];
       if (!o) return v;

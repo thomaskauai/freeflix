@@ -4,6 +4,7 @@ import { parseStream } from './parse';
 import { srtToVtt } from './subtitles';
 import {
   audioChoice,
+  audioOptions,
   describeStream,
   foreignOnly,
   hasOriginalAudio,
@@ -474,5 +475,25 @@ describe('PenguPlay: dublagem estrangeira no pacote', () => {
       ctx(),
     );
     expect(ranked.map((s) => s.languages)).toEqual([[], ['en', 'ru'], ['ru']]);
+  });
+});
+
+describe('audioOptions', () => {
+  const pt = { languages: ['pt'], multiAudio: false };
+  it('só dublada: o original entra no fim, mesmo sem fonte', () => {
+    const list = audioOptions([audioChoice(pt, 'ja'), audioChoice(pt, 'ja')], 'ja');
+    expect(list.map((a) => a.label)).toEqual(['Português', 'Japonês [original]']);
+    expect(list[1]).toMatchObject({ key: 'original', lang: 'ja', original: true });
+  });
+  it('fonte com o original já carregada: não repete', () => {
+    const list = audioOptions([audioChoice(pt, 'en'), audioChoice({ languages: [], multiAudio: false }, 'en')], 'en');
+    expect(list.map((a) => a.label)).toEqual(['Português', 'Inglês [original]']);
+  });
+  it('dual com o original ainda oferece o original sozinho', () => {
+    const dual = audioChoice({ languages: ['pt', 'en'], multiAudio: true }, 'en');
+    expect(audioOptions([dual], 'en').map((a) => a.label)).toEqual(['Dual: Português e Inglês', 'Inglês [original]']);
+  });
+  it('sem idioma original conhecido: só as fontes', () => {
+    expect(audioOptions([audioChoice(pt)]).map((a) => a.label)).toEqual(['Português']);
   });
 });

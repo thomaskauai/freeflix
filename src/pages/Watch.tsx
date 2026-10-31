@@ -23,8 +23,17 @@ import {
   resumePoint,
   type Plan,
 } from '../streams/playback';
-import { audioChoice, audioName, effectiveLanguages, offersAudio, type AudioChoice, type SourceProfile } from '../streams/rank';
+import {
+  audioChoice,
+  audioName,
+  audioOptions,
+  effectiveLanguages,
+  offersAudio,
+  type AudioChoice,
+  type SourceProfile,
+} from '../streams/rank';
 import { getSettings } from '../settings';
+import { undoSubtitle } from '../streams/subtitles';
 import type { Candidate, NoSourceReason } from '../streams/resolve';
 
 const MESSAGES: Record<NoSourceReason | 'all-failed', { title: string; text: string; settings?: boolean }> = {
@@ -111,6 +120,8 @@ export default function Watch() {
   /** nem fonte nem torrent com o áudio em uso: pergunta se troca */
   const [lost, setLost] = useState<{ key: string; want: AudioChoice } | null>(null);
   const torrentTried = useRef('');
+  /** idioma do áudio escolhido no player: a faixa do arquivo que toca primeiro (chave da abertura) */
+  const [trackLang, setTrackLang] = useState<{ key: string; lang: string } | null>(null);
   const liveKey = useRef('');
 
   const key = `${type}/${id}/${season}/${episode}`;
@@ -323,7 +334,9 @@ export default function Watch() {
 
   // Áudios: um por tipo entre as fontes (dublada, original, dual), na ordem da melhor fonte de cada.
   const audioOf = plan.candidates.map((c) => audioChoice(c.profile, title.originalLanguage));
-  const audios = audioOf.filter((a, i) => audioOf.map((b) => b.key).indexOf(a.key) === i);
+  const loadedAudios = audioOptions(audioOf);
+  // no player, o original aparece sempre: escolhido sem fonte carregada, é procurado
+  const audios = audioOptions(audioOf, title.originalLanguage);
   const audioKeys = audios.map((a) => a.key);
 
   // Nenhuma fonte com o áudio das Configurações: não troca sozinho, pergunta.
@@ -337,7 +350,7 @@ export default function Watch() {
   if (missingAudio) {
     const wantedName = audio === 'original' ? 'original' : `em ${audioName(audio)}`;
     // o original primeiro: é a troca mais natural
-    const offered = audios.filter((a) => a.original).concat(audios.filter((a) => !a.original));
+    const offered = loadedAudios.filter((a) => a.original).concat(loadedAudios.filter((a) => !a.original));
     return (
       <div className="page player" data-focus-main="">
         <Backdrop title={title} />
@@ -380,7 +393,7 @@ export default function Watch() {
   }
   if (lost && lost.key === key) {
     const want = lost.want;
-    const others = audios.filter((a) => a.key !== want.key);
+    const others = loadedAudios.filter((a) => a.key !== want.key);
     const offered = others.filter((a) => a.original).concat(others.filter((a) => !a.original));
     // a primeira fonte daquele áudio que ainda não falhou
     const indexFor = (a: AudioChoice) => {
@@ -498,10 +511,65 @@ export default function Watch() {
     };
     torrentCandidate(title, season, episode, (t) => sameAudio(want, t)).then(done, () => done(null));
   };
+  // O original sem fonte carregada: uma das que chegam depois (dual/multi conta)
+  // ou um torrent com ele; nada disso, segue na atual com o aviso.
+  const pickOriginal = (want: AudioChoice) => {
+    const name = audioName(want.lang || '');
+    const forKey = key;
+    const from = plan.index;
+    // a pura (só o original) antes da dual; a que está tocando não conta
+    const find = (list: typeof plan.candidates) => {
+      const fresh = list.map((c, j) => (j !== from && !c.torrent && !hasFailed(c.url) ? j : -1)).filter((j) => j >= 0);
+      const pure = fresh.filter((j) => audioChoice(list[j].profile, title.originalLanguage).original)[0];
+      return pure ?? fresh.filter((j) => sameAudio(want, list[j].profile))[0] ?? -1;
+    };
+    // o atalho "original com legendas" não liga a legenda sobre o áudio de agora
+    const missing = () => {
+      undoSubtitle();
+      say(`Nenhuma fonte com áudio ${name}. Continua na atual.`);
+    };
+    const viaTorrent = () => {
+      if (!torrentOk || hasTorrent) {
+        setSwitching(null);
+        return missing();
+      }
+      setSwitching({ key, text: `Procurando o áudio ${name} no torrent…` });
+      const done = (found: typeof candidate | null) => {
+        if (liveKey.current !== forKey) return;
+        setSwitching(null);
+        if (!found) return missing();
+        addAndPlay(found);
+      };
+      torrentCandidate(title, season, episode, (t) => sameAudio(want, t)).then(done, () => done(null));
+    };
+    const loaded = find(plan.candidates);
+    if (loaded >= 0) return switchTo(loaded);
+    const more = plan.more;
+    if (!more) {
+      if (!torrentOk || hasTorrent) return missing();
+      stopHere();
+      return viaTorrent();
+    }
+    waitFor(`Procurando o áudio ${name}…`);
+    more.then((list) => {
+      if (liveKey.current !== forKey) return;
+      const merged = mergeCandidates(plan.candidates, list);
+      const index = find(merged);
+      setPlan((p) =>
+        p && p.status === 'play' ? { ...p, candidates: merged, index: index >= 0 ? index : p.index, more: undefined } : p,
+      );
+      if (index >= 0) return setSwitching(null);
+      viaTorrent();
+    });
+  };
   // No torrent, trocar o áudio busca outro torrent com ele; nunca cai numa fonte HTTP.
   const pickAudio = (i: number) => {
     const want = audios[i];
-    if (!candidate.torrent) return switchTo(audioOf.map((a) => a.key).indexOf(want.key));
+    // o arquivo novo começa na faixa deste idioma (dual com o original, por exemplo)
+    if (want.lang) setTrackLang({ key, lang: want.lang });
+    const loadedIndex = audioOf.map((a) => a.key).indexOf(want.key);
+    if (!candidate.torrent && loadedIndex < 0 && want.original) return pickOriginal(want);
+    if (!candidate.torrent) return switchTo(loadedIndex);
     const torrents = plan.candidates.map((c, j) => (c.torrent && j !== plan.index ? j : -1)).filter((j) => j >= 0);
     const loaded =
       torrents.find((j) => audioOf[j].key === want.key) ?? torrents.find((j) => sameAudio(want, plan.candidates[j].profile));
@@ -636,7 +704,9 @@ export default function Watch() {
         startTimeout={candidate.torrent ? TORRENT_START_MS : undefined}
         torrentUrl={candidate.torrent ? candidate.url : undefined}
         originalLanguage={title.originalLanguage}
-        preferredAudio={audio === 'original' ? title.originalLanguage : audio}
+        preferredAudio={
+          trackLang && trackLang.key === key ? trackLang.lang : audio === 'original' ? title.originalLanguage : audio
+        }
         onExit={goBack}
       />
     </div>

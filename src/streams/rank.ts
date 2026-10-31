@@ -369,3 +369,23 @@ export function audioChoice(s: AudioInfo, originalLanguage?: string): AudioChoic
     original: false,
   };
 }
+
+/** O áudio original da obra como opção do player, mesmo sem fonte carregada com ele. */
+export const originalChoice = (lang: string): AudioChoice => ({
+  key: 'original',
+  label: `${audioName(lang)} [original]`,
+  lang,
+  original: true,
+});
+
+/**
+ * Opções de áudio do player: uma por tipo entre as fontes, na ordem da melhor
+ * de cada, e o original no fim quando nenhuma fonte carregada o traz sozinho.
+ * Escolhido, ele vem de uma fonte dual/multi, das que chegam depois ou do torrent.
+ */
+export function audioOptions(choices: AudioChoice[], originalLanguage?: string): AudioChoice[] {
+  const keys = choices.map((a) => a.key);
+  const list = choices.filter((a, i) => keys.indexOf(a.key) === i);
+  if (originalLanguage && !list.some((a) => a.original)) list.push(originalChoice(originalLanguage));
+  return list;
+}

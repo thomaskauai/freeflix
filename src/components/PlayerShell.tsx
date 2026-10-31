@@ -13,6 +13,7 @@ import {
   type SubtitleOption,
 } from '../streams/subtitles';
 import { audioName, type AudioChoice } from '../streams/rank';
+import { normalizeLanguage } from '../data/language';
 import { torrentBuffer } from '../streams/torrent';
 import { Icon, type IconName } from './Icon';
 
@@ -87,14 +88,7 @@ const audioTracksOf = (media: HTMLVideoElement) =>
   (media as unknown as { audioTracks?: FileAudioTrackList }).audioTracks;
 
 /** idioma das faixas do arquivo (ISO 639-2, "por", "eng") no código do app ("pt", "en") */
-const ISO3: Record<string, string> = {
-  por: 'pt', eng: 'en', spa: 'es', fre: 'fr', fra: 'fr', ita: 'it', ger: 'de', deu: 'de',
-  jpn: 'ja', kor: 'ko', chi: 'zh', zho: 'zh', hin: 'hi', rus: 'ru', tur: 'tr',
-};
-function trackLanguage(language: string): string {
-  const code = (language || '').toLowerCase().split('-')[0];
-  return ISO3[code] ?? (code.length === 2 ? code : '');
-}
+const trackLanguage = (language: string) => normalizeLanguage(language);
 
 /** idioma da legenda dos atalhos ("… com legendas") */
 const PRESET_SUBTITLE: SubtitleLanguage = 'pt';
@@ -190,6 +184,15 @@ function presetsFor(audios: AudioChoice[], current: number, subtitles: SubtitleO
   add(original, true);
   if (original >= 0 && !withSubs) add(original, false);
   add(dub, true);
+  // o original com a legenda no idioma dele (para quem estuda a língua, ou ouve mal)
+  const lang = original >= 0 ? audios[original].lang : undefined;
+  if (lang && lang !== PRESET_SUBTITLE && subtitles && subtitles.some((o) => o.language === lang)) {
+    list.push({
+      audio: original,
+      subtitle: lang,
+      label: `${audioName(lang)} [original] com legendas em ${audioName(lang).toLowerCase()}`,
+    });
+  }
   return list;
 }
 
@@ -590,9 +593,13 @@ export function PlayerShell({
         chosen = true;
         // MKV sem idioma na faixa vale inglês pela especificação; releases
         // russos/indianos (EniaHD, PrimeFix) deixam assim a faixa inglesa
+        const byLang = (lang?: string) => (lang ? all.filter((t) => trackLanguage(t.language) === lang)[0] : undefined);
+        // sem a faixa preferida (Híndi + Inglês da PenguPlay, sem português), a do original
         const wanted =
-          all.filter((t) => trackLanguage(t.language) === preferredAudio)[0] ??
-          (preferredAudio === 'en' ? all.filter((t) => !trackLanguage(t.language))[0] : undefined);
+          byLang(preferredAudio) ??
+          (preferredAudio === 'en' ? all.filter((t) => !trackLanguage(t.language))[0] : undefined) ??
+          byLang(originalLanguage) ??
+          (originalLanguage === 'en' ? all.filter((t) => !trackLanguage(t.language))[0] : undefined);
         if (wanted && !wanted.enabled) all.forEach((t) => (t.enabled = t === wanted));
       }
       setTracks(
@@ -904,7 +911,7 @@ export function PlayerShell({
   useEffect(() => {
     if (mode !== 'video' || !media || !subtitlesFor) return;
     let alive = true;
-    findSubtitles(subtitlesFor.type, subtitlesFor.videoId, subtitlesFor.release).then(
+    findSubtitles(subtitlesFor.type, subtitlesFor.videoId, subtitlesFor.release, originalLanguage).then(
       (found) => {
         if (!alive) return;
         setSubtitles(found);
@@ -943,14 +950,23 @@ export function PlayerShell({
         };
       })
     : null;
-  const audios = fileAudios ?? sourceAudios;
+  // arquivo sem a faixa original: o original das fontes continua no fim da lista
+  const sourceOriginal = sourceAudios.map((a) => a.original).indexOf(true);
+  const extraOriginal =
+    fileAudios && sourceOriginal >= 0 && !fileAudios.some((a) => a.original) ? sourceAudios[sourceOriginal] : null;
+  const audios = fileAudios ? (extraOriginal ? fileAudios.concat(extraOriginal) : fileAudios) : sourceAudios;
   const audioIndex = fileAudios ? Math.max(0, tracks.map((t) => t.enabled).indexOf(true)) : sourceAudioIndex;
+  /** faixa do arquivo; depois delas, o original que é outra fonte */
+  const isTrack = (index: number) => !!fileAudios && index < tracks.length;
   const selectTrack = (index: number) => {
     const list = media ? audioTracksOf(media) : undefined;
     if (!list) return;
     for (let i = 0; i < list.length; i++) list[i].enabled = list[i].id === tracks[index].id;
   };
-  const onPickAudio = fileAudios ? selectTrack : onPickSourceAudio;
+  const onPickAudio = fileAudios
+    ? (index: number) =>
+        isTrack(index) ? selectTrack(index) : onPickSourceAudio && onPickSourceAudio(sourceOriginal)
+    : onPickSourceAudio;
 
   /** Outro áudio é outra fonte: o player recomeça nela de onde estava, e com a legenda lembrada. */
   const pickAudio = (index: number) => {
@@ -961,7 +977,7 @@ export function PlayerShell({
 
   const pickPreset = (preset: Preset) => {
     const option = (subtitles ?? []).filter((o) => o.language === preset.subtitle)[0] ?? null;
-    if (preset.audio !== audioIndex && fileAudios) {
+    if (preset.audio !== audioIndex && isTrack(preset.audio)) {
       // faixa do mesmo arquivo: o vídeo segue, a legenda muda aqui
       selectTrack(preset.audio);
       if ((option ? option.language : null) !== subtitleLang) pickSubtitle(option);
