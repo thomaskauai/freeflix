@@ -201,6 +201,23 @@ function pickFile(files, fileIdx, season, episode) {
   })[0];
 }
 
+/**
+ * Ao abrir, o começo e o fim do arquivo já baixam com prioridade: o player lê
+ * o começo e, em mp4 com o índice (moov) no fim, pula para o fim antes de
+ * tocar; em mkv, os Cues também ficam no fim. Assim os dois chegam juntos.
+ */
+var WARM_HEAD_BYTES = 4 * 1024 * 1024;
+var WARM_TAIL_BYTES = 4 * 1024 * 1024;
+function warmEnds(engine, file) {
+  if (!engine.torrent || !file || file.warmed) return;
+  file.warmed = true;
+  var pl = engine.torrent.pieceLength;
+  var first = Math.floor(file.offset / pl);
+  var last = Math.floor((file.offset + file.length - 1) / pl);
+  engine.select(first, Math.min(last, Math.floor((file.offset + WARM_HEAD_BYTES - 1) / pl)), true);
+  engine.select(Math.max(first, Math.floor((file.offset + file.length - WARM_TAIL_BYTES) / pl)), last, true);
+}
+
 function fileList(engine) {
   return engine.files.map(function (f, i) {
     return { idx: i, name: f.name, path: f.path, length: f.length };
@@ -406,6 +423,7 @@ function handle(req, res) {
       var files = entry.engine.files;
       var idx = pickFile(files, wanted, season, episode);
       if (idx < 0) return send(res, 404, { error: 'no-video-file', files: fileList(entry.engine) });
+      warmEnds(entry.engine, files[idx]);
       send(res, 200, {
         infoHash: hash,
         name: entry.engine.torrent ? entry.engine.torrent.name : null,
