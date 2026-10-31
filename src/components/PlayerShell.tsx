@@ -184,7 +184,8 @@ function presetsFor(audios: AudioChoice[], current: number, subtitles: SubtitleO
   add(dub, false);
   add(original, true);
   if (original >= 0 && !withSubs) add(original, false);
-  add(dub, true);
+  // dublado com legenda só quando não há o original para oferecer
+  if (original < 0) add(dub, true);
   // o original com a legenda no idioma dele (para quem estuda a língua, ou ouve mal)
   const lang = original >= 0 ? audios[original].lang : undefined;
   if (lang && lang !== PRESET_SUBTITLE && subtitles && subtitles.some((o) => o.language === lang)) {
