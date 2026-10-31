@@ -1,6 +1,6 @@
 import { fetchMeta, fetchStreams } from '../data/addonClient';
 import { CATALOG } from '../settings';
-import type { Title } from '../data/types';
+import type { Title, TitleType } from '../data/types';
 import { audioFor } from './audioMemory';
 import { getSpeed } from './network';
 import { parseStream, type ParsedStream } from './parse';
@@ -67,6 +67,19 @@ const QUICK_MS = 2500;
 const accepts = (addon: SourceAddon, type: string, id: string) =>
   (addon.types.length === 0 || addon.types.indexOf(type) >= 0) &&
   (addon.idPrefixes.length === 0 || addon.idPrefixes.some((prefix) => id.indexOf(prefix) === 0));
+
+/**
+ * Pede as fontes de um título (ou episódio) aos addons sem esperar o título
+ * completo: o /meta do catálogo leva de meio a alguns segundos, e as fontes só
+ * dependem do id. resolvePlayback, quando o título chegar, recebe a mesma
+ * resposta (addonClient guarda por alguns segundos), já pronta ou a caminho.
+ */
+export function warmStreams(type: TitleType, id: string, season?: number, episode?: number) {
+  const videoId = season != null && episode != null ? `${id}:${season}:${episode}` : id;
+  listSources()
+    .filter((a) => accepts(a, type, id))
+    .forEach((a) => fetchStreams(a.base, type, videoId).catch(() => undefined));
+}
 
 /** O <video> deste aparelho toca esse codec ou contêiner? */
 export function deviceCanPlay(what: 'hevc' | 'av1' | 'mkv'): boolean {

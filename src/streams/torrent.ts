@@ -36,6 +36,12 @@ const HEALTH_TTL_MS = 30000;
 const SERVICE_START_MS = 12000;
 /** torrents tentados antes de desistir (um sem peers trava a lista de arquivos) */
 const TRIES = 3;
+/**
+ * Um torrent com peers entrega a lista de arquivos em 1 a 3 s; um morto só
+ * desiste no tempo limite (12 s). Sem resposta nesse tempo, o seguinte abre
+ * junto, e fica o que responder primeiro.
+ */
+const HEDGE_MS = 4000;
 
 let health: { at: number; ok: Promise<boolean> } | null = null;
 /** na TV, o pedido para subir o serviço do motor (uma vez por abertura do app) */
@@ -146,12 +152,25 @@ export async function noStreamingInBrazil(title: Title): Promise<boolean> {
 export const torrentInPreferredAudio = (title: Title) => (t: TorrentStream) =>
   offersAudio(t, { audio: audioFor(title), originalLanguage: title.originalLanguage });
 
+/** Pedido ao Torrentio dos torrents do título (ou episódio); null sem id do IMDb. */
+function torrentioStreams(title: Title, season?: number, episode?: number): Promise<AddonStream[]> | null {
+  const imdb = title.imdbId ?? (/^tt\d+$/.test(title.id) ? title.id : null);
+  if (!imdb) return null;
+  const videoId = season != null && episode != null ? `${imdb}:${season}:${episode}` : imdb;
+  return fetchStreams(TORRENTIO, title.type, videoId);
+}
+
+/** Adianta o pedido ao Torrentio: findTorrents, logo depois, recebe a mesma resposta (addonClient). */
+export function warmTorrents(title: Title, season?: number, episode?: number) {
+  const pending = torrentioStreams(title, season, episode);
+  if (pending) pending.catch(() => undefined);
+}
+
 /** Os torrents do título, do melhor para o pior, sem gravação de cinema. */
 export async function findTorrents(title: Title, season?: number, episode?: number): Promise<TorrentStream[]> {
-  const imdb = title.imdbId ?? (/^tt\d+$/.test(title.id) ? title.id : null);
-  if (!imdb) return [];
-  const videoId = season != null && episode != null ? `${imdb}:${season}:${episode}` : imdb;
-  const [streams, speed] = await Promise.all([fetchStreams(TORRENTIO, title.type, videoId), getSpeed()]);
+  const pending = torrentioStreams(title, season, episode);
+  if (!pending) return [];
+  const [streams, speed] = await Promise.all([pending, getSpeed()]);
   const torrents = (streams as TorrentioStream[]).map(toTorrent).filter((t): t is TorrentStream => !!t);
   return rankTorrents(torrents, {
     mbps: speed.mbps,
@@ -239,24 +258,90 @@ export async function torrentCandidate(
   const list = accept
     ? found.filter(accept)
     : preferAudio(found, { audio: audioFor(title), originalLanguage: title.originalLanguage });
-  for (const t of list.slice(0, TRIES)) {
-    try {
-      const url = await openInEngine(t, season, episode);
-      return {
-        url,
-        hls: false,
-        label: TORRENT_LABEL,
-        profile: { base: 'torrent', label: TORRENT_LABEL, languages: t.languages, multiAudio: t.multiAudio, dualAudio: t.dualAudio },
-        hardSubs: !!t.hardSubs,
-        release: releaseOf(t),
-        torrent: { infoHash: t.infoHash, seeds: t.seeds, resolution: t.resolution },
-      };
-    } catch {
-      // sem peers ou sem vídeo: o próximo, e este não fica baixando metadados à toa
-      if (!holds[t.infoHash]) removeFromEngine(t.infoHash);
-    }
-  }
-  return null;
+  const opened = await firstToOpen(list.slice(0, TRIES), (t) => openInEngine(t, season, episode), {
+    hedgeMs: HEDGE_MS,
+    // O motor guarda dois torrents e tira o mais antigo para abrir outro: com
+    // um em uso (tocando, guardado, pré-carregado), abrir dois de uma vez
+    // tiraria o que está em uso. Aí vai um por vez.
+    parallel: () => Object.keys(holds).length === 0,
+    // sem peers, sem vídeo ou perdeu a corrida: não fica baixando metadados à toa
+    drop: (t, winner) => {
+      if (!holds[t.infoHash] && (!winner || winner.infoHash !== t.infoHash)) removeFromEngine(t.infoHash);
+    },
+  });
+  if (!opened) return null;
+  const t = opened.item;
+  return {
+    url: opened.url,
+    hls: false,
+    label: TORRENT_LABEL,
+    profile: { base: 'torrent', label: TORRENT_LABEL, languages: t.languages, multiAudio: t.multiAudio, dualAudio: t.dualAudio },
+    hardSubs: !!t.hardSubs,
+    release: releaseOf(t),
+    torrent: { infoHash: t.infoHash, seeds: t.seeds, resolution: t.resolution },
+  };
+}
+
+/**
+ * Abre os itens na ordem, um por vez; o que não responde em hedgeMs ganha a
+ * companhia do seguinte (se parallel() deixar), no máximo dois ao mesmo tempo.
+ * Fica o primeiro que abrir; os outros saem por drop. Null se nenhum abriu.
+ */
+export function firstToOpen<T>(
+  list: T[],
+  open: (item: T) => Promise<string>,
+  options: { hedgeMs: number; parallel: () => boolean; drop: (item: T, winner: T | null) => void },
+): Promise<{ item: T; url: string } | null> {
+  return new Promise((resolve) => {
+    let next = 0;
+    let limit = 1;
+    let done = false;
+    let timer = 0;
+    let winner: T | null = null;
+    const running: T[] = [];
+    const leave = (item: T) => {
+      const at = running.indexOf(item);
+      if (at >= 0) running.splice(at, 1);
+    };
+    const hedge = () => {
+      if (done || !options.parallel()) return;
+      limit = 2;
+      fill();
+    };
+    const fill = () => {
+      while (!done && running.length < limit && next < list.length) start(list[next++]);
+      if (!done && running.length === 0) {
+        done = true;
+        window.clearTimeout(timer);
+        resolve(null);
+      }
+    };
+    const start = (item: T) => {
+      running.push(item);
+      if (limit === 1 && next < list.length) {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(hedge, options.hedgeMs);
+      }
+      open(item).then(
+        (url) => {
+          leave(item);
+          if (done) return options.drop(item, winner);
+          done = true;
+          winner = item;
+          window.clearTimeout(timer);
+          // o outro ainda abrindo perdeu a corrida
+          running.splice(0).forEach((other) => options.drop(other, item));
+          resolve({ item, url });
+        },
+        () => {
+          leave(item);
+          options.drop(item, winner);
+          fill();
+        },
+      );
+    };
+    fill();
+  });
 }
 
 /** Como o torrent em tela está: quanto já tem à frente do ponto pedido, em segundos de vídeo. */

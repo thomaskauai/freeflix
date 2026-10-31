@@ -130,9 +130,22 @@ export const fetchMeta = (base: string, type: string, id: string) =>
 /** alguns addons levam 12 s ou mais; o play não espera por eles (streams/resolve.ts) */
 const STREAMS_TIMEOUT_MS = 16000;
 
-/** Fontes não ficam em cache: links de vídeo expiram. */
-export const fetchStreams = (base: string, type: string, videoId: string) =>
-  getJson<{ streams?: AddonStream[] }>(
-    `${base}/stream/${type}/${encodeURIComponent(videoId)}.json`,
-    STREAMS_TIMEOUT_MS,
-  ).then((r) => r.streams ?? []);
+/**
+ * Fontes ficam guardadas só por pouco tempo (links de vídeo expiram): o bastante
+ * para pedidos iguais ao mesmo tempo dividirem a resposta (a fonte preferida e a
+ * busca completa perguntam ao mesmo addon) e para a busca adiantada antes do
+ * título completo chegar (resolve.ts, warmStreams) servir ao play logo depois.
+ */
+const STREAMS_SHARE_MS = 30 * 1000;
+const streamsCache: Record<string, { at: number; list: Promise<AddonStream[]> }> = {};
+
+export function fetchStreams(base: string, type: string, videoId: string): Promise<AddonStream[]> {
+  const url = `${base}/stream/${type}/${encodeURIComponent(videoId)}.json`;
+  const hit = streamsCache[url];
+  if (hit && Date.now() - hit.at < STREAMS_SHARE_MS) return hit.list;
+  const list = getJson<{ streams?: AddonStream[] }>(url, STREAMS_TIMEOUT_MS).then((r) => r.streams ?? []);
+  streamsCache[url] = { at: Date.now(), list };
+  // falha não fica guardada: a próxima tentativa refaz
+  list.catch(() => streamsCache[url] && streamsCache[url].list === list && delete streamsCache[url]);
+  return list;
+}

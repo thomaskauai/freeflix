@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { memo, useEffect, useRef, useState } from 'react';
 import { catalog } from '../data/provider';
 import { kindLabel, type Title } from '../data/types';
 import { useFocusable } from '../focus/useFocusable';
-import { titlePath } from '../nav';
+import { navigateTo, titlePath } from '../nav';
+import { warmTitle } from '../streams/playback';
 import { loadLogo } from './logo';
 
 interface CardProps {
@@ -40,6 +40,8 @@ const shown: Record<string, boolean> = {};
 
 /** foco parado por este tempo num cartão adianta a busca dos detalhes */
 const PREFETCH_AFTER_MS = 400;
+/** foco parado por este tempo num card sem onDwell: as fontes do título já são procuradas */
+const WARM_SOURCES_MS = 1500;
 
 // Matiz estável por título, para as cartelas sem pôster não ficarem iguais.
 function hueOf(id: string) {
@@ -54,8 +56,11 @@ export function fallbackArt(id: string) {
   return `linear-gradient(160deg, hsl(${hue}, 32%, 20%) 0%, hsl(${hue}, 40%, 7%) 100%)`;
 }
 
-/** Cartaz arredondado com título e uma linha de informação embaixo. */
-export function Card({
+/**
+ * Cartaz arredondado com título e uma linha de informação embaixo. memo: a
+ * fileira que renderiza de novo (foco entrando ou saindo) não refaz os cards.
+ */
+export const Card = memo(function Card({
   title,
   variant,
   focusId,
@@ -69,7 +74,6 @@ export function Card({
   onDwell,
   onLeave,
 }: CardProps) {
-  const navigate = useNavigate();
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const focus = useFocusable({ id: focusId, autoFocus });
@@ -92,6 +96,12 @@ export function Card({
     window.clearTimeout(prefetch.current);
     window.clearTimeout(dwell.current);
     if (onDwell) dwell.current = window.setTimeout(onDwell, DWELL_MS);
+    else {
+      // o título completo (idioma, ids) escolhe as mesmas fontes que os detalhes vão escolher
+      dwell.current = window.setTimeout(() => {
+        catalog.getTitle(title.type, title.id).then((full) => full && warmTitle(full), () => undefined);
+      }, WARM_SOURCES_MS);
+    }
     prefetch.current = window.setTimeout(() => {
       catalog.getTitle(title.type, title.id).catch(() => undefined);
       // a arte de título também: os detalhes abrem com ela pronta
@@ -115,7 +125,7 @@ export function Card({
         onSelect ??
         (() => {
           if (title.logo) loadLogo(title.logo);
-          navigate(titlePath(title));
+          navigateTo(titlePath(title));
         })
       }
     >
@@ -162,4 +172,4 @@ export function Card({
       </div>
     </div>
   );
-}
+});

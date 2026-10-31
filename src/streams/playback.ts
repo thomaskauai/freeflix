@@ -5,10 +5,10 @@ import {
   isFinished,
   rememberSource,
 } from '../data/storage';
-import type { Title } from '../data/types';
+import type { Title, TitleType } from '../data/types';
 import { loadHls } from './loadHls';
 import { offersAudio, type SourceProfile } from './rank';
-import { resolvePlayback, type Candidate, type NoSourceReason, type Resolution } from './resolve';
+import { resolvePlayback, warmStreams, type Candidate, type NoSourceReason, type Resolution } from './resolve';
 import {
   dropTorrent,
   holdTorrent,
@@ -17,6 +17,7 @@ import {
   torrentAvailable,
   torrentCandidate,
   torrentInPreferredAudio,
+  warmTorrents,
 } from './torrent';
 import { audioFor, sourceFor } from './audioMemory';
 
@@ -125,6 +126,53 @@ function keepFound(key: string, list: Candidate[]) {
 }
 
 /**
+ * O play vem aí (detalhes abrindo, player abrindo) e o título completo ainda
+ * não chegou: as fontes já são pedidas, só pelo id. Com busca guardada ou
+ * vídeo guardado deste episódio, nada é pedido.
+ */
+export function warmPlayback(type: TitleType, id: string, season?: number, episode?: number) {
+  if (import.meta.env.VITE_EMBED_BASE_URL) return;
+  const episodeKey = `${type}/${id}/${season}/${episode}`;
+  const cached = plans[`${episodeKey}/${audioFor({ id, type })}`];
+  if (cached && Date.now() - cached.at < PLAN_TTL_MS) return;
+  if (preloaded && preloaded.key === episodeKey) return;
+  warmStreams(type, id, season, episode);
+}
+
+/**
+ * warmPlayback do play principal dos detalhes: o filme, ou o episódio em
+ * andamento (sem progresso, o 1º). Episódio já terminado fica de fora: o
+ * seguinte depende da lista de episódios, que vem com o título.
+ */
+export function warmResume(type: TitleType, id: string) {
+  if (type !== 'series') return warmPlayback(type, id);
+  const saved = getProgress(id);
+  if (!saved || saved.season == null || saved.episode == null) return warmPlayback(type, id, 1, 1);
+  const own = episodeProgressOf(getEpisodeProgress(id), saved.season, saved.episode) || saved;
+  if (!isFinished(own)) warmPlayback(type, id, saved.season, saved.episode);
+}
+
+/**
+ * Foco parado num card da Home: a busca de fontes do play principal (filme ou
+ * episódio em andamento, senão o 1º) fica pronta para os detalhes. Não baixa
+ * vídeo: isso só nos detalhes, um por vez.
+ */
+export function warmTitle(title: Title) {
+  if (import.meta.env.VITE_EMBED_BASE_URL) return;
+  if (title.type !== 'series') {
+    planFor(title);
+    return;
+  }
+  const saved = getProgress(title.id);
+  if (!saved || saved.season == null || saved.episode == null) {
+    planFor(title, 1, 1);
+    return;
+  }
+  const own = episodeProgressOf(getEpisodeProgress(title.id), saved.season, saved.episode) || saved;
+  if (!isFinished(own)) planFor(title, saved.season, saved.episode);
+}
+
+/**
  * De onde sai o vídeo: embed configurado ou as fontes instaladas. A busca nas
  * fontes fica guardada por alguns minutos, então a página de detalhes pode
  * começá-la antes do play e o player só colhe o resultado.
@@ -170,7 +218,8 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
   const torrentFirst = prefer
     ? Promise.resolve(null)
     : torrentAvailable()
-        .then((ok) => ok && noStreamingInBrazil(title))
+        // a lista do Torrentio já vem a caminho enquanto o motor pergunta ao JustWatch
+        .then((ok) => ok && (warmTorrents(title, season, episode), noStreamingInBrazil(title)))
         // só no áudio preferido: sem ele, as fontes HTTP vêm primeiro
         .then((yes) =>
           yes ? ((torrentTried = true), torrentCandidate(title, season, episode, torrentInPreferredAudio(title))) : null,

@@ -21,7 +21,9 @@ import {
   mergeCandidates,
   parkVideo,
   planFor,
+  preloadPlayback,
   resumePoint,
+  warmPlayback,
   type Plan,
 } from '../streams/playback';
 import {
@@ -74,6 +76,8 @@ const MESSAGES: Record<NoSourceReason | 'all-failed', { title: string; text: str
 
 /** perto do fim do episódio, as fontes do próximo já são procuradas */
 const WARM_NEXT_S = 120;
+/** com o cartão do próximo episódio na tela, o vídeo dele já começa a baixar */
+const PRELOAD_NEXT_S = 20;
 
 /** Enquanto a fonte é procurada: a mesma cara do player, com o título no alto e só o Voltar. */
 /** pausa que dura isso com o app à vista apaga a anotação do player (ver onPlaying) */
@@ -122,6 +126,8 @@ export default function Watch() {
   /** o vídeo já mostrou imagem: o fundo esmaecido da espera sai */
   const [started, setStarted] = useState(false);
   const warmed = useRef('');
+  /** episódio cujo próximo já está baixando (chave da abertura) */
+  const preloadedNext = useRef('');
   /** o espectador aceitou outro áudio porque o escolhido não existe (vale para esta abertura) */
   const [audioAccepted, setAudioAccepted] = useState('');
   /**
@@ -187,6 +193,8 @@ export default function Watch() {
     let alive = true;
     setTitle(null);
     setPlan(null);
+    // as fontes já são pedidas enquanto o título completo não chega (sem detalhes antes, ele leva segundos)
+    warmPlayback(type, id, season, episode);
     catalog.getTitle(type, id).then(
       (t) => {
         if (!alive) return;
@@ -807,6 +815,10 @@ export default function Watch() {
           if (following && length > 0 && length - time < WARM_NEXT_S && warmed.current !== key) {
             warmed.current = key;
             planFor(title, following.season, following.episode.number);
+          }
+          if (following && length > 0 && length - time < PRELOAD_NEXT_S && preloadedNext.current !== key) {
+            preloadedNext.current = key;
+            preloadPlayback(title, following.season, following.episode.number);
           }
         }}
         upNext={upNext}

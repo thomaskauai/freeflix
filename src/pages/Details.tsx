@@ -29,7 +29,7 @@ import { focusElement, forgetPage } from '../focus/FocusContext';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
 import { watchPath } from '../nav';
 import { isLegacyTizen } from '../platform/tizen';
-import { planFor, preloadPlayback, releasePreload } from '../streams/playback';
+import { planFor, preloadPlayback, releasePreload, warmResume } from '../streams/playback';
 import { ROW_ANCHOR } from '../styles/tokens';
 
 /** altura da fileira de temporadas, que fica visível acima dos episódios */
@@ -141,6 +141,8 @@ export default function Details() {
       );
     const early = previewTitle(type, id);
     if (early && early.genres.length) findSimilar(early);
+    // as fontes do play principal já são pedidas enquanto o título completo não chega
+    warmResume(type, id);
     Promise.all([catalog.getTitle(type, id), catalog.getSeasons(type, id)]).then(
       ([title, seasons]) => {
         if (!alive) return;
@@ -210,8 +212,8 @@ export default function Details() {
   }, [season]);
 
   // O play do botão principal (filme, ou o episódio de "Assistir/Continuar")
-  // já começa aqui: fonte procurada e vídeo baixando, sem tocar. Outro
-  // episódio escolhido na lista é procurado só no clique.
+  // já começa aqui: fonte procurada e vídeo baixando, sem tocar. Foco parado
+  // em outro episódio da lista passa a preparar esse (um vídeo por vez).
   useEffect(() => {
     if (!data) return;
     const { title, seasons } = data;
@@ -359,7 +361,7 @@ export default function Details() {
                       : undefined)
                   }
                   onSelect={() => navigate(watchPath(title, current.number, episode.number))}
-                  onDwell={() => data && planFor(data.title, current.number, episode.number)}
+                  onDwell={() => data && preloadPlayback(data.title, current.number, episode.number)}
                 />
               ))}
             </Row>
