@@ -442,6 +442,8 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
           (['movie', 'series'] as TitleType[]).map((t) =>
             page(t, `trending-${plural(t)}`)
               .catch(() => [] as Title[])
+              // filme só de cinema também não vira destaque: só abriria em gravação
+              .then(withoutCinema)
               .then((items) => pickFeatured(items, FEATURED_COUNT, `featured:${t}:${draw}`)),
           ),
         ).then(([movies, series]) => {

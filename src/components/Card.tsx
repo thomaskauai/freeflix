@@ -41,7 +41,7 @@ const shown: Record<string, boolean> = {};
 /** foco parado por este tempo num cartão adianta a busca dos detalhes */
 const PREFETCH_AFTER_MS = 400;
 /** foco parado por este tempo num card sem onDwell: as fontes do título já são procuradas */
-const WARM_SOURCES_MS = 1500;
+const WARM_SOURCES_MS = 1000;
 
 // Matiz estável por título, para as cartelas sem pôster não ficarem iguais.
 function hueOf(id: string) {
