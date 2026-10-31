@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import type { RowStyle, Title } from '../data/types';
 import { rememberedFocus } from '../focus/FocusContext';
 import { usePageActive } from '../pageActive';
@@ -55,17 +55,32 @@ interface LazyRowProps {
   anchor?: 'top';
   passed: boolean;
   autoFocusFirst?: boolean;
-  onActivate: () => void;
-  onSettled: () => void;
+  /** posição da fileira na pilha, passada de volta a onActivate e onSettled */
+  index: number;
+  onActivate: (index: number) => void;
+  onSettled: (index: number) => void;
 }
 
-function LazyRow({ source, wanted, anchor, passed, autoFocusFirst, onActivate, onSettled }: LazyRowProps) {
+/**
+ * memo: o foco passando de uma fileira para outra muda só as props das
+ * fileiras envolvidas; as demais (e os cards delas) não renderizam de novo.
+ */
+const LazyRow = memo(function LazyRow({
+  source,
+  wanted,
+  anchor,
+  passed,
+  autoFocusFirst,
+  index,
+  onActivate,
+  onSettled,
+}: LazyRowProps) {
   // itens próprios (Continuar assistindo) mudam a cada visita; os das listas ficam guardados
   const [key] = useState(() => rowKey(source.id));
   const saved = source.items ? undefined : loadedRows[key];
   const [items, setItems] = useState<Title[] | null>(source.items ?? (saved ? saved.items : null));
-  const settled = useRef(onSettled);
-  settled.current = onSettled;
+  const settled = useRef(() => onSettled(index));
+  settled.current = () => onSettled(index);
   // próxima página a pedir; 0 quando a lista acabou ou não tem páginas
   const nextPage = useRef(source.items ? 0 : saved ? saved.nextPage : 1);
   const loadingMore = useRef(false);
@@ -128,7 +143,7 @@ function LazyRow({ source, wanted, anchor, passed, autoFocusFirst, onActivate, o
       variant={source.style}
       anchor={anchor}
       passed={passed}
-      onActivate={onActivate}
+      onActivate={() => onActivate(index)}
       onNearEnd={items && source.load ? loadMore : undefined}
     >
       {items
@@ -155,7 +170,7 @@ function LazyRow({ source, wanted, anchor, passed, autoFocusFirst, onActivate, o
           ))}
     </Row>
   );
-}
+});
 
 interface RowsProps {
   rows: RowSource[];
@@ -186,7 +201,7 @@ export function Rows({ rows, autoFocusFirst, keepHeader, onFocus, onReady }: Row
   const settledRows = useRef<Record<number, boolean>>({});
   const announced = useRef(false);
 
-  const settle = (index: number) => {
+  const settleNow = (index: number) => {
     settledRows.current[index] = true;
     if (announced.current) return;
     for (let i = 0; i <= Math.min(resumeRow, rows.length - 1); i++) {
@@ -195,6 +210,14 @@ export function Rows({ rows, autoFocusFirst, keepHeader, onFocus, onReady }: Row
     announced.current = true;
     if (onReady) onReady();
   };
+  // callbacks estáveis: as fileiras são memo e não podem receber função nova a cada render
+  const latestSettle = useRef(settleNow);
+  latestSettle.current = settleNow;
+  const settle = useCallback((index: number) => latestSettle.current(index), []);
+  const activate = useCallback((r: number) => {
+    setActiveRow(r);
+    setReach((prev) => Math.max(prev, r + AHEAD));
+  }, []);
 
   useEffect(() => {
     if (rows.length === 0 && !announced.current) {
@@ -231,11 +254,9 @@ export function Rows({ rows, autoFocusFirst, keepHeader, onFocus, onReady }: Row
           anchor={keepHeader && r === 0 ? 'top' : undefined}
           passed={focused && r < activeRow}
           autoFocusFirst={autoFocusFirst && r === 0}
-          onActivate={() => {
-            setActiveRow(r);
-            setReach((prev) => Math.max(prev, r + AHEAD));
-          }}
-          onSettled={() => settle(r)}
+          index={r}
+          onActivate={activate}
+          onSettled={settle}
         />
       ))}
     </div>

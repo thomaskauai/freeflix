@@ -6,7 +6,7 @@ import { Stage } from './components/Stage';
 import { FocusProvider } from './focus/FocusContext';
 import { useKeyHandler } from './focus/keys';
 import { getPlayerSession } from './data/storage';
-import { useGoBack } from './nav';
+import { setAppNavigate, useGoBack } from './nav';
 import AddSource from './pages/AddSource';
 import Browse from './pages/Browse';
 import Details from './pages/Details';
@@ -71,6 +71,7 @@ function backWithFade(goBack: () => void) {
 export default function App() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  setAppNavigate(navigate);
   const goBack = useGoBack();
   const [opening, setOpening] = useState(true);
   // última página-base aberta; segue montada enquanto detalhes ou player estão por cima
