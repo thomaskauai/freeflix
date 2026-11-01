@@ -76,3 +76,12 @@ describe('firstToOpen', () => {
     expect(r.dropped.sort()).toEqual([0, 1, 2]);
   });
 });
+
+describe('torrent de outro título', () => {
+  it('fica de fora pelo nome do arquivo', async () => {
+    const { otherTitle } = await import('./parse');
+    const names = ['Resident Evil', 'Resident Evil', ''];
+    expect(otherTitle('the.shadow.men.1997.1080p.web.hevc.x265.rmteam.mkv', '', names)).toBe(true);
+    expect(otherTitle('Resident Evil 2026.1080p.WEB-DL.AAC.x264-rothebehap.mp4', '', names)).toBe(false);
+  });
+});

@@ -80,7 +80,7 @@ export function fileTitle(filename: string): string {
  * Conta como certo o nome que contém um dos nomes do título (ou está contido
  * nele) ou que o próprio addon cita no texto da fonte ("🍿 Spirited Away").
  */
-function otherTitle(filename: string, text: string, names: string[]): boolean {
+export function otherTitle(filename: string, text: string, names: string[]): boolean {
   const part = fileTitle(filename);
   if (!part) return false;
   const has = (a: string, b: string) => !!a && !!b && ` ${a} `.indexOf(` ${b} `) >= 0;

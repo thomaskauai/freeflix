@@ -14,9 +14,9 @@ import type { Title } from '../data/types';
 import { isTizen, startTorrentService } from '../platform/tizen';
 import { audioFor } from './audioMemory';
 import { getSpeed } from './network';
-import { parseStream } from './parse';
+import { otherTitle, parseStream } from './parse';
 import { offersAudio, preferAudio, rankTorrents, type TorrentStream } from './rank';
-import { deviceCanPlay, type Candidate } from './resolve';
+import { deviceCanPlay, englishName, type Candidate } from './resolve';
 import { releaseOf, rememberRelease } from './subtitles';
 
 export const ENGINE = 'http://127.0.0.1:2710';
@@ -170,8 +170,13 @@ export function warmTorrents(title: Title, season?: number, episode?: number) {
 export async function findTorrents(title: Title, season?: number, episode?: number): Promise<TorrentStream[]> {
   const pending = torrentioStreams(title, season, episode);
   if (!pending) return [];
-  const [streams, speed] = await Promise.all([pending, getSpeed()]);
-  const torrents = (streams as TorrentioStream[]).map(toTorrent).filter((t): t is TorrentStream => !!t);
+  const [streams, speed, english] = await Promise.all([pending, getSpeed(), englishName(title)]);
+  // o Torrentio às vezes traz release de outro filme ("The Shadow Men 1997" em Resident Evil)
+  const names = [title.title, title.originalTitle ?? '', english];
+  const torrents = (streams as TorrentioStream[])
+    .filter((s) => !otherTitle((s.behaviorHints && s.behaviorHints.filename) || '', '', names))
+    .map(toTorrent)
+    .filter((t): t is TorrentStream => !!t);
   return rankTorrents(torrents, {
     mbps: speed.mbps,
     audio: audioFor(title),

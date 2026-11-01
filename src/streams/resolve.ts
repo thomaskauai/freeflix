@@ -69,6 +69,20 @@ const accepts = (addon: SourceAddon, type: string, id: string) =>
   (addon.idPrefixes.length === 0 || addon.idPrefixes.some((prefix) => id.indexOf(prefix) === 0));
 
 /**
+ * Nome do título no catálogo em inglês ("Spirited Away" para A Viagem de
+ * Chihiro), para reconhecer arquivos de release. O catálogo em inglês já veio
+ * nos detalhes, então costuma estar em cache.
+ */
+export function englishName(title: Title): Promise<string> {
+  return CATALOG.fallback
+    ? fetchMeta(CATALOG.fallback, title.type, title.id).then(
+        (meta) => (meta ? meta.name : ''),
+        () => '',
+      )
+    : Promise.resolve('');
+}
+
+/**
  * Pede as fontes de um título (ou episódio) aos addons sem esperar o título
  * completo: o /meta do catálogo leva de meio a alguns segundos, e as fontes só
  * dependem do id. resolvePlayback, quando o título chegar, recebe a mesma
@@ -114,14 +128,7 @@ export async function resolvePlayback(
   if (listSources().length === 0) return { reason: 'no-addons' };
   if (addons.length === 0) return { reason: 'not-found' };
 
-  // nome em inglês também vale ("Spirited.Away…" para A Viagem de Chihiro); o
-  // catálogo em inglês já veio nos detalhes, então costuma estar em cache
-  const english = CATALOG.fallback
-    ? fetchMeta(CATALOG.fallback, title.type, title.id).then(
-        (meta) => (meta ? meta.name : ''),
-        () => '',
-      )
-    : Promise.resolve('');
+  const english = englishName(title);
   let answered = 0;
   let pending = addons.length;
   const lists: ParsedStream[][] = addons.map(() => []);
