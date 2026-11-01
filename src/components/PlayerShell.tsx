@@ -33,6 +33,8 @@ const SEEK_CHAIN_MS = 700;
 const SEEK_COMMIT_MS = 650;
 /** o aviso de quanto avançou fica mais um pouco depois do pulo */
 const SEEK_FEEDBACK_MS = 1300;
+/** pulo que demora mais que isso mostra o spinner no lugar do aviso de avanço */
+const SEEK_SPINNER_DELAY_MS = 250;
 /** o cartão do próximo episódio aparece nesse tanto antes do fim */
 const UPNEXT_S = 20;
 const SAVE_EVERY_MS = 5000;
@@ -321,6 +323,8 @@ export function PlayerShell({
   const [tracks, setTracks] = useState<{ id: string; lang: string; label: string; enabled: boolean }[]>([]);
   /** torrent travou: pausado juntando folga */
   const [rebuffering, setRebuffering] = useState(false);
+  // depois de um pulo, até o vídeo ter o trecho novo para mostrar
+  const [seekLoading, setSeekLoading] = useState(false);
   /** torrent abrindo: quanto da folga inicial já baixou (0–99) */
   const [torrentPercent, setTorrentPercent] = useState<number | null>(null);
   /** o vídeo já mostrou imagem uma vez */
@@ -528,11 +532,28 @@ export function PlayerShell({
       const url = torrentRef.current;
       if (started && url && !holding && !media.seeking && !media.paused) hold(url);
     };
+    let seekWait = 0;
+    const seekDone = () => {
+      window.clearTimeout(seekWait);
+      setSeekLoading(false);
+    };
     const onReady = () => {
       if (!started && startRef.current) startRef.current();
       started = true;
       setBuffering(false);
       setStarted(true);
+      seekDone();
+    };
+    // Pulo no vídeo: trecho já baixado responde na hora; senão, o spinner
+    // aparece (depois de um instante, para não piscar) até o trecho novo chegar.
+    const onSeeking = () => {
+      if (!started) return;
+      window.clearTimeout(seekWait);
+      seekWait = window.setTimeout(() => setSeekLoading(true), SEEK_SPINNER_DELAY_MS);
+    };
+    // pausado, o pulo termina quando o quadro novo aparece; tocando, quando volta a andar (playing/canplay)
+    const onSeeked = () => {
+      if (media.paused || media.readyState >= 3) seekDone();
     };
 
     // Relógio da fonte. Até o tempo andar, ela tem `startTimeout` para começar
@@ -568,6 +589,8 @@ export function PlayerShell({
     media.addEventListener('pause', onPause);
     media.addEventListener('ended', onEnded);
     media.addEventListener('waiting', onWaiting);
+    media.addEventListener('seeking', onSeeking);
+    media.addEventListener('seeked', onSeeked);
     media.addEventListener('playing', onReady);
     media.addEventListener('canplay', onReady);
     media.addEventListener('error', fail);
@@ -587,6 +610,10 @@ export function PlayerShell({
       media.removeEventListener('pause', onPause);
       media.removeEventListener('ended', onEnded);
       media.removeEventListener('waiting', onWaiting);
+      media.removeEventListener('seeking', onSeeking);
+      media.removeEventListener('seeked', onSeeked);
+      window.clearTimeout(seekWait);
+      setSeekLoading(false);
       media.removeEventListener('playing', onReady);
       media.removeEventListener('canplay', onReady);
       media.removeEventListener('error', fail);
@@ -1087,7 +1114,7 @@ export function PlayerShell({
         </div>
       )}
       {/* fora do shell: o carregamento aparece mesmo com os controles escondidos */}
-      {hasControls && (buffering || rebuffering) && !failed && feedback === null && (
+      {hasControls && (buffering || rebuffering || seekLoading) && !failed && (feedback === null || seekLoading) && (
         <div className="shell__loading" aria-label="Carregando">
           <div className="shell__spinner" />
           {!started && torrentPercent !== null && (
@@ -1169,7 +1196,7 @@ export function PlayerShell({
 
         {toast && <div className="shell__toast">{toast}</div>}
 
-        {feedback !== null && (
+        {feedback !== null && !seekLoading && (
           <div className={`shell__seek shell__seek--${feedback < 0 ? 'back' : 'forward'}`}>
             <Icon name={feedback < 0 ? 'rewind' : 'forward'} />
             <span>

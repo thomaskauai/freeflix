@@ -1,3 +1,4 @@
+import { directFor, forgetDirect, resolveDirect } from './directUrl';
 import {
   episodeProgressOf,
   getEpisodeProgress,
@@ -39,6 +40,8 @@ const failedUrls: Record<string, boolean> = {};
 /** O player avisa que uma fonte não tocou. */
 export function markFailed(url: string) {
   failedUrls[url] = true;
+  // na próxima tentativa, o link original (o endereço final pode ter vencido)
+  forgetDirect(url);
 }
 
 export const hasFailed = (url: string) => !!failedUrls[url];
@@ -251,6 +254,8 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
   const episodeKey = keyOf(title, season, episode);
   plan.then((p) => {
     if (p.status !== 'play') return;
+    // o endereço final das primeiras fontes já fica descoberto para o play
+    p.candidates.slice(0, DIRECT_AHEAD).forEach((c) => !c.torrent && resolveDirect(c.url, c.hls));
     keepFound(episodeKey, p.candidates);
     if (p.more) p.more.then((more) => keepFound(episodeKey, more));
   });
@@ -272,7 +277,8 @@ export function attachSource(video: HTMLVideoElement, url: string, hls: boolean)
     held = false;
   };
   if (!hls || video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = url;
+    // arquivo: direto no endereço final, sem os redirecionamentos a cada pulo
+    video.src = hls ? url : directFor(url);
     return unhold;
   }
   let alive = true;
@@ -349,6 +355,11 @@ export function preloadPlayback(title: Title, season?: number, episode?: number)
   });
 }
 
+/** fontes com o endereço final sendo descoberto para a pré-carga */
+const resolving: Record<string, boolean> = {};
+/** quantas das primeiras fontes do plano têm o endereço final descoberto de antemão */
+const DIRECT_AHEAD = 2;
+
 /** Baixa a primeira fonte que não falhou; se esta falhar, passa para a seguinte. */
 function preloadCandidate(
   key: string,
@@ -361,6 +372,15 @@ function preloadCandidate(
   const candidate = candidates.filter((c) => !failedUrls[c.url])[0];
   if (wanted !== key || !candidate || tries <= 0) return;
   if (preloaded && preloaded.url === candidate.url) return;
+  // pré-carga não tem pressa: espera o endereço final (até 4 s) para o vídeo já nascer nele
+  if (!candidate.torrent && directFor(candidate.url) === candidate.url && !resolving[candidate.url]) {
+    resolving[candidate.url] = true;
+    resolveDirect(candidate.url, candidate.hls).then(() => {
+      delete resolving[candidate.url];
+      preloadCandidate(key, title, candidates, season, episode, tries);
+    });
+    return;
+  }
   dropPreloaded();
   const video = document.createElement('video');
   video.preload = 'auto';
