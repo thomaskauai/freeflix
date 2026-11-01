@@ -53,6 +53,10 @@ export default defineConfig(({ mode }) => {
         chunkSizeWarningLimit: 1500,
       }),
     },
-    server: { port: 5173 },
+    server: {
+      port: 5173,
+      // o Vite não roda as funções de api/: no computador, elas vêm do site
+      proxy: { '/api': { target: 'https://freefliix.vercel.app', changeOrigin: true } },
+    },
   };
 });
