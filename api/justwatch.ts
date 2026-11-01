@@ -10,41 +10,62 @@
 //   GET ?list=cinema-ids   -> ids IMDb dos filmes que só passam no cinema (no mundo), para o app esconder
 // service: mxx (HBO Max), atp (Apple TV+), pmp (Paramount+), gop (Globoplay, o padrão), cru (Crunchyroll).
 // A API do JustWatch só libera CORS para localhost; o servidor busca por elas.
-import { json, preflight } from './_lib.js';
+import { json, preflight } from "./_lib.js";
 
 export const OPTIONS = preflight;
 
-const JUSTWATCH = 'https://apis.justwatch.com/graphql';
-const IMAGES = 'https://images.justwatch.com';
+const JUSTWATCH = "https://apis.justwatch.com/graphql";
+const IMAGES = "https://images.justwatch.com";
 /** códigos de streaming do JustWatch aceitos em ?service= */
-const SERVICES = ['mxx', 'atp', 'pmp', 'gop', 'cru'];
-const GLOBOPLAY = 'gop';
+const SERVICES = ["mxx", "atp", "pmp", "gop", "cru"];
+const GLOBOPLAY = "gop";
+
+/**
+ * Pedido ao JustWatch. Ele responde 429 quando recebe pedidos demais do mesmo
+ * servidor: espera um pouco (o Retry-After, se vier) e tenta de novo, até 3 vezes.
+ */
+async function ask(body: string): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(JUSTWATCH, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+    if (res.ok) return res;
+    if (res.status !== 429 || attempt >= 3)
+      throw new Error(`justwatch ${res.status}`);
+    const wait = Number(res.headers.get("retry-after"));
+    await new Promise((r) =>
+      setTimeout(r, wait > 0 && wait <= 10 ? wait * 1000 : 1000 * 2 ** attempt),
+    );
+  }
+}
 const PAGE_SIZE = 20;
 /** o JustWatch entrega no máximo 100 por pedido */
 const BATCH = 100;
 /** novela: uma temporada longa; série brasileira tem temporadas curtas */
 const NOVELA_MIN_EPISODES = 60;
-const NOT_NOVELA = ['rly', 'doc', 'ani'];
+const NOT_NOVELA = ["rly", "doc", "ani"];
 
 // gêneros do JustWatch com os nomes do TMDB, que o app traduz e usa nos semelhantes
 const GENRES: Record<string, { movie: string; series: string }> = {
-  act: { movie: 'Action', series: 'Action & Adventure' },
-  ani: { movie: 'Animation', series: 'Animation' },
-  cmy: { movie: 'Comedy', series: 'Comedy' },
-  crm: { movie: 'Crime', series: 'Crime' },
-  doc: { movie: 'Documentary', series: 'Documentary' },
-  drm: { movie: 'Drama', series: 'Drama' },
-  fml: { movie: 'Family', series: 'Family' },
-  fnt: { movie: 'Fantasy', series: 'Sci-Fi & Fantasy' },
-  hrr: { movie: 'Horror', series: 'Horror' },
-  hst: { movie: 'History', series: 'History' },
-  msc: { movie: 'Music', series: 'Music' },
-  rly: { movie: 'Reality', series: 'Reality' },
-  rma: { movie: 'Romance', series: 'Romance' },
-  scf: { movie: 'Science Fiction', series: 'Sci-Fi & Fantasy' },
-  trl: { movie: 'Thriller', series: 'Mystery' },
-  war: { movie: 'War', series: 'War & Politics' },
-  wsn: { movie: 'Western', series: 'Western' },
+  act: { movie: "Action", series: "Action & Adventure" },
+  ani: { movie: "Animation", series: "Animation" },
+  cmy: { movie: "Comedy", series: "Comedy" },
+  crm: { movie: "Crime", series: "Crime" },
+  doc: { movie: "Documentary", series: "Documentary" },
+  drm: { movie: "Drama", series: "Drama" },
+  fml: { movie: "Family", series: "Family" },
+  fnt: { movie: "Fantasy", series: "Sci-Fi & Fantasy" },
+  hrr: { movie: "Horror", series: "Horror" },
+  hst: { movie: "History", series: "History" },
+  msc: { movie: "Music", series: "Music" },
+  rly: { movie: "Reality", series: "Reality" },
+  rma: { movie: "Romance", series: "Romance" },
+  scf: { movie: "Science Fiction", series: "Sci-Fi & Fantasy" },
+  trl: { movie: "Thriller", series: "Mystery" },
+  war: { movie: "War", series: "War & Politics" },
+  wsn: { movie: "Western", series: "Western" },
 };
 
 const QUERY = `query Globoplay($first: Int!, $after: String, $filter: TitleFilter) {
@@ -64,7 +85,7 @@ const QUERY = `query Globoplay($first: Int!, $after: String, $filter: TitleFilte
 }`;
 
 interface Node {
-  objectType: 'SHOW' | 'MOVIE';
+  objectType: "SHOW" | "MOVIE";
   totalSeasonCount?: number;
   seasons?: { totalEpisodeCount: number | null }[];
   content: {
@@ -91,13 +112,16 @@ interface Node {
  * Polônia, é anime). O JustWatch não passa de ~1900 por filtro, então as
  * séries vêm fatiadas por ano.
  */
-const ANIME_COUNTRIES = ['JP', 'CN', 'KR', 'TW'];
-const ANIME_SLICES: { kind: 'SHOW' | 'MOVIE'; years?: { min?: number; max?: number } }[] = [
-  { kind: 'SHOW', years: { max: 2009 } },
-  { kind: 'SHOW', years: { min: 2010, max: 2017 } },
-  { kind: 'SHOW', years: { min: 2018, max: 2021 } },
-  { kind: 'SHOW', years: { min: 2022 } },
-  { kind: 'MOVIE' },
+const ANIME_COUNTRIES = ["JP", "CN", "KR", "TW"];
+const ANIME_SLICES: {
+  kind: "SHOW" | "MOVIE";
+  years?: { min?: number; max?: number };
+}[] = [
+  { kind: "SHOW", years: { max: 2009 } },
+  { kind: "SHOW", years: { min: 2010, max: 2017 } },
+  { kind: "SHOW", years: { min: 2018, max: 2021 } },
+  { kind: "SHOW", years: { min: 2022 } },
+  { kind: "MOVIE" },
 ];
 const ANIME_QUERY = `query Anime($first: Int!, $after: String, $filter: TitleFilter) {
   popularTitles(country: BR, first: $first, after: $after, filter: $filter) {
@@ -106,24 +130,32 @@ const ANIME_QUERY = `query Anime($first: Int!, $after: String, $filter: TitleFil
 }`;
 
 interface AnimeNode {
-  content: { productionCountries: string[] | null; externalIds: { imdbId: string | null } };
+  content: {
+    productionCountries: string[] | null;
+    externalIds: { imdbId: string | null };
+  };
 }
 
-async function animePage(slice: (typeof ANIME_SLICES)[number], offset: number): Promise<AnimeNode[]> {
+async function animePage(
+  slice: (typeof ANIME_SLICES)[number],
+  offset: number,
+): Promise<AnimeNode[]> {
   const filter = {
     objectTypes: [slice.kind],
-    genres: ['ani'],
+    genres: ["ani"],
     productionCountries: ANIME_COUNTRIES,
     ...(slice.years ? { releaseYear: slice.years } : {}),
   };
-  const after = offset ? Buffer.from(String(offset)).toString('base64') : '';
-  const res = await fetch(JUSTWATCH, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: ANIME_QUERY, variables: { first: BATCH, after, filter } }),
-  });
-  if (!res.ok) throw new Error(`justwatch ${res.status}`);
-  const body = (await res.json()) as { data?: { popularTitles: { edges: { node: AnimeNode }[] } } };
+  const after = offset ? Buffer.from(String(offset)).toString("base64") : "";
+  const res = await ask(
+    JSON.stringify({
+      query: ANIME_QUERY,
+      variables: { first: BATCH, after, filter },
+    }),
+  );
+  const body = (await res.json()) as {
+    data?: { popularTitles: { edges: { node: AnimeNode }[] } };
+  };
   return body.data ? body.data.popularTitles.edges.map((e) => e.node) : [];
 }
 
@@ -133,11 +165,14 @@ async function animeIds(): Promise<string[]> {
   await Promise.all(
     ANIME_SLICES.map(async (slice) => {
       for (let start = 0; start < 2000; start += 4 * BATCH) {
-        const chunk = await Promise.all([0, 1, 2, 3].map((i) => animePage(slice, start + i * BATCH)));
+        const chunk = await Promise.all(
+          [0, 1, 2, 3].map((i) => animePage(slice, start + i * BATCH)),
+        );
         chunk.forEach((nodes) =>
           nodes.forEach((n) => {
             const id = n.content.externalIds.imdbId;
-            if (id && (n.content.productionCountries ?? []).indexOf('US') < 0) ids[id] = true;
+            if (id && (n.content.productionCountries ?? []).indexOf("US") < 0)
+              ids[id] = true;
           }),
         );
         if (chunk[chunk.length - 1].length < BATCH) break;
@@ -151,16 +186,31 @@ async function animeIds(): Promise<string[]> {
  * Países onde as cópias digitais costumam sair primeiro. "Só no cinema" vale
  * para o mundo: estreou aqui, mas já está à venda nos EUA, existe WEB-DL.
  */
-const CINEMA_COUNTRIES = ['BR', 'US', 'GB', 'CA', 'AU', 'IN', 'DE', 'FR', 'ES', 'IT', 'MX', 'JP', 'KR', 'NL'];
+const CINEMA_COUNTRIES = [
+  "BR",
+  "US",
+  "GB",
+  "CA",
+  "AU",
+  "IN",
+  "DE",
+  "FR",
+  "ES",
+  "IT",
+  "MX",
+  "JP",
+  "KR",
+  "NL",
+];
 /** os filmes em cartaz saem destas listas */
-const CINEMA_FROM = ['BR', 'US'];
-const DISC = ['DVD', 'BLURAY', 'BLURAY_4K'];
+const CINEMA_FROM = ["BR", "US"];
+const DISC = ["DVD", "BLURAY", "BLURAY_4K"];
 
 const CINEMA_QUERY = `query Cinema($country: Country!, $first: Int!, $after: String, $filter: TitleFilter) {
   popularTitles(country: $country, first: $first, after: $after, filter: $filter) {
     edges { node {
       content(country: BR, language: "pt") { externalIds { imdbId } }
-      ${CINEMA_COUNTRIES.map((c) => `${c}: offers(country: ${c}, platform: WEB) { monetizationType presentationType availableFromTime }`).join('\n      ')}
+      ${CINEMA_COUNTRIES.map((c) => `${c}: offers(country: ${c}, platform: WEB) { monetizationType presentationType availableFromTime }`).join("\n      ")}
     } }
   }
 }`;
@@ -171,7 +221,9 @@ interface CinemaOffer {
   availableFromTime: string | null;
 }
 
-type CinemaNode = { content: { externalIds: { imdbId: string | null } } } & Record<string, CinemaOffer[]>;
+type CinemaNode = {
+  content: { externalIds: { imdbId: string | null } };
+} & Record<string, CinemaOffer[]>;
 
 /**
  * Oferta que é cópia digital já disponível: assinatura ou grátis; aluguel ou
@@ -179,23 +231,30 @@ type CinemaNode = { content: { externalIds: { imdbId: string | null } } } & Reco
  * Fandango na semana da estreia). DVD e Blu-ray não contam: são pré-venda de disco.
  */
 const isDigital = (o: CinemaOffer, now: string) =>
-  o.monetizationType !== 'CINEMA' &&
+  o.monetizationType !== "CINEMA" &&
   DISC.indexOf(o.presentationType) < 0 &&
-  ((o.monetizationType !== 'RENT' && o.monetizationType !== 'BUY') ||
+  ((o.monetizationType !== "RENT" && o.monetizationType !== "BUY") ||
     (!!o.availableFromTime && o.availableFromTime <= now));
 
-async function cinemaPage(country: string, offset: number): Promise<CinemaNode[]> {
-  const after = offset ? Buffer.from(String(offset)).toString('base64') : '';
-  const res = await fetch(JUSTWATCH, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+async function cinemaPage(
+  country: string,
+  offset: number,
+): Promise<CinemaNode[]> {
+  const after = offset ? Buffer.from(String(offset)).toString("base64") : "";
+  const res = await ask(
+    JSON.stringify({
       query: CINEMA_QUERY,
-      variables: { country, first: BATCH, after, filter: { objectTypes: ['MOVIE'], monetizationTypes: ['CINEMA'] } },
+      variables: {
+        country,
+        first: BATCH,
+        after,
+        filter: { objectTypes: ["MOVIE"], monetizationTypes: ["CINEMA"] },
+      },
     }),
-  });
-  if (!res.ok) throw new Error(`justwatch ${res.status}`);
-  const body = (await res.json()) as { data?: { popularTitles: { edges: { node: CinemaNode }[] } } };
+  );
+  const body = (await res.json()) as {
+    data?: { popularTitles: { edges: { node: CinemaNode }[] } };
+  };
   return body.data ? body.data.popularTitles.edges.map((e) => e.node) : [];
 }
 
@@ -211,13 +270,20 @@ async function cinemaIds(): Promise<string[]> {
   await Promise.all(
     CINEMA_FROM.map(async (country) => {
       for (let start = 0; start < 3000; start += 5 * BATCH) {
-        const chunk = await Promise.all([0, 1, 2, 3, 4].map((i) => cinemaPage(country, start + i * BATCH)));
+        const chunk = await Promise.all(
+          [0, 1, 2, 3, 4].map((i) => cinemaPage(country, start + i * BATCH)),
+        );
         chunk.forEach((nodes) =>
           nodes.forEach((n) => {
             const id = n.content.externalIds.imdbId;
             if (!id) return;
             ids[id] = true;
-            if (CINEMA_COUNTRIES.some((c) => (n[c] || []).some((o) => isDigital(o, now)))) digital[id] = true;
+            if (
+              CINEMA_COUNTRIES.some((c) =>
+                (n[c] || []).some((o) => isDigital(o, now)),
+              )
+            )
+              digital[id] = true;
           }),
         );
         if (chunk[chunk.length - 1].length < BATCH) break;
@@ -228,25 +294,30 @@ async function cinemaIds(): Promise<string[]> {
 }
 
 const image = (path: string | null | undefined, profile: string) =>
-  path ? IMAGES + path.replace('{profile}', profile).replace('{format}', 'jpg') : undefined;
+  path
+    ? IMAGES + path.replace("{profile}", profile).replace("{format}", "jpg")
+    : undefined;
 
 /** O cursor do JustWatch é a posição em base64: dá para pedir qualquer página. */
 async function batch(
-  kind: 'SHOW' | 'MOVIE',
+  kind: "SHOW" | "MOVIE",
   offset: number,
   first: number,
   brazilian: boolean,
   service = GLOBOPLAY,
 ): Promise<Node[]> {
-  const filter = { packages: [service], objectTypes: [kind], ...(brazilian ? { productionCountries: ['BR'] } : {}) };
-  const after = offset ? Buffer.from(String(offset)).toString('base64') : '';
-  const res = await fetch(JUSTWATCH, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: QUERY, variables: { first, after, filter } }),
-  });
-  if (!res.ok) throw new Error(`justwatch ${res.status}`);
-  const body = (await res.json()) as { data?: { popularTitles: { edges: { node: Node }[] } } };
+  const filter = {
+    packages: [service],
+    objectTypes: [kind],
+    ...(brazilian ? { productionCountries: ["BR"] } : {}),
+  };
+  const after = offset ? Buffer.from(String(offset)).toString("base64") : "";
+  const res = await ask(
+    JSON.stringify({ query: QUERY, variables: { first, after, filter } }),
+  );
+  const body = (await res.json()) as {
+    data?: { popularTitles: { edges: { node: Node }[] } };
+  };
   return body.data ? body.data.popularTitles.edges.map((e) => e.node) : [];
 }
 
@@ -254,7 +325,9 @@ async function batch(
 async function allBrazilianShows(): Promise<Node[]> {
   const pages: Node[][] = [];
   for (let start = 0; ; start += 4 * BATCH) {
-    const chunk = await Promise.all([0, 1, 2, 3].map((i) => batch('SHOW', start + i * BATCH, BATCH, true)));
+    const chunk = await Promise.all(
+      [0, 1, 2, 3].map((i) => batch("SHOW", start + i * BATCH, BATCH, true)),
+    );
     pages.push(...chunk);
     if (chunk[chunk.length - 1].length < BATCH) break;
   }
@@ -262,16 +335,23 @@ async function allBrazilianShows(): Promise<Node[]> {
 }
 
 function isNovela(node: Node): boolean {
-  const episodes = (node.seasons ?? []).reduce((n, s) => n + (s.totalEpisodeCount ?? 0), 0);
+  const episodes = (node.seasons ?? []).reduce(
+    (n, s) => n + (s.totalEpisodeCount ?? 0),
+    0,
+  );
   const genres = node.content.genres.map((g) => g.shortName);
-  return node.totalSeasonCount === 1 && episodes >= NOVELA_MIN_EPISODES && !genres.some((g) => NOT_NOVELA.includes(g));
+  return (
+    node.totalSeasonCount === 1 &&
+    episodes >= NOVELA_MIN_EPISODES &&
+    !genres.some((g) => NOT_NOVELA.includes(g))
+  );
 }
 
 /** No formato de item de catálogo dos addons; sem id IMDb as fontes de vídeo não acham, então fica de fora. */
 function toMeta(node: Node, brazilian: boolean) {
   const c = node.content;
   if (!c.externalIds.imdbId) return null;
-  const type = node.objectType === 'SHOW' ? 'series' : 'movie';
+  const type = node.objectType === "SHOW" ? "series" : "movie";
   const genres = c.genres
     .map((g) => GENRES[g.shortName]?.[type])
     .filter((g, i, all): g is string => !!g && all.indexOf(g) === i);
@@ -279,61 +359,88 @@ function toMeta(node: Node, brazilian: boolean) {
     id: c.externalIds.imdbId,
     type,
     name: nameOf(node),
-    poster: image(c.posterUrl, 's332'),
-    background: image(c.backdrops[0]?.backdropUrl, 's1440'),
-    description: node.brazilian?.shortDescription || c.shortDescription || undefined,
-    releaseInfo: c.originalReleaseYear ? String(c.originalReleaseYear) : undefined,
-    genres: type === 'series' && isNovela(node) ? ['Soap', ...genres] : genres,
-    ...(brazilian ? { country: 'BR', language: 'pt' } : {}),
+    poster: image(c.posterUrl, "s332"),
+    background: image(c.backdrops[0]?.backdropUrl, "s1440"),
+    description:
+      node.brazilian?.shortDescription || c.shortDescription || undefined,
+    releaseInfo: c.originalReleaseYear
+      ? String(c.originalReleaseYear)
+      : undefined,
+    genres: type === "series" && isNovela(node) ? ["Soap", ...genres] : genres,
+    ...(brazilian ? { country: "BR", language: "pt" } : {}),
   };
 }
 
 /** Produção brasileira fica com o nome original; estrangeira, com o nome lançado no Brasil. */
 function nameOf(node: Node): string {
   const pt = node.content.title.trim();
-  const original = (node.content.originalTitle ?? '').trim();
+  const original = (node.content.originalTitle ?? "").trim();
   return pt === original ? pt : node.brazilian?.title?.trim() || pt;
 }
 
-const metas = (nodes: Node[], brazilian: boolean) => nodes.map((n) => toMeta(n, brazilian)).filter(Boolean);
+const metas = (nodes: Node[], brazilian: boolean) =>
+  nodes.map((n) => toMeta(n, brazilian)).filter(Boolean);
+
+/** Última lista boa nesta instância da função: JustWatch fora do ar não deixa o app sem filtro. */
+const good: Record<string, string[]> = {};
+async function lastGood(
+  name: string,
+  load: () => Promise<string[]>,
+): Promise<string[]> {
+  try {
+    const ids = await load();
+    good[name] = ids;
+    return ids;
+  } catch (e) {
+    if (good[name]) return good[name];
+    throw e;
+  }
+}
 
 export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
-  const list = params.get('list');
-  const page = Math.max(0, Math.min(200, Number(params.get('page')) || 0));
-  const service = params.get('service') || GLOBOPLAY;
-  if (SERVICES.indexOf(service) < 0) return json({ error: 'bad-request' }, 400);
+  const list = params.get("list");
+  const page = Math.max(0, Math.min(200, Number(params.get("page")) || 0));
+  const service = params.get("service") || GLOBOPLAY;
+  if (SERVICES.indexOf(service) < 0) return json({ error: "bad-request" }, 400);
   try {
     let nodes: Node[];
     let brazilian = true;
-    if (list === 'anime-ids') {
+    if (list === "anime-ids") {
       // muda devagar: um dia no CDN, e mais uma semana servindo a antiga enquanto renova
-      return json({ ids: await animeIds() }, 200, {
-        'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800',
+      return json({ ids: await lastGood("anime", animeIds) }, 200, {
+        "Cache-Control":
+          "public, s-maxage=86400, stale-while-revalidate=604800",
       });
     }
-    if (list === 'cinema-ids') {
+    if (list === "cinema-ids") {
       // sai do cinema para o streaming de um dia para o outro: seis horas no CDN
-      return json({ ids: await cinemaIds() }, 200, {
-        'Cache-Control': 'public, s-maxage=21600, stale-while-revalidate=86400',
+      return json({ ids: await lastGood("cinema", cinemaIds) }, 200, {
+        "Cache-Control": "public, s-maxage=21600, stale-while-revalidate=86400",
       });
     }
-    if (list === 'novelas' || list === 'series-br') {
+    if (list === "novelas" || list === "series-br") {
       const shows = await allBrazilianShows();
-      nodes = shows.filter((n) => isNovela(n) === (list === 'novelas'));
-    } else if (list === 'series' || list === 'movies' || list === 'movies-br') {
-      brazilian = list === 'movies-br';
+      nodes = shows.filter((n) => isNovela(n) === (list === "novelas"));
+    } else if (list === "series" || list === "movies" || list === "movies-br") {
+      brazilian = list === "movies-br";
       // séries e filmes: de qualquer streaming; os brasileiros, só do Globoplay
-      nodes = await batch(list === 'series' ? 'SHOW' : 'MOVIE', page * PAGE_SIZE, PAGE_SIZE, brazilian, brazilian ? GLOBOPLAY : service);
+      nodes = await batch(
+        list === "series" ? "SHOW" : "MOVIE",
+        page * PAGE_SIZE,
+        PAGE_SIZE,
+        brazilian,
+        brazilian ? GLOBOPLAY : service,
+      );
     } else {
-      return json({ error: 'bad-request' }, 400);
+      return json({ error: "bad-request" }, 400);
     }
     // o catálogo muda devagar: seis horas no CDN, e mais um dia servindo o antigo enquanto renova
     return json({ metas: metas(nodes, brazilian) }, 200, {
-      'Cache-Control': 'public, s-maxage=21600, stale-while-revalidate=86400',
+      "Cache-Control": "public, s-maxage=21600, stale-while-revalidate=86400",
     });
   } catch (e) {
-    console.error('justwatch', list, e instanceof Error ? e.message : e);
-    return json({ error: 'upstream' }, 502);
+    console.error("justwatch", list, e instanceof Error ? e.message : e);
+    return json({ error: "upstream" }, 502);
   }
 }
