@@ -557,6 +557,14 @@ describe('pickStreams', () => {
     const kept = pickStreams(ranked, { audio: 'pt', originalLanguage: 'en' });
     expect(kept.map((k) => k.url)).toEqual(['Apt1080', 'Apt720', 'A1080', 'Aes1080']);
   });
+  it('com áudio limpo, o pacote com dublagem de fora sai', () => {
+    const dual = { ...s(['hi', 'en'], 1080), multiAudio: true, url: 'dual' };
+    const ranked = [s([], 1080), dual, s([], 720)];
+    const kept = pickStreams(ranked, { audio: 'original', originalLanguage: 'en' });
+    expect(kept.map((k) => k.url)).toEqual(['A1080', 'A720']);
+    // só o pacote tem o áudio: ele fica
+    expect(pickStreams([dual], { audio: 'original', originalLanguage: 'en' }).map((k) => k.url)).toEqual(['dual']);
+  });
   it('nenhuma com o preferido: todas', () => {
     const ranked = [s([], 1080), s([], 720)];
     expect(pickStreams(ranked, { audio: 'pt', originalLanguage: 'en' })).toHaveLength(2);

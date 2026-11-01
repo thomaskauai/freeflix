@@ -438,9 +438,13 @@ const MAX_EXTRA_AUDIOS = 4;
 /**
  * As fontes que o player guarda: as com o áudio preferido (todas, se nenhuma
  * tem) e, de cada outro áudio, só a melhor, para os atalhos oferecerem a troca.
+ * Havendo fonte só com idiomas pedidos, as com dublagem de fora junto ficam de fora.
  */
 export function pickStreams<T extends ParsedStream>(ranked: T[], ctx: AudioPrefs): T[] {
-  const wanted = ranked.filter((s) => offersAudio(s, ctx));
+  const offered = ranked.filter((s) => offersAudio(s, ctx));
+  // com áudio limpo disponível, o pacote com dublagem de fora (híndi, russo) sai: pode abrir na faixa errada
+  const clean = offered.filter((s) => cleanAudioTier(s, ctx) > 0);
+  const wanted = clean.length ? clean : offered;
   const kept: T[] = [];
   const mirrors: Record<string, number> = {};
   for (const s of wanted.length ? wanted : ranked) {
