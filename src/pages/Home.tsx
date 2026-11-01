@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Hero } from '../components/Hero';
 import { Loading } from '../components/Loading';
@@ -14,7 +14,7 @@ import { focusElement, rememberedFocus } from '../focus/FocusContext';
 import { useKeyHandler } from '../focus/keys';
 import { usePageFocus } from '../focus/useFocusable';
 import { titlePath, watchPath } from '../nav';
-import { preloadPlayback, releasePreload } from '../streams/playback';
+import { preloadPlayback, releasePreload, warmResume } from '../streams/playback';
 
 /** Episódio que o card de uma série mostra, depois de consultar a lista de episódios. */
 interface EpisodeCard {
@@ -115,6 +115,9 @@ function continueWatchingRow(
   }
 }
 
+/** a Home abriu: espera isso antes de carregar o último de Continuar assistindo (imagens e fileiras primeiro) */
+const OPEN_PRELOAD_DELAY_MS = 2000;
+
 /** card de Continuar assistindo com o vídeo sendo preparado */
 let warming: string | null = null;
 
@@ -212,6 +215,36 @@ export default function Home() {
       document.removeEventListener('visibilitychange', refresh);
     };
   }, []);
+
+  // App aberto: o último de Continuar assistindo já começa a carregar, como no
+  // foco do card, para o play nele começar na hora; dos dois seguintes, só as
+  // fontes são buscadas (três vídeos baixando juntos pesariam na TV). Espera a
+  // Home aparecer e, em série, a lista de episódios dizer qual é o episódio.
+  // Uma vez por abertura.
+  const warmedFirst = useRef(false);
+  useEffect(() => {
+    if (warmedFirst.current || !data || !rowsReady) return;
+    const resume = continueWatchingRow(version, cards, openContinue);
+    const first = resume && resume.items && resume.items[0];
+    if (!first) return;
+    const card = cards[first.id];
+    const saved = getAllProgress()[first.id];
+    if (first.type === 'series' && !card) return;
+    const timer = window.setTimeout(() => {
+      warmedFirst.current = true;
+      (resume.items || []).slice(1, 3).forEach((t) => warmResume(t.type, t.id));
+      // o espectador já focou outro card de Continuar assistindo: aquele manda
+      if (warming) return;
+      const at = card && card !== 'done' ? card : { season: saved.season, episode: saved.episode };
+      catalog.getTitle(first.type, first.id).then(
+        (full) => full && !warming && preloadPlayback(full, at.season, at.episode),
+        () => undefined,
+      );
+    }, OPEN_PRELOAD_DELAY_MS);
+    return () => window.clearTimeout(timer);
+    // openContinue só usa navigate, estável
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, rowsReady, cards, version]);
 
   // Continuar assistindo vem antes de tudo; refeito quando chegam dados de outra TV.
   const rows = useMemo(() => {
