@@ -332,7 +332,8 @@ export async function GET(req: Request) {
     return json({ metas: metas(nodes, brazilian) }, 200, {
       'Cache-Control': 'public, s-maxage=21600, stale-while-revalidate=86400',
     });
-  } catch {
+  } catch (e) {
+    console.error('justwatch', list, e instanceof Error ? e.message : e);
     return json({ error: 'upstream' }, 502);
   }
 }
