@@ -128,47 +128,85 @@ function toTorrent(s: TorrentioStream): TorrentStream | null {
  * fontes HTTP costumam ser fracas ou nem existir, e o torrent vem primeiro. O
  * motor pergunta ao JustWatch; sem resposta, fica como antes (false).
  */
-export async function noStreamingInBrazil(title: Title): Promise<boolean> {
+export function noStreamingInBrazil(title: Title): Promise<boolean> {
   const imdb = title.imdbId ?? (/^tt\d+$/.test(title.id) ? title.id : null);
-  if (!imdb) return false;
+  if (!imdb) return Promise.resolve(false);
+  const hit = streamingAnswers[imdb];
+  if (hit && Date.now() - hit.at < TORRENT_LIST_TTL_MS) return hit.answer;
+  const answer = askStreaming(title, imdb).catch(() => {
+    // motor ou JustWatch fora: a próxima vez pergunta de novo
+    if (streamingAnswers[imdb] && streamingAnswers[imdb]!.answer === answer) delete streamingAnswers[imdb];
+    return false;
+  });
+  streamingAnswers[imdb] = { at: Date.now(), answer };
+  return answer;
+}
+
+/** resposta do JustWatch por id do IMDb: não muda em minutos, e o foco no card já pergunta */
+const streamingAnswers: Record<string, { at: number; answer: Promise<boolean> } | undefined> = {};
+
+async function askStreaming(title: Title, imdb: string): Promise<boolean> {
   const ask = async (q: string) =>
     (
       await getJson<{ streaming: boolean | null }>(
         `${ENGINE}/streaming-br?imdb=${imdb}&type=${title.type}&q=${encodeURIComponent(q)}`,
       )
     ).streaming;
-  try {
-    let streaming = await ask(title.title);
-    if (streaming === null && title.originalTitle && title.originalTitle !== title.title) {
-      streaming = await ask(title.originalTitle);
-    }
-    return streaming === false;
-  } catch {
-    return false;
+  let streaming = await ask(title.title);
+  if (streaming === null && title.originalTitle && title.originalTitle !== title.title) {
+    streaming = await ask(title.originalTitle);
   }
+  return streaming === false;
 }
 
 /** O torrent tem o áudio preferido (o original da obra, se a preferência é o original)? */
 export const torrentInPreferredAudio = (title: Title) => (t: TorrentStream) =>
   offersAudio(t, { audio: audioFor(title), originalLanguage: title.originalLanguage });
 
+/**
+ * A lista do Torrentio (infoHash, seeds) não expira como link de vídeo: fica
+ * guardada o mesmo tempo que a busca de fontes (playback.ts), para o foco no
+ * card ou os detalhes servirem ao play minutos depois. Falha não fica.
+ */
+const TORRENT_LIST_TTL_MS = 10 * 60 * 1000;
+const torrentLists: Record<string, { at: number; list: Promise<AddonStream[]> } | undefined> = {};
+
 /** Pedido ao Torrentio dos torrents do título (ou episódio); null sem id do IMDb. */
-function torrentioStreams(title: Title, season?: number, episode?: number): Promise<AddonStream[]> | null {
-  const imdb = title.imdbId ?? (/^tt\d+$/.test(title.id) ? title.id : null);
-  if (!imdb) return null;
-  const videoId = season != null && episode != null ? `${imdb}:${season}:${episode}` : imdb;
-  return fetchStreams(TORRENTIO, title.type, videoId);
+function torrentioStreams(type: string, id: string, season?: number, episode?: number): Promise<AddonStream[]> | null {
+  if (!/^tt\d+$/.test(id)) return null;
+  const videoId = season != null && episode != null ? `${id}:${season}:${episode}` : id;
+  const key = `${type}/${videoId}`;
+  const hit = torrentLists[key];
+  if (hit && Date.now() - hit.at < TORRENT_LIST_TTL_MS) return hit.list;
+  const list = fetchStreams(TORRENTIO, type, videoId);
+  torrentLists[key] = { at: Date.now(), list };
+  list.catch(() => torrentLists[key] && torrentLists[key]!.list === list && delete torrentLists[key]);
+  return list;
 }
 
-/** Adianta o pedido ao Torrentio: findTorrents, logo depois, recebe a mesma resposta (addonClient). */
+const imdbOf = (title: Title) => title.imdbId ?? title.id;
+
+/**
+ * Adianta o pedido ao Torrentio (e ao JustWatch, que decide se o torrent vem
+ * primeiro) só pelo id, com o motor no ar: o play logo depois colhe as respostas.
+ */
+export function warmTorrentsById(type: string, id: string, season?: number, episode?: number) {
+  if (!/^tt\d+$/.test(id)) return;
+  torrentAvailable().then((ok) => {
+    const pending = ok && torrentioStreams(type, id, season, episode);
+    if (pending) pending.catch(() => undefined);
+  });
+}
+
+/** Adianta o pedido ao Torrentio: findTorrents, logo depois, recebe a mesma resposta. */
 export function warmTorrents(title: Title, season?: number, episode?: number) {
-  const pending = torrentioStreams(title, season, episode);
+  const pending = torrentioStreams(title.type, imdbOf(title), season, episode);
   if (pending) pending.catch(() => undefined);
 }
 
 /** Os torrents do título, do melhor para o pior, sem gravação de cinema. */
 export async function findTorrents(title: Title, season?: number, episode?: number): Promise<TorrentStream[]> {
-  const pending = torrentioStreams(title, season, episode);
+  const pending = torrentioStreams(title.type, imdbOf(title), season, episode);
   if (!pending) return [];
   const [streams, speed, english] = await Promise.all([pending, getSpeed(), englishName(title)]);
   // o Torrentio às vezes traz release de outro filme ("The Shadow Men 1997" em Resident Evil)

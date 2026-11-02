@@ -19,6 +19,7 @@ import {
   torrentCandidate,
   torrentInPreferredAudio,
   warmTorrents,
+  warmTorrentsById,
 } from './torrent';
 import { audioFor, sourceFor } from './audioMemory';
 
@@ -140,6 +141,7 @@ export function warmPlayback(type: TitleType, id: string, season?: number, episo
   if (cached && Date.now() - cached.at < PLAN_TTL_MS) return;
   if (preloaded && preloaded.key === episodeKey) return;
   warmStreams(type, id, season, episode);
+  warmTorrentsById(type, id, season, episode);
 }
 
 /**
@@ -218,11 +220,16 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
   // fontes HTTP costumam ser fracas: com o motor no ar, o torrent vem primeiro e
   // as fontes HTTP ficam de reserva. Episódio com fonte escolhida antes segue ela.
   let torrentTried = false;
+  // a lista do Torrentio já vem a caminho enquanto o motor pergunta ao JustWatch;
+  // com fonte lembrada também: o torrent é a reserva se as fontes HTTP falharem
+  const engine = torrentAvailable().then((ok) => {
+    if (ok) warmTorrents(title, season, episode);
+    return ok;
+  });
   const torrentFirst = prefer
     ? Promise.resolve(null)
-    : torrentAvailable()
-        // a lista do Torrentio já vem a caminho enquanto o motor pergunta ao JustWatch
-        .then((ok) => ok && (warmTorrents(title, season, episode), noStreamingInBrazil(title)))
+    : engine
+        .then((ok) => ok && noStreamingInBrazil(title))
         // só no áudio preferido: sem ele, as fontes HTTP vêm primeiro
         .then((yes) =>
           yes ? ((torrentTried = true), torrentCandidate(title, season, episode, torrentInPreferredAudio(title))) : null,
