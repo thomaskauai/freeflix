@@ -127,8 +127,12 @@ export function fetchCatalog(base: string, type: string, id: string, extra?: Rec
 export const fetchMeta = (base: string, type: string, id: string) =>
   cached<{ meta?: AddonMeta }>(`${base}/meta/${type}/${encodeURIComponent(id)}.json`).then((r) => r.meta ?? null);
 
-/** alguns addons levam 12 s ou mais; o play não espera por eles (streams/resolve.ts) */
-const STREAMS_TIMEOUT_MS = 16000;
+/**
+ * Alguns addons levam 12 s ou mais, e o BestCine leva 20 a 40 s na primeira vez
+ * que alguém pede um título (depois guarda e responde na hora). O play não
+ * espera por eles se outra fonte já respondeu (streams/resolve.ts).
+ */
+const STREAMS_TIMEOUT_MS = 45000;
 
 /**
  * Fontes ficam guardadas só por pouco tempo (links de vídeo expiram): o bastante

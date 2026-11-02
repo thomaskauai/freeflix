@@ -63,6 +63,8 @@ export type Resolution =
  * depois como reserva.
  */
 const QUICK_MS = 2500;
+/** passado isso, o que já chegou (mesmo sem o áudio escolhido) toca; o resto vem como reserva */
+const ENOUGH_MS = 16000;
 
 const accepts = (addon: SourceAddon, type: string, id: string) =>
   (addon.types.length === 0 || addon.types.indexOf(type) >= 0) &&
@@ -167,17 +169,24 @@ export async function resolvePlayback(
     return ranked.length > 0 && offersAudio(ranked[0], audio);
   };
   let quick = false;
+  let enough = false;
   const timer = window.setTimeout(() => {
     quick = true;
     arrived();
   }, QUICK_MS);
+  // fonte lenta (até 45 s) só segura o play quando nenhuma outra tem o título
+  const cap = window.setTimeout(() => {
+    enough = true;
+    arrived();
+  }, ENOUGH_MS);
   await new Promise<void>((done) => {
     arrived = () => {
-      if (pending === 0 || (quick && ready())) done();
+      if (pending === 0 || (quick && ready()) || (enough && rank().length > 0)) done();
     };
     arrived();
   });
   window.clearTimeout(timer);
+  window.clearTimeout(cap);
 
   if (pending > 0) {
     return {
