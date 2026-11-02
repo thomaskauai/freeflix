@@ -95,6 +95,23 @@ describe('parseStream', () => {
 });
 
 describe('rankStreams', () => {
+  it('BestCine só entra depois de todas as outras, mesmo com idioma melhor', () => {
+    const from = (s: AddonStream, addon: string, base: string) => ({ ...parseStream(s, addon), base, priority: 0 });
+    const ranked = rankStreams(
+      [
+        from(stream('2160p', 'Filme Dublado'), 'BestCine', 'https://bestcine.dpdns.org/usr_x'),
+        from(stream('720p', 'Filme'), 'Outra', 'https://outra.example'),
+      ],
+      ctx({ audio: 'pt' }),
+    );
+    expect(ranked.map((s) => s.addon)).toEqual(['Outra', 'BestCine']);
+    // nem o áudio preferido faz a reserva passar à frente
+    expect(pickStreams(ranked, { audio: 'pt', originalLanguage: 'en' }).map((s) => s.addon)).toEqual([
+      'Outra',
+      'BestCine',
+    ]);
+  });
+
   it('descarta fonte só de torrent', () => {
     const ranked = rank([{ name: '1080p', title: '👤 9999', infoHash: 'abc' }, stream('720p', 'a')], ctx());
     expect(ranked).toHaveLength(1);

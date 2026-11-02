@@ -7,6 +7,7 @@ import { parseStream, type ParsedStream } from './parse';
 import {
   describeStream,
   foreignOnly,
+  isBackupSource,
   offersAudio,
   pickStreams,
   rankStreams,
@@ -133,6 +134,8 @@ export async function resolvePlayback(
   const english = englishName(title);
   let answered = 0;
   let pending = addons.length;
+  // sem contar a fonte reserva (BestCine): com as outras respondidas e algo tocável, não espera por ela
+  let mainPending = addons.filter((a) => !isBackupSource(a)).length;
   const lists: ParsedStream[][] = addons.map(() => []);
   let arrived: () => void = () => undefined;
   const all = Promise.all(
@@ -154,6 +157,7 @@ export async function resolvePlayback(
         () => undefined,
       ).then(() => {
         pending--;
+        if (!isBackupSource(addon)) mainPending--;
         arrived();
       }),
     ),
@@ -181,7 +185,7 @@ export async function resolvePlayback(
   }, ENOUGH_MS);
   await new Promise<void>((done) => {
     arrived = () => {
-      if (pending === 0 || (quick && ready()) || (enough && rank().length > 0)) done();
+      if (pending === 0 || (quick && ready()) || ((enough || mainPending === 0) && rank().length > 0)) done();
     };
     arrived();
   });

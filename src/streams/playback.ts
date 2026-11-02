@@ -8,7 +8,7 @@ import {
 } from '../data/storage';
 import type { Title, TitleType } from '../data/types';
 import { loadHls } from './loadHls';
-import { offersAudio, type SourceProfile } from './rank';
+import { isBackupSource, offersAudio, type SourceProfile } from './rank';
 import { resolvePlayback, warmStreams, type Candidate, type NoSourceReason, type Resolution } from './resolve';
 import {
   dropTorrent,
@@ -202,7 +202,8 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
   // Fonte de outro áudio (o espectador trocou a preferência depois) não vale mais.
   const remembered = sourceFor(title);
   const prefer: SourceProfile | undefined =
-    remembered && offersAudio(remembered, { audio: audioFor(title), originalLanguage: title.originalLanguage })
+    // a fonte reserva não passa à frente das outras nos episódios seguintes
+    remembered && !isBackupSource(remembered) && offersAudio(remembered, { audio: audioFor(title), originalLanguage: title.originalLanguage })
       ? remembered
       : undefined;
   const full = resolvePlayback(title, season, episode, { prefer }).then(toPlan, unreachable);

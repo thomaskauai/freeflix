@@ -164,6 +164,16 @@ function lastResortTier(s: ParsedStream, ctx: RankContext): number {
   return ctx.audio !== 'pt' && LAST_RESORT.test(`${s.base ?? ''} ${s.addon}`) ? 0 : 1;
 }
 
+/**
+ * BestCine: lenta (20 a 40 s num título nunca pedido) e com servidores
+ * repetidos das outras. Só toca quando nenhuma outra fonte tem o título.
+ */
+const BACKUP = /bestcine/i;
+/** fontes da reserva no fim da lista, para quando as das outras falham */
+const BACKUP_CANDIDATES = 2;
+export const isBackupSource = (s: { base?: string; addon?: string; label?: string }) =>
+  BACKUP.test(`${s.base ?? ''} ${s.addon ?? ''} ${s.label ?? ''}`);
+
 /** Legenda gravada fica atrás das limpas, fora do português (a do app ficaria por cima). */
 const cleanTier = (s: ParsedStream, ctx: RankContext) => (ctx.audio !== 'pt' && s.hardSubs ? 0 : 1);
 
@@ -198,6 +208,7 @@ export function rankStreams(streams: ParsedStream[], ctx: RankContext): ParsedSt
   const key = (s: ParsedStream) => {
     const fits = fitsNetwork(s, ctx);
     return [
+      isBackupSource(s) ? 0 : 1,
       lastResortTier(s, ctx),
       preferenceTier(s, ctx.prefer),
       fits ? 1 : 0,
@@ -440,7 +451,13 @@ const MAX_EXTRA_AUDIOS = 4;
  * tem) e, de cada outro áudio, só a melhor, para os atalhos oferecerem a troca.
  * Havendo fonte só com idiomas pedidos, as com dublagem de fora junto ficam de fora.
  */
-export function pickStreams<T extends ParsedStream>(ranked: T[], ctx: AudioPrefs): T[] {
+export function pickStreams<T extends ParsedStream>(all: T[], ctx: AudioPrefs): T[] {
+  // a fonte reserva (BestCine) só escolhe quando é a única; senão vai ao fim, se as outras falharem
+  const main = all.filter((s) => !isBackupSource(s));
+  if (main.length && main.length < all.length) {
+    return pickStreams(main, ctx).concat(pickStreams(all.filter(isBackupSource), ctx).slice(0, BACKUP_CANDIDATES));
+  }
+  const ranked = all;
   const offered = ranked.filter((s) => offersAudio(s, ctx));
   // com áudio limpo disponível, o pacote com dublagem de fora (híndi, russo) sai: pode abrir na faixa errada
   const clean = offered.filter((s) => cleanAudioTier(s, ctx) > 0);
