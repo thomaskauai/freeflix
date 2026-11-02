@@ -47,7 +47,7 @@ import {
   undoTitleSubtitle,
 } from '../streams/audioMemory';
 import { undoSubtitle } from '../streams/subtitles';
-import { resolvePlayback, type Candidate, type NoSourceReason } from '../streams/resolve';
+import { resolvePlayback, warmStreams, type Candidate, type NoSourceReason } from '../streams/resolve';
 
 const MESSAGES: Record<NoSourceReason | 'all-failed', { title: string; text: string; settings?: boolean }> = {
   'no-addons': {
@@ -807,6 +807,10 @@ export default function Watch() {
           // torrent não vira a fonte padrão (dos próximos episódios ou da próxima abertura)
           if (!candidate.torrent) rememberSourceOf(title, candidate.profile);
           syncStarted(title, season, episode);
+          // fonte lenta (BestCine leva 20 a 40 s num episódio nunca pedido): os 2
+          // seguintes já ficam pedidos, e pular de episódio cai na resposta guardada
+          const after = following && followingEpisode(list, following.season, following.episode.number);
+          [following, after].forEach((e) => e && warmStreams(title.type, title.id, e.season, e.episode.number));
         }}
         onProgress={(time, length, moment) => {
           saveProgress(title, { season, episode, time, duration: length }, thumb);
