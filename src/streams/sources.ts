@@ -42,6 +42,8 @@ export const INSTALL_ERRORS: Record<InstallError, string> = {
 export interface ListedSource {
   name: string;
   url: string;
+  /** só para títulos com esse idioma original ("pt" = produção brasileira/portuguesa) */
+  originalLanguage?: string;
 }
 
 // o repositório é privado: a lista sai pelo site (api/sources.ts), publicada a cada deploy do main
@@ -105,6 +107,15 @@ export function sourcePriority(source: SourceAddon, installed: SourceAddon[]): n
   const list = listedSources();
   const listedAt = list.map((s) => addonBase(s.url)).indexOf(source.base);
   return listedAt >= 0 ? listedAt : list.length + installed.indexOf(source);
+}
+
+/**
+ * A fonte serve para um título desse idioma original? Fonte da lista com
+ * originalLanguage só entra quando bate; idioma desconhecido não entra.
+ */
+export function servesLanguage(source: SourceAddon, originalLanguage?: string): boolean {
+  const only = listedSources().filter((s) => addonBase(s.url) === source.base)[0]?.originalLanguage;
+  return !only || only === originalLanguage;
 }
 
 /** A fonte listada já está instalada? */

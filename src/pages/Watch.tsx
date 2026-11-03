@@ -810,7 +810,9 @@ export default function Watch() {
           // fonte lenta (BestCine leva 20 a 40 s num episódio nunca pedido): os 2
           // seguintes já ficam pedidos, e pular de episódio cai na resposta guardada
           const after = following && followingEpisode(list, following.season, following.episode.number);
-          [following, after].forEach((e) => e && warmStreams(title.type, title.id, e.season, e.episode.number));
+          [following, after].forEach(
+            (e) => e && warmStreams(title.type, title.id, e.season, e.episode.number, title.originalLanguage),
+          );
         }}
         onProgress={(time, length, moment) => {
           saveProgress(title, { season, episode, time, duration: length }, thumb);
