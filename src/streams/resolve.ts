@@ -120,6 +120,28 @@ export async function resolvePlayback(
   episode?: number,
   options: ResolveOptions = {},
 ): Promise<Resolution> {
+  const found = await resolveOnce(title, season, episode, options);
+  if (!('reason' in found) || options.only) return found;
+  // Sem fonte: uma fonte nova da lista (BestCine, por exemplo) pode estar
+  // entrando agora, ao abrir o app. Espera ela entrar e pergunta de novo.
+  const before = listSources().map((a) => a.base).join(' ');
+  await Promise.race([
+    installDefaultSources().catch(() => undefined),
+    new Promise((r) => window.setTimeout(r, INSTALL_WAIT_MS)),
+  ]);
+  if (listSources().map((a) => a.base).join(' ') === before) return found;
+  return resolveOnce(title, season, episode, options);
+}
+
+/** quanto o "sem fonte" espera uma fonte nova da lista terminar de entrar */
+const INSTALL_WAIT_MS = 8000;
+
+async function resolveOnce(
+  title: Title,
+  season: number | undefined,
+  episode: number | undefined,
+  options: ResolveOptions,
+): Promise<Resolution> {
   const videoId = season != null && episode != null ? `${title.id}:${season}:${episode}` : title.id;
   // Na primeira abertura as fontes padrão podem ainda estar entrando. Já
   // instaladas, a lista remota atualiza em segundo plano, sem segurar o play.
