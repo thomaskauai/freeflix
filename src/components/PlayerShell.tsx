@@ -431,6 +431,10 @@ export function PlayerShell({
       if (gaveUp) return;
       gaveUp = true;
       window.clearInterval(watchdog);
+      // Erro ou trava nos últimos segundos (pedaços finais do torrent, HLS sem
+      // fim marcado, conexão que cai nos créditos): o episódio acabou, segue
+      // para o próximo em vez de abrir outra fonte no fim deste.
+      if (moving && nextRef.current && nearEnd()) return goNext();
       if (failRef.current) failRef.current();
       else {
         setFailed(true);
@@ -521,6 +525,8 @@ export function PlayerShell({
       const guess = lengthRef.current;
       return !(guess > 0) || t >= guess - Math.max(30, guess * 0.05);
     };
+    /** perto do fim, com alguma duração conhecida (sem nenhuma, o fim não se sabe) */
+    const nearEnd = () => (realLength > 0 || lengthRef.current > 0) && atEnd();
     const onEnded = () => {
       setPlaying(false);
       if (playingCb.current) playingCb.current(false);
@@ -579,7 +585,8 @@ export function PlayerShell({
         return;
       }
       stuck = went && !media.seeking ? 0 : stuck + WATCH_TICK_MS;
-      if (stuck >= stallLimit) fail();
+      // parado no fim (torrent sem os últimos pedaços), a espera longa do torrent não vale
+      if (stuck >= stallLimit || (stuck >= STALL_MS && nearEnd())) fail();
     }, WATCH_TICK_MS);
 
     media.addEventListener('loadedmetadata', onMeta);
