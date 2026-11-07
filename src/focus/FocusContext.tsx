@@ -40,7 +40,8 @@ let pointerFocus = false;
 export const isPointerFocus = () => pointerFocus;
 
 export function focusElement(el: HTMLElement | null | undefined): boolean {
-  if (!el || !el.isConnected) return false;
+  // contains em vez de isConnected: o Chromium 47 da TV de 2017 não tem isConnected
+  if (!el || !document.documentElement.contains(el)) return false;
   el.focus({ preventScroll: true });
   return document.activeElement === el;
 }

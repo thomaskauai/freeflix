@@ -37,7 +37,20 @@ for preciso.
 
 ### 1. Baixar os dois arquivos
 
-- O app: **[Freeflix.wgt](https://github.com/thomaskauai/freeflix/releases/latest/download/Freeflix.wgt)**
+- O app, conforme o ano da TV:
+
+  | TV | Arquivo |
+  |---|---|
+  | 2019 em diante (Tizen 5 ou mais novo) | **[Freeflix.wgt](https://github.com/thomaskauai/freeflix/releases/latest/download/Freeflix.wgt)** |
+  | 2017 ou 2018 (Tizen 3 ou 4) | **[Freeflix-tizen3.wgt](https://github.com/thomaskauai/freeflix/releases/latest/download/Freeflix-tizen3.wgt)** |
+
+  É o mesmo app. O da TV antiga só vem adaptado ao navegador mais velho que ela tem por
+  dentro; numa TV antiga o `Freeflix.wgt` comum **não instala** (dá falha na instalação).
+
+  **Como saber o ano:** Configurações → Suporte → Sobre esta TV → código do modelo. A
+  letra logo depois do tamanho da tela diz o ano: **M** ou **MU** = 2017 (ex.:
+  `UN49MU6100`), **N** ou **NU** = 2018, **R** ou **RU** = 2019, **T** ou **TU** = 2020.
+  QLED: **Q…R** = 2019, **Q…T** = 2020, e assim por diante.
 - O [TizenBrew Installer](https://github.com/reisxd/TizenBrewInstaller/releases/latest)
   do seu sistema: `TizenBrewInstaller-win-x64.exe` (Windows),
   `TizenBrewInstaller-macos-arm64` (Mac M1/M2…), `TizenBrewInstaller-macos-x64` (Mac
@@ -104,7 +117,8 @@ Deixe o modo de desenvolvedor ligado na TV para isso. Em TV Tizen 7+, entre semp
 |---|---|
 | *Make sure that the TV is on and that the IP is correct* | IP da TV errado, TV desligada, ou TV e computador em redes diferentes (ex.: Wi-Fi de visitantes). |
 | *Either you haven't set the Host PC IP… or you didn't restart the TV properly* | Refaça o passo 2: confira o IP do computador (pode mudar de um dia para o outro) e reinicie segurando o botão liga/desliga. |
-| Conectou uma vez e depois não conecta mais | Feche o Installer, abra de novo e reconecte. |
+| Conectou uma vez e depois não conecta mais | Feche o Installer, abra de novo e reconecte. Também vale depois de reiniciar a TV: o Installer aberto de antes segura a conexão velha e a TV recusa a nova. |
+| Falha ao instalar numa TV de 2017 ou 2018 | Use o `Freeflix-tizen3.wgt` (passo 1). O `Freeflix.wgt` comum exige Tizen 5 (2019 em diante). |
 | *Author certificate not match* | O app foi instalado antes com outra conta Samsung. Desinstale o Freeflix na TV (segure OK no ícone → Excluir) e instale de novo. |
 
 ## Usando

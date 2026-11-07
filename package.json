@@ -12,7 +12,8 @@
     "test": "vitest run",
     "mock-addon": "node scripts/mock-addon.mjs",
     "tv:install": "node --experimental-websocket scripts/tv-install.mjs",
-    "torrent": "npm --prefix torrent-engine start"
+    "torrent": "npm --prefix torrent-engine start",
+    "build:tizen-legacy": "tsc --noEmit && vite build --mode tizen-legacy && node scripts/package-tizen.mjs --legacy"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",
@@ -24,11 +25,16 @@
     "react-router-dom": "^6.26.2"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.13",
+    "@babel/preset-env": "^7.29.7",
+    "@csstools/postcss-global-data": "^2.1.1",
     "@types/node": "^26.6.5",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "adbhost": "^0.0.2",
+    "core-js-bundle": "^3.51.0",
+    "postcss-custom-properties": "^13.3.12",
     "tizen": "github:reisxd/tizen.js#45b00106149d0c8eff74ead4a979c909dd80efd6",
     "typescript": "^5.5.4",
     "vite": "^5.4.6",
