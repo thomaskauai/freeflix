@@ -44,7 +44,8 @@ não ser pelo ícone: `Freeflix-tizen7.wgt` (quadrado, Tizen 7 ou mais novo; o p
 
 - A versão do `package.json` vai para o `config.xml` e aparece no fim de Configurações.
 - O bundle da TV é um script clássico (sem módulos ES) em es2015: o `.wgt` abre por
-  `file://`, onde o WebView (Chromium 63–76) bloqueia `<script type="module">`.
+  `file://`, onde o WebView (Chromium 63–76) bloqueia `<script type="module">`. Para TV
+  de 2017/2018 (Chromium 47/56), ver "App da TV antiga" abaixo.
 - Assinatura: certificado de autor Tizen mais o distribuidor público do SDK, via
   [tizen.js](https://github.com/reisxd/tizen.js). Serve direto abaixo do Tizen 7; nas 7+
   o TizenBrew Installer reassina com a conta Samsung.
@@ -55,7 +56,57 @@ não ser pelo ícone: `Freeflix-tizen7.wgt` (quadrado, Tizen 7 ou mais novo; o p
 
 **Publicar:** suba a versão, rode `npm run build:tizen` e anexe `Freeflix-tizen7.wgt`,
 renomeado para `Freeflix.wgt`, a uma release `vX.Y.Z`. O nome fixo mantém o link de
-download do README.
+download do README. Rode também `npm run build:tizen-legacy` e anexe o
+`Freeflix-tizen3.wgt` à mesma release, com esse nome (o README aponta para ele).
+
+### App da TV antiga (2017 e 2018)
+
+```bash
+npm run build:tizen-legacy
+```
+
+Gera um `.wgt` só, `tizen-build/Freeflix-tizen3.wgt` (ícone 16:9), para TV com Tizen 3.0
+(2017) ou 4.0 (2018). O `build:tizen` normal não muda nada: as adaptações abaixo só
+rodam no modo `tizen-legacy` (`vite.config.ts`, `scripts/package-tizen.mjs --legacy`).
+
+**Por que um pacote separado.** O app roda no motor de navegador que vem de fábrica na
+TV, e a Samsung não atualiza esse motor. O Tizen 3.0 traz um Chromium 47 (2015), o 4.0 um
+Chromium 56; o build normal mira o Chromium 63+ (Tizen 5) e o `config.xml` exige
+`required_version="5.0"`, então a TV antiga recusa a instalação. Um `.wgt` único para
+todas pesaria mais nas TVs novas sem necessidade.
+
+**O que o modo legacy faz:**
+
+| Problema no Chromium 47 | Solução |
+|---|---|
+| `config.xml` exige Tizen 5.0 | O `package-tizen.mjs --legacy` grava `required_version="3.0"` no `config.xml` do pacote (o da raiz fica como está). Mesmo `package` (`FreeFlixTV`) e mesmo certificado: na TV é o mesmo app. |
+| Sem desestruturação, parâmetro padrão, `for…of` completo etc. | O esbuild não rebaixa isso abaixo do es2015. O bundle sai em es2015 como sempre e o plugin `legacyTranspile` passa o Babel (`@babel/preset-env`, alvo `chrome 47`) no chunk pronto. |
+| Faltam `String.padStart`, `Object.entries`, `Promise.finally`, `URLSearchParams`… | `core-js-bundle` copiado para `vendor/core-js.min.js` e carregado antes do app (plugin `legacyPolyfills`). |
+| Sem variável CSS (`var(--x)`, só no Chromium 49) | `postcss-custom-properties` (`preserve: true`) põe antes de cada `var()` uma linha com o valor do `:root`; o Chromium 47 ignora a linha com `var()` e fica com a fixa. `@csstools/postcss-global-data` injeta o `tokens.css` em todo CSS, já que cada arquivo é processado sozinho. Os valores do `:root` já são os da TV 1920×1080. Ficam sem valor fixo só as variáveis que existem apenas no layout de celular (`.is-compact`, `.is-short`), que a TV não usa. |
+| Sem `Node.isConnected` (Chromium 54) | Corrigido no código comum: `focusElement` usa `document.documentElement.contains(el)`. Antes, o foco nunca saía do `<body>` e o controle não movia nada. |
+
+**Diagnóstico.** A TV antiga não tem inspetor à mão. Com `FREEFLIX_DEBUG=1` o build legacy
+põe na tela um painel com os erros de JS, as rejeições de Promise, os `console.error`, as
+teclas recebidas (`keyCode` e o elemento focado) e o user agent:
+
+```bash
+FREEFLIX_DEBUG=1 npm run build:tizen-legacy              # Mac / Linux / Git Bash
+$env:FREEFLIX_DEBUG=1; npm run build:tizen-legacy        # PowerShell
+```
+
+Foi esse painel que mostrou o `isConnected`: as teclas chegavam, mas o elemento focado era
+sempre o `BODY`. Se algo novo quebrar só na TV antiga, comece por ele. Os suspeitos de
+sempre são APIs do DOM, que o `core-js` não cobre.
+
+**Testado** numa UN49MU6100 (2017, Tizen 3.0, user agent `Tizen 3.0 … Safari/538.1`):
+instala, abre o catálogo e navega pelo controle. Player, legendas e o motor de torrent
+(serviço Node) não foram verificados nessa TV. TV de 2018 (Tizen 4.0) não foi testada.
+
+**Instalar sem a interface.** Com o Installer aberto, dá para mandar o `.wgt` pelo
+WebSocket dele (`ws://localhost:8091`), como faz o `scripts/tv-install.mjs`: evento
+`ConnectToTV` (6) com o IP e depois `InstallFile` (7) com o arquivo em base64. Para
+reinstalar a mesma versão, desinstale antes (`vd_appuninstall FreeFlixTV` pelo sdb, com o
+Installer fechado; apaga os dados do app na TV).
 
 ## Como funciona
 
