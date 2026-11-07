@@ -48,10 +48,29 @@ function legacyPolyfills(): Plugin {
     apply: 'build',
     enforce: 'post',
     transformIndexHtml(html) {
-      return html.replace('</title>', '</title>\n    <script src="vendor/core-js.min.js"></script>');
+      const debug = process.env.FREEFLIX_DEBUG ? `\n    <script>${DEBUG_OVERLAY}</script>` : '';
+      return html.replace('</title>', `</title>${debug}\n    <script src="vendor/core-js.min.js"></script>`);
     },
   };
 }
+
+/**
+ * FREEFLIX_DEBUG=1: painel no canto da tela com erros de JS e as teclas que
+ * chegam (a TV antiga não tem inspetor à mão). ES5 puro: roda antes de tudo.
+ */
+const DEBUG_OVERLAY = `(function(){
+  var lines=[];var box;
+  function show(t){lines.push(t);if(lines.length>14)lines.shift();
+    if(!box&&document.body){box=document.createElement('pre');box.style.cssText='position:fixed;left:0;bottom:0;z-index:2147483647;margin:0;padding:8px;max-width:1900px;background:rgba(0,0,0,.85);color:#0f0;font:20px monospace;white-space:pre-wrap;pointer-events:none';document.body.appendChild(box);}
+    if(box)box.textContent=lines.join('\\n');}
+  window.__dbg=show;
+  window.addEventListener('error',function(e){show('ERRO: '+e.message+' @'+(e.filename||'').split('/').pop()+':'+e.lineno+':'+e.colno);});
+  window.addEventListener('unhandledrejection',function(e){var r=e.reason||(e.detail&&e.detail.reason);show('PROMISE: '+(r&&(r.stack||r.message)||r));});
+  var ce=console.error;console.error=function(){try{show('console.error: '+[].slice.call(arguments).map(String).join(' ').slice(0,300));}catch(x){}return ce.apply(console,arguments);};
+  document.addEventListener('keydown',function(e){show('tecla keyCode='+e.keyCode+' alvo='+(document.activeElement&&document.activeElement.tagName));},true);
+  setTimeout(function(){show('UA: '+navigator.userAgent);},500);
+  setInterval(function(){if(box&&box.parentNode!==document.body&&document.body)document.body.appendChild(box);},2000);
+})();`;
 
 /** O esbuild não rebaixa desestruturação nem parâmetro padrão: o Babel passa no bundle já pronto. */
 function legacyTranspile(): Plugin {
