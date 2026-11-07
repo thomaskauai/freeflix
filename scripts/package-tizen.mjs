@@ -46,16 +46,25 @@ const { version } = JSON.parse(await readFile(path.join(root, 'package.json'), '
 if (!/^\d{1,3}\.\d{1,3}\.\d{1,5}$/.test(version)) {
   throw new Error(`versão "${version}" fora do formato da TV (x.y.z, até 255.255.65535)`);
 }
+// --legacy: pacote para TV de 2017/2018 (Tizen 3.0/4.0), do `vite build --mode tizen-legacy`
+const legacy = process.argv.includes('--legacy');
 const config = (await readFile(path.join(root, 'config.xml'), 'utf8')).replace(
   /(<widget\b[^>]*?\sversion=")[^"]*(")/,
   `$1${version}$2`,
 );
-await writeFile(path.join(app, 'config.xml'), config);
 // mantém o config.xml do projeto em dia com a versão
 await writeFile(path.join(root, 'config.xml'), config);
+await writeFile(
+  path.join(app, 'config.xml'),
+  legacy ? config.replace(/required_version="[^"]*"/, 'required_version="3.0"') : config,
+);
 // hls.js fica fora do bundle da TV; src/streams/loadHls.ts o injeta quando preciso
 await mkdir(path.join(app, 'vendor'), { recursive: true });
 await copyFile(path.join(root, 'node_modules/hls.js/dist/hls.min.js'), path.join(app, 'vendor/hls.min.js'));
+// polyfills do core-js, carregados antes do app no index.html (vite.config.ts)
+if (legacy) {
+  await copyFile(path.join(root, 'node_modules/core-js-bundle/minified.js'), path.join(app, 'vendor/core-js.min.js'));
+}
 // motor de torrent: o serviço Node do app (config.xml), num arquivo só que o
 // Node 4.4 da TV antiga entende (torrent-engine/build.mjs)
 const engineDir = path.join(root, 'torrent-engine');
@@ -147,7 +156,8 @@ const VARIANTS = [
 for (const name of await readdir(out)) {
   if (name.endsWith('.wgt')) await rm(path.join(out, name));
 }
-for (const variant of VARIANTS) {
+const variants = legacy ? [{ file: 'Freeflix-tizen3.wgt', icon: 'tizen/icon-retangular.png' }] : VARIANTS;
+for (const variant of variants) {
   // o icon.png do config.xml é trocado a cada pacote; a assinatura cobre o ícone
   await copyFile(path.join(root, variant.icon), path.join(app, 'icon.png'));
   const files = await listFiles(app);
