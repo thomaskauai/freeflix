@@ -92,6 +92,11 @@ describe('parseStream', () => {
       parseStream(stream('Auto', 'Servidor: MegaEmbed', { url: 'https://viewplayer.online/filme/tt1' }), 'T').unplayable,
     ).toBe('external');
   });
+
+  it('descarta link de pagamento', () => {
+    const paid = stream('🔒 4K/1080p', '3 Premium Streams Available', { url: 'https://www.paypal.com/ncp/payment/283WL2A4WG9AC' });
+    expect(parseStream(paid, 'T').unplayable).toBe('external');
+  });
 });
 
 describe('rankStreams', () => {

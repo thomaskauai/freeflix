@@ -49,6 +49,9 @@ function needsHeaders(request: Record<string, string> | undefined): boolean {
 /** player embutido de site ("MegaEmbed", ".../embed/123") */
 const EMBED = /embed/i;
 
+/** página de pagamento ("🔒 4K/1080p · Premium Streams" do NoTorrent aponta pro PayPal) */
+const PAYWALL = /^https?:\/\/([^/]+\.)?(paypal\.com|patreon\.com|ko-fi\.com|buymeacoffee\.com)\//i;
+
 /** arquivo que não é vídeo (aplicativo, compactado, só a faixa de áudio: "…Tamil.Audio.GTM.m4a.mkv") */
 const NOT_VIDEO = /\.(apk|exe|msi|dmg|zip|rar|7z|iso)(\b|$)|\.(m4a|mka|mp3)(\.\w{3,4})?$/i;
 
@@ -317,6 +320,7 @@ export function parseStream(stream: AddonStream, addon: string, names?: string[]
   if (!stream.url) unplayable = stream.infoHash ? 'torrent' : 'external';
   // <video> não deixa mandar cabeçalhos próprios na requisição
   else if (needsHeaders(hints.proxyHeaders && hints.proxyHeaders.request)) unplayable = 'headers';
+  else if (PAYWALL.test(stream.url)) unplayable = 'external';
   // página de player embutido (não é o arquivo de vídeo)
   else if (!containerOf(stream.url, filename, '') && EMBED.test(`${stream.url}\n${text}`)) unplayable = 'external';
   else if (NOT_VIDEO.test(filename || ff.file || '')) unplayable = 'not-video';

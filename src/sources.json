@@ -14,5 +14,9 @@
     {
         "name": "BestCine",
         "url": "https://bestcine.dpdns.org/usr_534cd27423bd98d1739753b2/manifest.json"
+    },
+    {
+        "name": "NoTorrent",
+        "url": "https://addon.notorrent2.workers.dev/manifest.json"
     }
 ]
