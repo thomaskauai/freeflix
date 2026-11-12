@@ -10,6 +10,8 @@ import type { Title } from './types';
 
 /** sem lista guardada, as fileiras esperam o site no máximo isso; depois entram sem filtro */
 const FIRST_WAIT_MS = 2500;
+/** lista que falhou: nova tentativa só depois disso */
+const RETRY_AFTER_MS = 5 * 60 * 1000;
 
 /** Uma lista do site: buscada uma vez por abertura do app; falha não fica guardada. */
 function idList(name: string) {
@@ -30,7 +32,8 @@ function idList(name: string) {
           write(name, r.ids);
         },
         () => {
-          loading = null;
+          // site fora: tenta de novo daqui a um tempo, não a cada fileira
+          window.setTimeout(() => (loading = null), RETRY_AFTER_MS);
         },
       );
     }

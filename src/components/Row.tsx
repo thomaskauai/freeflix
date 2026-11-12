@@ -116,6 +116,8 @@ export function Row({ title, variant, anchor = ROW_ANCHOR, passed, onActivate, o
       className={`row row--${variant}${active ? ' is-active' : ''}${passed ? ' is-passed' : ''}`}
       data-focus-group=""
       data-focus-enter="up down"
+      // no último card, direita fica onde está (sem isso a geometria achava o banner lá em cima)
+      data-focus-lock="right"
       data-scroll-anchor={anchor}
       onFocus={onFocus}
       onBlur={() => setActive(false)}

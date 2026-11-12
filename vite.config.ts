@@ -129,7 +129,8 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       // o Vite não roda as funções de api/: no computador, elas vêm do site
-      proxy: { '/api': { target: 'https://freefliix.vercel.app', changeOrigin: true } },
+      // só as funções do site: api/_justwatch.ts é módulo do app, servido pelo próprio Vite
+      proxy: { '^/api/(?!_)': { target: 'https://freefliix.vercel.app', changeOrigin: true } },
     },
   };
 });

@@ -2,6 +2,8 @@ import { normalizeLanguage } from './language';
 import { fetchCached, fetchCatalog, fetchManifest, fetchMeta, getJson, type AddonMeta } from './addonClient';
 import { withoutAnime, withoutCinema, withoutHidden } from './hidden';
 import { API_BASE } from './site';
+import { listMetas } from '../../api/_justwatch';
+import { isTizen } from '../platform/tizen';
 import { getSettings, STREAMING_FALLBACK, streamingServices } from '../settings';
 import { CATALOG_NAMES_PT, GENRE_NAMES_PT, HIDDEN_CATALOGS, PARAMETERIZED_CATALOGS } from './catalogNames';
 import { read, write } from './storage';
@@ -242,6 +244,29 @@ function incomplete(meta: AddonMeta): boolean {
   });
 }
 
+/**
+ * O JustWatch recusa (429) o servidor do site quando ele pede demais. A TV não
+ * tem a barreira de CORS e sai pela internet de casa: pergunta direto, e o
+ * site fica de reserva. No navegador, só em localhost (o JustWatch libera CORS
+ * para ele).
+ */
+const directJustWatch = () =>
+  isTizen() || (typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname));
+
+const deviceLists: Record<string, Promise<AddonMeta[]>> = {};
+/** Lista pedida pela TV direto ao JustWatch, guardada na sessão (falha não fica). */
+function viaDevice(list: string, page: number, service?: string): Promise<AddonMeta[]> {
+  const key = `${list}:${service ?? ''}:${page}`;
+  if (!deviceLists[key]) {
+    deviceLists[key] = listMetas(list, service, page).then((metas) => {
+      if (!metas) throw new Error('bad-list');
+      return metas as AddonMeta[];
+    });
+    deviceLists[key].catch(() => delete deviceLists[key]);
+  }
+  return deviceLists[key];
+}
+
 export function createAddonProvider(base: string, localized: boolean, fallback?: string): CatalogProvider {
   const catalogs = () =>
     fetchManifest(base).then((m) =>
@@ -283,10 +308,14 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
    * Streamings pelo site (api/justwatch.ts, dados do JustWatch): o catálogo
    * inteiro de cada um, em português e com páginas de verdade.
    */
-  const justwatch = (list: string, page = 0, service?: string) =>
+  const viaSite = (list: string, page: number, service?: string) =>
     fetchCached<{ metas?: AddonMeta[] }>(
       `${API_BASE.replace(/\/$/, '')}/api/justwatch?list=${list}${service ? `&service=${service}` : ''}${WHOLE_LISTS.indexOf(list) < 0 ? `&page=${page}` : ''}`,
-    ).then((r) => (r.metas ?? []).map(toTitle).filter((t) => !!t.poster));
+    ).then((r) => r.metas ?? []);
+  const justwatch = (list: string, page = 0, service?: string) =>
+    (directJustWatch() ? viaDevice(list, page, service).catch(() => viaSite(list, page, service)) : viaSite(list, page, service)).then(
+      (metas) => metas.map(toTitle).filter((t) => !!t.poster),
+    );
 
   /**
    * País, nome e cartaz de cada novela no catálogo principal. A lista em
