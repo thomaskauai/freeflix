@@ -386,15 +386,15 @@ export function servesAudio(choice: AudioChoice, s: AudioInfo, originalLanguage?
 }
 
 /**
- * O áudio que se ouve nesta fonte: o preferido, se ela tem; senão português;
- * senão o original; senão inglês; senão o primeiro idioma dela.
+ * O áudio que se ouve nesta fonte: o preferido, se ela tem; senão o original;
+ * senão português; senão inglês; senão o primeiro idioma dela.
  */
 export function audioChoice(s: AudioInfo, originalLanguage?: string, audio: AudioLanguage = 'original'): AudioChoice {
   const preferred = languageChoice(audio, originalLanguage);
   if (servesAudio(preferred, s, originalLanguage)) return preferred;
   const languages = effectiveLanguages(s, originalLanguage);
-  if (languages.indexOf('pt') >= 0) return languageChoice('pt', originalLanguage);
   if (offersAudio(s, { audio: 'original', originalLanguage })) return originalChoice(originalLanguage);
+  if (languages.indexOf('pt') >= 0) return languageChoice('pt', originalLanguage);
   return languageChoice(languages.indexOf('en') >= 0 ? 'en' : languages[0] || 'original', originalLanguage);
 }
 

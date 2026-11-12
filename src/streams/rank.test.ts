@@ -259,10 +259,10 @@ describe('audioChoice', () => {
     expect(audioChoice({ languages: [], multiAudio: false }).label).toBe('Original');
   });
 
-  it('dual com português é Português; com o original preferido, é o original', () => {
+  it('dual com português é Português; sem o preferido (ou com o original preferido), é o original', () => {
     const dual = { languages: ['pt', 'en'], multiAudio: true };
     expect(audioChoice(dual, 'en', 'pt').label).toBe('Português');
-    expect(audioChoice(dual, 'en', 'es').label).toBe('Português');
+    expect(audioChoice(dual, 'en', 'es').label).toBe('Inglês [original]');
     expect(audioChoice(dual, 'en', 'original').label).toBe('Inglês [original]');
     const dualAudio = { languages: [], multiAudio: true, dualAudio: true };
     expect(audioChoice(dualAudio, 'en', 'pt').key).toBe('pt');
