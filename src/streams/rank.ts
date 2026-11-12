@@ -165,10 +165,12 @@ function lastResortTier(s: ParsedStream, ctx: RankContext): number {
 }
 
 /**
- * BestCine: lenta (20 a 40 s num título nunca pedido) e com servidores
- * repetidos das outras. Só toca quando nenhuma outra fonte tem o título.
+ * Reservas, que só tocam quando nenhuma outra fonte tem o título: BestCine,
+ * lenta (20 a 40 s num título nunca pedido) e com servidores repetidos das
+ * outras; Muvibox, só 480p (o idioma vem antes da lista na ordem, e sem isso o
+ * áudio original em 480p dela passaria à frente do dublado em 4K das outras).
  */
-const BACKUP = /bestcine/i;
+const BACKUP = /bestcine|muvibox/i;
 /** fontes da reserva no fim da lista, para quando as das outras falham */
 const BACKUP_CANDIDATES = 2;
 export const isBackupSource = (s: { base?: string; addon?: string; label?: string }) =>
