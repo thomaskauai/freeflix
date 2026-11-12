@@ -18,5 +18,9 @@
     {
         "name": "NoTorrent",
         "url": "https://addon.notorrent2.workers.dev/manifest.json"
+    },
+    {
+        "name": "HdHub",
+        "url": "https://hdhub.thevolecitor.qzz.io/eyJ0b3Jib3giOiJ1bnNldCIsInF1YWxpdGllcyI6IjEwODBwLDcyMHAiLCJzb3J0IjoiZGVzYyIsImNvbnRlbnQiOiJwb3J0dWd1ZXNlIiwiY2F0YWxvZ3MiOiIifQ/manifest.json"
     }
 ]
