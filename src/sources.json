@@ -22,5 +22,9 @@
     {
         "name": "HdHub",
         "url": "https://hdhub.thevolecitor.qzz.io/eyJ0b3Jib3giOiJ1bnNldCIsInF1YWxpdGllcyI6IjEwODBwLDcyMHAiLCJzb3J0IjoiZGVzYyIsImNvbnRlbnQiOiJwb3J0dWd1ZXNlIiwiY2F0YWxvZ3MiOiIifQ/manifest.json"
+    },
+    {
+        "name": "PenguPlay",
+        "url": "https://pengu.uk/%7B%22auth_token%22%3A%22FPf4uFyJoQG7veojqY0XrqXhBSB8bP71AWT51UNX2Qk%22%7D/manifest.json"
     }
 ]
