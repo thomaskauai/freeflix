@@ -8,7 +8,7 @@
 //   GET ?list=movies-br&page= -> filmes brasileiros do Globoplay, 20 por página
 //   GET ?list=anime-ids    -> ids IMDb de todos os animes (séries e filmes), para o app esconder
 //   GET ?list=cinema-ids   -> ids IMDb dos filmes que só passam no cinema (no mundo), para o app esconder
-// service: mxx (HBO Max), atp (Apple TV+), pmp (Paramount+), gop (Globoplay, o padrão), cru (Crunchyroll).
+// service: nfx (Netflix), mxx (HBO Max), atp (Apple TV+), pmp (Paramount+), gop (Globoplay, o padrão), cru (Crunchyroll).
 // A API do JustWatch só libera CORS para localhost; o servidor busca por elas.
 import { json, preflight } from "./_lib.js";
 
@@ -17,7 +17,7 @@ export const OPTIONS = preflight;
 const JUSTWATCH = "https://apis.justwatch.com/graphql";
 const IMAGES = "https://images.justwatch.com";
 /** códigos de streaming do JustWatch aceitos em ?service= */
-const SERVICES = ["mxx", "atp", "pmp", "gop", "cru"];
+const SERVICES = ["nfx", "mxx", "atp", "pmp", "gop", "cru"];
 const GLOBOPLAY = "gop";
 
 /**

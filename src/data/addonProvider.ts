@@ -33,6 +33,10 @@ const GLOBOPLAY = 'gop';
 const WHOLE_LISTS = ['novelas', 'series-br'];
 /** fileiras de streaming entram depois desta lista (a última das de streaming do addon) */
 const STREAMING_AFTER = 'prime-video-';
+/** Netflix no JustWatch: o que está em alta agora na Netflix do Brasil */
+const NETFLIX = 'nfx';
+/** destaques da Netflix no banner, alternados com os em alta */
+const NETFLIX_FEATURED = 3;
 
 // Sorteio desta abertura do app: muda cada vez que o app abre e fica igual
 // enquanto ele está aberto (voltar à Home não reembaralha nada).
@@ -393,6 +397,18 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
     if (ref.kind === 'top-rated') return n ? [] : topRated(ref.type);
     // listas inteiras entram de 20 em 20: uma fileira com centenas de cartões pesa na TV
     if (ref.kind === 'novelas') return (await loadNovelas()).slice(n * PAGE_SIZE, (n + 1) * PAGE_SIZE);
+    if (ref.kind === 'streaming' && !ref.type) {
+      // fileira com filmes e séries do streaming, alternados
+      const [series, movies] = await Promise.all(
+        (['series', 'movie'] as TitleType[]).map((t) =>
+          justwatch(plural(t), n, ref.catalogId).catch(() =>
+            // JustWatch falhou: as listas da Netflix do catálogo principal
+            ref.catalogId === NETFLIX ? page(t, `netflix-${plural(t)}`, n * PAGE_SIZE) : ([] as Title[]),
+          ),
+        ),
+      );
+      return remember(alternate([series, movies]));
+    }
     if (!ref.type || !ref.catalogId) return [];
     if (ref.kind === 'globoplay') {
       if (WHOLE_LISTS.indexOf(ref.catalogId) < 0) return remember(await justwatch(ref.catalogId, n));
@@ -453,6 +469,21 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
           const s = series.slice(0, FEATURED_COUNT - Math.min(m.length, FEATURED_COUNT));
           return alternate([m, s]).slice(0, FEATURED_COUNT);
         });
+        // Em alta na Netflix do Brasil entra no banner, um sim, um não com os em alta
+        const trending = featured;
+        const netflix = Promise.all(
+          (['series', 'movie'] as TitleType[]).map((t) =>
+            justwatch(plural(t), 0, NETFLIX)
+              .then(withoutHidden)
+              .then((items) => pickFeatured(items, NETFLIX_FEATURED, `featured:netflix:${t}:${draw}`))
+              .catch(() => [] as Title[]),
+          ),
+        ).then((lists) => remember(alternate(lists)));
+        featured = Promise.all([trending, netflix]).then(([main, fromNetflix]) => {
+          const ids = main.map((t) => t.id);
+          const extra = fromNetflix.filter((t) => ids.indexOf(t.id) < 0).slice(0, NETFLIX_FEATURED);
+          return alternate([main, extra]);
+        });
         // falhou: a próxima abertura da Home tenta de novo
         featured.then(
           (list) => list.length || (featured = null),
@@ -488,8 +519,17 @@ export function createAddonProvider(base: string, localized: boolean, fallback?:
         showRating: true,
       };
       const rest = refs.filter((r) => pinned.indexOf(r) < 0);
-      // todas as fileiras com o cartaz grande
-      if (!filter) return [...pinned, topRow, ...rest].map((r) => ({ ...r, style: 'tall' as const }));
+      // Home: em alta na Netflix (filmes e séries) logo depois dos em alta; todas com o cartaz grande
+      if (!filter) {
+        const netflixRow: RowRef = {
+          id: `streaming:all:${NETFLIX}`,
+          title: localized ? 'Em alta na Netflix' : 'Trending on Netflix',
+          style: 'poster',
+          catalogId: NETFLIX,
+          kind: 'streaming',
+        };
+        return [...pinned, netflixRow, topRow, ...rest].map((r) => ({ ...r, style: 'tall' as const }));
+      }
 
       // Filmes e Séries: mais streamings logo depois dos do addon, e uma fileira por gênero no fim.
       const name = filter === 'series' ? 'Séries' : 'Filmes';
