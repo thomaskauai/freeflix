@@ -363,6 +363,15 @@ export function preloadPlayback(title: Title, season?: number, episode?: number)
   });
 }
 
+/**
+ * O vídeo que está tocando travou: a pré-carga deste episódio (o próximo) sai
+ * para não dividir a banda com ele. O player tenta de novo quando o buffer
+ * voltar a ter folga.
+ */
+export function dropPreloadOf(title: Title, season?: number, episode?: number) {
+  if (preloaded && preloaded.key === keyOf(title, season, episode)) dropPreloaded();
+}
+
 /** fontes com o endereço final sendo descoberto para a pré-carga */
 const resolving: Record<string, boolean> = {};
 /** quantas das primeiras fontes do plano têm o endereço final descoberto de antemão */

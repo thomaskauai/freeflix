@@ -37,6 +37,8 @@ const SEEK_FEEDBACK_MS = 1300;
 const SEEK_SPINNER_DELAY_MS = 250;
 /** o cartão do próximo episódio aparece nesse tanto antes do fim */
 const UPNEXT_S = 20;
+/** o próximo episódio entra sozinho com esse tanto ainda por tocar (créditos finais) */
+const AUTO_NEXT_S = 3;
 const SAVE_EVERY_MS = 5000;
 /** fonte que não começa a tocar nesse tempo é dada como ruim */
 const START_TIMEOUT_MS = 15000;
@@ -861,7 +863,7 @@ export function PlayerShell({
 
   useEffect(() => {
     // vídeo com erro pode dizer que está no fim; o fim conta só com ele tocando
-    if (showUpNext && !seeking && remaining <= 0.5 && media && !media.error) goNext();
+    if (showUpNext && !seeking && remaining <= AUTO_NEXT_S && media && !media.error) goNext();
   }, [showUpNext, seeking, remaining, goNext, media]);
 
   const showToast = (message: string) => {
@@ -1291,13 +1293,13 @@ export function PlayerShell({
             <Icon name="play" />
           </div>
           <div className="upnext__info">
-            <span className="upnext__count">Próximo episódio em {Math.max(1, Math.ceil(remaining))}</span>
+            <span className="upnext__count">Próximo episódio em {Math.max(1, Math.ceil(remaining - AUTO_NEXT_S))}</span>
             <span className="upnext__label">{upNext.label}</span>
             <span className="upnext__title">{upNext.title}</span>
           </div>
           <i
             className="upnext__timer"
-            style={{ width: `${Math.min(100, ((UPNEXT_S - remaining) / UPNEXT_S) * 100)}%` }}
+            style={{ width: `${Math.min(100, ((UPNEXT_S - remaining) / (UPNEXT_S - AUTO_NEXT_S)) * 100)}%` }}
           />
         </div>
       )}

@@ -17,6 +17,7 @@ import {
   firstWorking,
   hasFailed,
   keptPlan,
+  dropPreloadOf,
   markFailed,
   mergeCandidates,
   parkVideo,
@@ -76,8 +77,23 @@ const MESSAGES: Record<NoSourceReason | 'all-failed', { title: string; text: str
 
 /** perto do fim do episódio, as fontes do próximo já são procuradas */
 const WARM_NEXT_S = 120;
-/** com o cartão do próximo episódio na tela, o vídeo dele já começa a baixar */
-const PRELOAD_NEXT_S = 20;
+/** perto do fim, o vídeo do próximo episódio já começa a baixar (fica pronto para a troca) */
+const PRELOAD_NEXT_S = 60;
+/**
+ * O vídeo tocando vem primeiro: o próximo só baixa com esse tanto já guardado à
+ * frente (ou tudo até o fim). Se o atual travar, a pré-carga sai e espera.
+ */
+const PRELOAD_NEXT_NEEDS_AHEAD_S = 30;
+
+/** segundos já baixados à frente do ponto em que o vídeo está */
+function bufferedAhead(video: HTMLVideoElement): number {
+  const t = video.currentTime;
+  const ranges = video.buffered;
+  for (let i = 0; i < ranges.length; i++) {
+    if (ranges.start(i) <= t + 0.5 && ranges.end(i) >= t) return ranges.end(i) - t;
+  }
+  return 0;
+}
 
 /** Enquanto a fonte é procurada: a mesma cara do player, com o título no alto e só o Voltar. */
 /** pausa que dura isso com o app à vista apaga a anotação do player (ver onPlaying) */
@@ -305,6 +321,21 @@ export default function Watch() {
     ? `Temporada ${season}, episódio ${episode}${current && current.title ? ` · ${current.title}` : ''}`
     : undefined;
   const thumb = current ? current.thumbnail : undefined;
+
+  // Vídeo tocando travou (sem ser pulo do espectador): a pré-carga do próximo
+  // episódio sai para não dividir a banda; volta quando o buffer tiver folga.
+  const nextSeason = following ? following.season : undefined;
+  const nextEpisode = following ? following.episode.number : undefined;
+  useEffect(() => {
+    if (!media || !title || nextEpisode == null) return;
+    const stalled = () => {
+      if (media.seeking || preloadedNext.current !== key) return;
+      preloadedNext.current = '';
+      dropPreloadOf(title, nextSeason, nextEpisode);
+    };
+    media.addEventListener('waiting', stalled);
+    return () => media.removeEventListener('waiting', stalled);
+  }, [media, title, key, nextSeason, nextEpisode]);
 
   // Até a imagem chegar, o fundo do título aparece esmaecido atrás do
   // carregamento. Antes dos detalhes completos chegarem, vale o que a lista já
@@ -822,7 +853,14 @@ export default function Watch() {
             warmed.current = key;
             planFor(title, following.season, following.episode.number);
           }
-          if (following && length > 0 && length - time < PRELOAD_NEXT_S && preloadedNext.current !== key) {
+          if (
+            following &&
+            length > 0 &&
+            length - time < PRELOAD_NEXT_S &&
+            preloadedNext.current !== key &&
+            media &&
+            bufferedAhead(media) >= Math.min(PRELOAD_NEXT_NEEDS_AHEAD_S, length - time - 1)
+          ) {
             preloadedNext.current = key;
             preloadPlayback(title, following.season, following.episode.number);
           }
