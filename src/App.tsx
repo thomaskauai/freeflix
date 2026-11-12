@@ -17,7 +17,8 @@ import Settings from './pages/Settings';
 import Watch from './pages/Watch';
 import { PageActiveContext } from './pageActive';
 import { exitApp, isLegacyTizen, registerMediaKeys } from './platform/tizen';
-import { installDefaultSources } from './streams/sources';
+import { probeSources } from './streams/health';
+import { installDefaultSources, listSources } from './streams/sources';
 import { startSync } from './data/sync';
 
 /** player aberto há mais tempo que isso quando o app fechou não é retomado */
@@ -89,6 +90,8 @@ export default function App() {
   useEffect(() => {
     registerMediaKeys();
     installDefaultSources();
+    // fontes fora do ar ficam de fora das buscas (streams/health.ts)
+    probeSources(listSources().map((s) => s.base));
     startSync();
     // O app fechou (ou a TV desligou) com o player aberto: volta para ele, do
     // ponto salvo. Detalhes e Início ficam por baixo, para o Voltar de sempre.

@@ -15,6 +15,7 @@ import {
   type RankContext,
   type SourceProfile,
 } from './rank';
+import { markDown, onlyUp, showsDown } from './health';
 import { installDefaultSources, listSources, servesLanguage, sourcePriority, type SourceAddon } from './sources';
 import { releaseOf, rememberRelease } from './subtitles';
 
@@ -99,8 +100,7 @@ export function warmStreams(
   originalLanguage?: string,
 ) {
   const videoId = season != null && episode != null ? `${id}:${season}:${episode}` : id;
-  listSources()
-    .filter((a) => accepts(a, type, id) && servesLanguage(a, originalLanguage))
+  onlyUp(listSources().filter((a) => accepts(a, type, id) && servesLanguage(a, originalLanguage)))
     .forEach((a) => fetchStreams(a.base, type, videoId).catch(() => undefined));
 }
 
@@ -153,12 +153,14 @@ async function resolveOnce(
   // instaladas, a lista remota atualiza em segundo plano, sem segurar o play.
   const installing = installDefaultSources();
   if (listSources().length === 0) await installing;
-  const addons = listSources().filter(
+  const serving = listSources().filter(
     (a) =>
       accepts(a, title.type, title.id) &&
       servesLanguage(a, title.originalLanguage) &&
       (!options.only || a.base === options.only),
   );
+  // fonte fora do ar (streams/health.ts) não entra, a não ser que seja a escolhida
+  const addons = options.only ? serving : onlyUp(serving);
   if (listSources().length === 0) return { reason: 'no-addons' };
   if (addons.length === 0) return { reason: 'not-found' };
 
@@ -185,7 +187,9 @@ async function resolveOnce(
             return parsed;
           });
         },
-        () => undefined,
+        (err) => {
+          if (showsDown(err)) markDown(addon.base);
+        },
       ).then(() => {
         pending--;
         if (!isBackupSource(addon)) mainPending--;
