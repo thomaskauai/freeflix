@@ -132,6 +132,8 @@ export interface ParsedStream {
   durationSec?: number;
   /** nome do arquivo que o addon informa na linha ff: */
   file?: string;
+  /** cabeçalhos que a fonte exige (Referer, Origin); só tocam pelo repasse do motor (streams/headerProxy.ts) */
+  headers?: Record<string, string>;
 }
 
 /**
@@ -378,5 +380,8 @@ export function parseStream(stream: AddonStream, addon: string, names?: string[]
     ...(exactLanguages ? { exactLanguages } : {}),
     ...(ff.durationSec ? { durationSec: ff.durationSec } : {}),
     ...(ff.file ? { file: ff.file } : {}),
+    ...(unplayable === 'headers' && hints.proxyHeaders && hints.proxyHeaders.request
+      ? { headers: hints.proxyHeaders.request }
+      : {}),
   };
 }

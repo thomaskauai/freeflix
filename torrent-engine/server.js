@@ -14,6 +14,9 @@
  *   GET /<hash>/remove                  -> para e apaga o que baixou
  *   GET /removeAll
  *   GET /streaming-br?imdb=tt..&q=nome&type=movie|series -> { streaming: true|false|null }
+ *   GET /proxy?u=<endereço>&h=<cabeçalhos em JSON> -> o vídeo de u, pedido com os
+ *                                       cabeçalhos h (Referer, Origin), com Range;
+ *                                       lista HLS volta com os endereços passando por aqui
  *
  * Uso no Mac: cd torrent-engine && npm start   (PORT=2710 por padrão)
  */
@@ -385,6 +388,163 @@ function streamingInBrazil(imdb, q, type, back) {
   req.end(body);
 }
 
+// Repasse com cabeçalhos. Algumas fontes só entregam o vídeo com Referer ou
+// Origin do site delas, e o <video> (e o hls.js) não deixa o app escolher esses
+// cabeçalhos. O player pede aqui; o motor busca na origem com os cabeçalhos da
+// fonte e devolve o que vier, com Range (avançar e voltar). Lista HLS (.m3u8)
+// volta reescrita, cada parte passando também por aqui.
+
+/** redirecionamentos seguidos antes de desistir */
+var PROXY_MAX_REDIRECTS = 5;
+/** sem resposta da origem nesse tempo: desiste */
+var PROXY_TIMEOUT_MS = 20000;
+/** maior lista HLS lida para reescrever; acima disso, passa como veio */
+var PLAYLIST_MAX_BYTES = 4 * 1024 * 1024;
+/** cabeçalhos da origem que seguem para o player */
+var PASS_HEADERS = ['content-type', 'content-length', 'content-range', 'accept-ranges', 'last-modified', 'etag'];
+
+function proxyPath(target, headersJson) {
+  return '/proxy?u=' + encodeURIComponent(target) + '&h=' + encodeURIComponent(headersJson);
+}
+
+/** Lista HLS com cada endereço (linhas e URI="...") apontando para o repasse. */
+function rewritePlaylist(text, base, headersJson) {
+  return text
+    .split(/\r?\n/)
+    .map(function (line) {
+      var trimmed = line.trim();
+      if (!trimmed) return line;
+      if (trimmed.charAt(0) === '#') {
+        return line.replace(/URI="([^"]+)"/g, function (all, uri) {
+          return 'URI="' + proxyPath(url.resolve(base, uri), headersJson) + '"';
+        });
+      }
+      return proxyPath(url.resolve(base, trimmed), headersJson);
+    })
+    .join('\n');
+}
+
+/** Pode ser lista HLS: pelo tipo ou pela extensão (há origem que manda como texto ou binário). */
+function maybePlaylist(type, pathname) {
+  return /mpegurl/i.test(type) || /^text\//i.test(type) || /\.m3u8?$/i.test(pathname || '');
+}
+
+function proxy(req, res, target, headersJson, hops) {
+  var parsed = url.parse(target);
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return send(res, 400, { error: 'bad-url' });
+  var extra;
+  try {
+    extra = JSON.parse(headersJson || '{}') || {};
+  } catch (e) {
+    return send(res, 400, { error: 'bad-headers' });
+  }
+  var headers = {};
+  var hasAgent = false;
+  Object.keys(extra).forEach(function (name) {
+    headers[name] = String(extra[name]);
+    if (name.toLowerCase() === 'user-agent') hasAgent = true;
+  });
+  if (!hasAgent) headers['User-Agent'] = req.headers['user-agent'] || 'Mozilla/5.0';
+  if (req.headers.range) headers.Range = req.headers.range;
+
+  var done = false;
+  var lib = parsed.protocol === 'https:' ? https : http;
+  var out = lib.request(
+    {
+      hostname: parsed.hostname,
+      port: parsed.port,
+      path: parsed.path,
+      method: req.method === 'HEAD' ? 'HEAD' : 'GET',
+      headers: headers,
+      // a TV antiga (Node 4.4) não conhece as autoridades novas (Let's Encrypt); é só vídeo
+      rejectUnauthorized: false,
+    },
+    function (up) {
+      var status = up.statusCode;
+      if (status >= 300 && status < 400 && up.headers.location) {
+        up.resume();
+        done = true;
+        if (hops >= PROXY_MAX_REDIRECTS) return send(res, 508, { error: 'too-many-redirects' });
+        return proxy(req, res, url.resolve(target, up.headers.location), headersJson, hops + 1);
+      }
+      var type = String(up.headers['content-type'] || '');
+      var pass = {};
+      PASS_HEADERS.forEach(function (name) {
+        if (up.headers[name] != null) pass[name] = up.headers[name];
+      });
+
+      if (status < 400 && status !== 206 && maybePlaylist(type, parsed.pathname)) {
+        var chunks = [];
+        var size = 0;
+        var piped = false;
+        up.on('data', function (chunk) {
+          if (piped) return;
+          chunks.push(chunk);
+          size += chunk.length;
+          if (size > PLAYLIST_MAX_BYTES) {
+            // grande demais para ser lista: segue como veio
+            piped = true;
+            res.writeHead(status, corsWith(pass));
+            res.write(Buffer.concat(chunks));
+            up.pipe(res);
+          }
+        });
+        up.on('end', function () {
+          done = true;
+          if (piped) return;
+          var body = Buffer.concat(chunks);
+          var text = body.toString('utf8');
+          if (text.replace(/^﻿/, '').indexOf('#EXTM3U') !== 0) return send(res, status, body, pass);
+          delete pass['content-length'];
+          delete pass['content-range'];
+          delete pass.etag;
+          pass['content-type'] = 'application/vnd.apple.mpegurl';
+          send(res, status, rewritePlaylist(text, target, headersJson), pass);
+        });
+        up.on('error', function () {
+          if (!res.headersSent) send(res, 502, { error: 'origin' });
+          else res.end();
+        });
+        return;
+      }
+
+      res.writeHead(status, corsWith(pass));
+      up.pipe(res);
+      up.on('end', function () {
+        done = true;
+      });
+    },
+  );
+  out.setTimeout(PROXY_TIMEOUT_MS, function () {
+    out.abort();
+  });
+  out.on('error', function (err) {
+    if (done) return;
+    done = true;
+    if (!res.headersSent) send(res, 502, { error: String((err && err.message) || err) });
+    else res.end();
+  });
+  // o player cancelou (avançou, trocou de fonte): para de baixar da origem
+  res.on('close', function () {
+    if (!done) out.abort();
+  });
+  out.end();
+}
+
+/** Cabeçalhos de CORS do motor somados aos da origem. */
+function corsWith(headers) {
+  var h = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Range, Content-Type',
+    'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges',
+    'Cache-Control': 'no-store',
+  };
+  Object.keys(headers).forEach(function (name) {
+    h[name] = headers[name];
+  });
+  return h;
+}
+
 function handle(req, res) {
   if (req.method === 'OPTIONS') return send(res, 204, '');
   var parsed = url.parse(req.url, true);
@@ -397,6 +557,11 @@ function handle(req, res) {
   if (parts[0] === 'removeAll') {
     Object.keys(engines).forEach(remove);
     return send(res, 200, { ok: true });
+  }
+
+  if (parts[0] === 'proxy') {
+    if (!query.u) return send(res, 400, { error: 'u' });
+    return proxy(req, res, String(query.u), query.h ? String(query.h) : '{}', 0);
   }
 
   if (parts[0] === 'streaming-br') {

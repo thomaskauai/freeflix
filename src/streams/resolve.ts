@@ -16,6 +16,7 @@ import {
   type SourceProfile,
 } from './rank';
 import { markDown, onlyUp, showsDown } from './health';
+import { headerProxyAvailable, viaHeaderProxy } from './headerProxy';
 import { installDefaultSources, listSources, servesLanguage, sourcePriority, type SourceAddon } from './sources';
 import { releaseOf, rememberRelease } from './subtitles';
 
@@ -165,6 +166,8 @@ async function resolveOnce(
   if (addons.length === 0) return { reason: 'not-found' };
 
   const english = englishName(title);
+  // com o motor local no ar, fonte que pede cabeçalho toca por ele (headerProxy.ts)
+  const proxy = headerProxyAvailable();
   let answered = 0;
   let pending = addons.length;
   // sem contar a fonte reserva (BestCine): com as outras respondidas e algo tocável, não espera por ela
@@ -173,13 +176,14 @@ async function resolveOnce(
   let arrived: () => void = () => undefined;
   const all = Promise.all(
     addons.map((addon, i) =>
-      Promise.all([fetchStreams(addon.base, title.type, videoId), english]).then(
-        ([streams, englishName]) => {
+      Promise.all([fetchStreams(addon.base, title.type, videoId), english, proxy]).then(
+        ([streams, englishName, proxyOn]) => {
           const names = [title.title, title.originalTitle ?? '', englishName];
           answered++;
           const priority = sourcePriority(addon, listSources());
           lists[i] = streams.map((s) => {
-            const parsed = { ...parseStream(s, addon.name, names), priority, base: addon.base };
+            const read = parseStream(s, addon.name, names);
+            const parsed = { ...(proxyOn ? viaHeaderProxy(read) : read), priority, base: addon.base };
             // filme com arquivo de duração bem diferente da do catálogo: outro título
             if (title.type === 'movie' && !parsed.unplayable && wrongDuration(parsed, title.runtime))
               parsed.unplayable = 'other-title';
