@@ -849,7 +849,9 @@ export default function Watch() {
           saveProgress(title, { season, episode, time, duration: length }, thumb);
           syncProgress(title, season, episode, moment);
           // perto do fim, as fontes do próximo episódio já vão sendo procuradas
-          if (following && length > 0 && length - time < WARM_NEXT_S && warmed.current !== key) {
+          // as duas esperam folga no buffer: com torrent, a busca já abre o do próximo episódio no motor
+          const roomy = !!media && bufferedAhead(media) >= Math.min(PRELOAD_NEXT_NEEDS_AHEAD_S, length - time - 1);
+          if (following && length > 0 && length - time < WARM_NEXT_S && warmed.current !== key && roomy) {
             warmed.current = key;
             planFor(title, following.season, following.episode.number);
           }
@@ -858,8 +860,7 @@ export default function Watch() {
             length > 0 &&
             length - time < PRELOAD_NEXT_S &&
             preloadedNext.current !== key &&
-            media &&
-            bufferedAhead(media) >= Math.min(PRELOAD_NEXT_NEEDS_AHEAD_S, length - time - 1)
+            roomy
           ) {
             preloadedNext.current = key;
             preloadPlayback(title, following.season, following.episode.number);
