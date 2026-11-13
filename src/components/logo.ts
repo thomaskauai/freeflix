@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { headerProxyAvailable, proxiedUrl } from '../streams/headerProxy';
 
 // Arte de título (logo) baixada fora da tela, uma vez por endereço nesta
 // abertura do app. Os cards pedem a arte quando o foco para neles, e a página
@@ -68,4 +69,53 @@ export function useLogoSettled(url: string | undefined, maxWaitMs: number): bool
     return () => window.clearTimeout(timer);
   }, [url, maxWaitMs]);
   return logo !== null || (!!url && expired === url);
+}
+
+/**
+ * Margem transparente à esquerda da arte (fração da largura). Várias artes do
+ * catálogo trazem um vazio ali e o título ficava desalinhado do texto. Lida por
+ * uma cópia carregada com CORS; se o servidor não deixar, fica 0.
+ */
+const insets = new Map<string, number>();
+
+
+export async function measureLogoInset(url: string): Promise<number> {
+  const known = insets.get(url);
+  if (known != null) return known;
+  // o servidor das imagens não manda CORS; o motor local repassa com ele
+  if (!(await headerProxyAvailable())) return 0;
+  const via = proxiedUrl(url, {});
+  return new Promise<number>((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onerror = () => resolve(0);
+    img.onload = () => {
+      try {
+        const w = Math.min(img.naturalWidth, 400);
+        const h = Math.max(1, Math.round((img.naturalHeight * w) / img.naturalWidth));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(0);
+        ctx.drawImage(img, 0, 0, w, h);
+        const data = ctx.getImageData(0, 0, w, h).data;
+        let left = w;
+        for (let y = 0; y < h && left > 0; y++) {
+          for (let x = 0; x < left; x++) {
+            if (data[(y * w + x) * 4 + 3] > 40) {
+              left = x;
+              break;
+            }
+          }
+        }
+        const frac = left >= w ? 0 : left / w;
+        insets.set(url, frac);
+        resolve(frac);
+      } catch {
+        resolve(0);
+      }
+    };
+    img.src = via;
+  });
 }

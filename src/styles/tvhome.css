@@ -322,9 +322,20 @@
   font-size: 28px;
 }
 
-.hero .meta,
-.hero__pager {
+.hero .meta {
   display: none;
+}
+
+/* pontos entre os botões e o selo de nota */
+.hero__pager {
+  position: absolute;
+  right: 190px;
+  bottom: 0;
+  margin: 0;
+}
+
+.hero__dot {
+  height: 76px;
 }
 
 /* selo no canto de baixo à direita, na linha dos botões */

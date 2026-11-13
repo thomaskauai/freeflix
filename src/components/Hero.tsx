@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Title } from '../data/types';
 import { useFocusable } from '../focus/useFocusable';
+import { isLegacyTizen } from '../platform/tizen';
 import { Backdrop } from './Backdrop';
 import { Button } from './Button';
-import { useLogo } from './logo';
+import { measureLogoInset, useLogo } from './logo';
 import { HeroLine, KindTag, Meta } from './Meta';
 
 interface HeroProps {
@@ -15,6 +16,9 @@ interface HeroProps {
   away?: boolean;
   onFocus?: () => void;
 }
+
+/** destaque passa sozinho a cada tanto, enquanto o foco não está nos pontos */
+const ROTATE_MS = 9000;
 
 /** os fundos dos outros destaques começam a baixar depois que a Home assentou */
 const PRELOAD_AFTER_MS = 2500;
@@ -29,10 +33,33 @@ const PRELOAD_AFTER_MS = 2500;
 export function TitleArt({ title, className }: { title: Title; className: string }) {
   const logo = title.logo;
   const ready = useLogo(logo);
+  const box = useRef<HTMLDivElement>(null);
+  // vazio à esquerda da arte: puxa a imagem para o alinhamento do texto ao lado
+  const [shift, setShift] = useState(0);
+  useEffect(() => {
+    if (!logo || !ready) return;
+    let alive = true;
+    measureLogoInset(logo).then((f) => {
+      const el = box.current;
+      const img = el && el.querySelector('img');
+      if (!alive || !el || !img || !img.naturalWidth) return;
+      const scale = Math.min(el.clientWidth / img.naturalWidth, el.clientHeight / img.naturalHeight);
+      setShift(Math.round(f * img.naturalWidth * scale));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [logo, ready]);
   if (logo && ready !== false) {
     return (
-      <div className={`${className} ${className}--logo`}>
-        {ready && <img src={logo} alt={title.title} />}
+      <div ref={box} className={`${className} ${className}--logo`}>
+        {ready && (
+          <img
+            src={logo}
+            alt={title.title}
+            style={shift ? { marginLeft: -shift + 'px' } : undefined}
+          />
+        )}
       </div>
     );
   }
@@ -88,6 +115,18 @@ export function Hero({ titles, onPlay, onInfo, away, onFocus }: HeroProps) {
     return () => window.clearTimeout(timer);
   }, [titles]);
 
+  // passa sozinho; some na TV antiga (cada troca redesenha o painel inteiro) e
+  // pausa quando o foco desceu para as fileiras
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    if (away || paused || titles.length < 2 || isLegacyTizen()) return;
+    const timer = window.setTimeout(() => {
+      setPrevious(index);
+      setIndex((index + 1) % titles.length);
+    }, ROTATE_MS);
+    return () => window.clearTimeout(timer);
+  }, [away, paused, index, titles.length]);
+
   const show = (i: number) => {
     if (i === index) return;
     setPrevious(index);
@@ -122,7 +161,7 @@ export function Hero({ titles, onPlay, onInfo, away, onFocus }: HeroProps) {
             Mais informações
           </Button>
           {titles.length > 1 && (
-            <div className="hero__pager">
+            <div className="hero__pager" onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}>
               {titles.map((t, i) => (
                 <Dot
                   key={t.id}
