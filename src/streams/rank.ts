@@ -202,7 +202,7 @@ function compatTier(s: ParsedStream, ctx: RankContext): number {
 /**
  * Ordena as fontes tocáveis, da melhor para a pior. A ordem dos critérios é a
  * do pedido: a escolhida no episódio anterior (se houver), caber na rede,
- * idioma, a fonte (ordem da lista padrão), resolução e compatibilidade; empate
+ * idioma, link direto antes do repasse, a fonte (ordem da lista padrão), resolução e compatibilidade; empate
  * total mantém a ordem de chegada. Assim, no idioma preferido, a fonte 1 ganha
  * da 2; a 2 só entra quando a 1 não tem o idioma.
  */
@@ -217,6 +217,8 @@ export function rankStreams(streams: ParsedStream[], ctx: RankContext): ParsedSt
       languageTier(s, ctx),
       cleanAudioTier(s, ctx),
       cleanTier(s, ctx),
+      // mesmo idioma: link direto antes do que passa pelo repasse do motor
+      s.proxied ? 0 : 1,
       -(s.priority ?? 0),
       // fora do que a rede aguenta, quanto menor a resolução, menos engasga
       fits ? resolutionTier(s.resolution) : -s.resolution,

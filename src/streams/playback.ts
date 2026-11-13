@@ -265,7 +265,19 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
     // o endereço final das primeiras fontes já fica descoberto para o play
     p.candidates.slice(0, DIRECT_AHEAD).forEach((c) => !c.torrent && resolveDirect(c.url, c.hls));
     keepFound(episodeKey, p.candidates);
-    if (p.more) p.more.then((more) => keepFound(episodeKey, more));
+    if (!p.more) return;
+    const first = p.candidates[0];
+    p.more.then((more) => {
+      keepFound(episodeKey, more);
+      // As fontes lentas chegaram antes do play (foco no card, detalhes abertos):
+      // o plano guardado passa a ser a lista completa, já ordenada, e o play
+      // começa na melhor de todas, não na melhor das que responderam primeiro.
+      // Torrent na frente (título fora do streaming) continua na frente.
+      if (!more.length || (first && first.torrent)) return;
+      if (!plans[key] || plans[key].plan !== plan) return;
+      const full: Plan = { status: 'play', candidates: mergeCandidates(more, p.candidates), index: 0 };
+      plans[key] = { at: plans[key].at, plan: Promise.resolve(full) };
+    });
   });
   // sem fonte, a próxima tentativa pergunta de novo
   plan.then((p) => p.status === 'none' && plans[key] && plans[key].plan === plan && delete plans[key]);

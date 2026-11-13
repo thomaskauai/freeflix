@@ -134,6 +134,8 @@ export interface ParsedStream {
   file?: string;
   /** cabeçalhos que a fonte exige (Referer, Origin); só tocam pelo repasse do motor (streams/headerProxy.ts) */
   headers?: Record<string, string>;
+  /** toca pelo repasse do motor (cabeçalhos): pesa mais na TV antiga que um link direto */
+  proxied?: boolean;
 }
 
 /**

@@ -24,5 +24,5 @@ export function proxiedUrl(url: string, headers: Record<string, string>): string
 /** Fonte que só faltava cabeçalho vira tocável pelo motor; as outras ficam como estão. */
 export function viaHeaderProxy(s: ParsedStream): ParsedStream {
   if (s.unplayable !== 'headers' || !s.url || !s.headers) return s;
-  return { ...s, url: proxiedUrl(s.url, s.headers), unplayable: undefined };
+  return { ...s, url: proxiedUrl(s.url, s.headers), unplayable: undefined, proxied: true };
 }
