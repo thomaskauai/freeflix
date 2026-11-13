@@ -60,6 +60,12 @@ export function fallbackArt(id: string) {
  * Cartaz arredondado com título e uma linha de informação embaixo. memo: a
  * fileira que renderiza de novo (foco entrando ou saindo) não refaz os cards.
  */
+/**
+ * Arte do card largo (520 px): o fundo do TMDB vem em w1280 ou original, e na
+ * TV antiga cada imagem grande custa dezenas de ms para decodificar. w780 basta.
+ */
+const wideArt = (url?: string) => (url ? url.replace(/\/t\/p\/(w1280|original)\//, '/t/p/w780/') : undefined);
+
 export const Card = memo(function Card({
   title,
   variant,
@@ -77,7 +83,7 @@ export const Card = memo(function Card({
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const focus = useFocusable({ id: focusId, autoFocus });
-  const picture = image ?? (variant === 'wide' ? (title.backdrop ?? title.poster) : title.poster);
+  const picture = image ?? (variant === 'wide' ? (wideArt(title.backdrop) ?? title.poster) : title.poster);
   const hasImage = !!picture && !failed;
   const loaded = !!picture && (loadedSrc === picture || !!shown[picture]);
 

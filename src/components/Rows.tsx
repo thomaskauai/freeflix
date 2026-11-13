@@ -5,6 +5,7 @@ import { usePageActive } from '../pageActive';
 import { Card } from './Card';
 import { Row } from './Row';
 import { NEAR_END_EVENT } from './ScrollArea';
+import { isLegacyTizen } from '../platform/tizen';
 
 export interface RowSource {
   id: string;
@@ -43,7 +44,8 @@ export function forgetLoadedRows() {
 const rowKey = (id: string) => `${window.location.hash || '#/'}${SEP}${id}`;
 
 /** quantas fileiras além da focada ficam carregadas */
-const AHEAD = 3;
+/** na TV antiga, cada fileira montada custa ~1 s de desenho: só a seguinte */
+const AHEAD = isLegacyTizen() ? 1 : 3;
 const SKELETONS = 8;
 
 /** Separador entre fileira e título no id de foco; ids de título podem ter ":" (tmdb:123). */

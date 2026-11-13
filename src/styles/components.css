@@ -626,6 +626,21 @@
   opacity: 1;
 }
 
+/* TV antiga (Chrome 63): cada fade e cada contorno animado vira trabalho de
+   desenho a cada tecla (medido na sala: quadros de 215 ms caem para 73 ms sem
+   eles). Lá a imagem aparece sem fade, o escurecimento das fileiras é na hora,
+   e fileira que já passou nem é desenhada. */
+.is-legacy-tv .row,
+.is-legacy-tv .card__img,
+.is-legacy-tv .card__art::after {
+  -webkit-transition: none;
+  transition: none;
+}
+
+.is-legacy-tv .rows.has-focus .row.is-passed {
+  visibility: hidden;
+}
+
 .card__text {
   padding: 14px 2px 0;
 }

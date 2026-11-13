@@ -15,6 +15,7 @@ import { useKeyHandler } from '../focus/keys';
 import { usePageFocus } from '../focus/useFocusable';
 import { titlePath, watchPath } from '../nav';
 import { preloadPlayback, releasePreload, warmResume } from '../streams/playback';
+import { isLegacyTizen } from '../platform/tizen';
 
 /** Episódio que o card de uma série mostra, depois de consultar a lista de episódios. */
 interface EpisodeCard {
@@ -116,7 +117,8 @@ function continueWatchingRow(
 }
 
 /** a Home abriu: espera isso antes de carregar o último de Continuar assistindo (imagens e fileiras primeiro) */
-const OPEN_PRELOAD_DELAY_MS = 2000;
+/** na TV antiga, a busca e o download na abertura disputam com a navegação: espera mais */
+const OPEN_PRELOAD_DELAY_MS = isLegacyTizen() ? 8000 : 2000;
 
 /** card de Continuar assistindo com o vídeo sendo preparado */
 let warming: string | null = null;
