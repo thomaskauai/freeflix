@@ -4,7 +4,7 @@ import { useFocusable } from '../focus/useFocusable';
 import { Backdrop } from './Backdrop';
 import { Button } from './Button';
 import { useLogo } from './logo';
-import { KindTag, Meta } from './Meta';
+import { HeroLine, KindTag, Meta } from './Meta';
 
 interface HeroProps {
   /** destaques; com mais de um, aparecem os pontos para passar entre eles */
@@ -110,6 +110,7 @@ export function Hero({ titles, onPlay, onInfo, away, onFocus }: HeroProps) {
         <div key={title.id} className="hero__info">
           <KindTag title={title} />
           <TitleArt title={title} className="hero__title" />
+          <HeroLine title={title} />
           {title.tagline && <p className="hero__tagline">{title.tagline}</p>}
           <p className="hero__synopsis">{title.synopsis}</p>
         </div>
@@ -133,6 +134,7 @@ export function Hero({ titles, onPlay, onInfo, away, onFocus }: HeroProps) {
               ))}
             </div>
           )}
+          {title.rating && <div className="hero__badge">IMDb {title.rating}</div>}
         </div>
         <Meta title={title} />
       </div>

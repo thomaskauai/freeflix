@@ -5,20 +5,22 @@
    antiga paga caro por layout animado). */
 
 :root {
-  --content-left: 120px;
+  /* medidas tiradas do primeiro quadro da referência, em 1920×1080 */
+  --content-left: 84px;
   --topnav-h: 112px;
-  --row-anchor: 128px;
-  --poster-w: 250px;
-  --poster-h: 400px;
+  --row-anchor: 156px;
+  --poster-w: 305px;
+  --poster-h: 489px;
   /* card aberto: 16:9 na altura do cartaz */
-  --open-w: 711px;
-  --open-details-h: 150px;
-  --card-gap: 16px;
+  --open-w: 869px;
+  --open-details-h: 200px;
+  --card-gap: 20px;
   --card-radius: 14px;
-  --row-gap: 44px;
-  --hero-panel-top: 120px;
-  --hero-panel-h: 640px;
-  --hero-radius: 28px;
+  --row-gap: 46px;
+  --hero-panel-top: 139px;
+  --hero-panel-h: 742px;
+  --hero-radius: 24px;
+  --hero-pad: 29px;
 }
 
 /* ---------- Navegação no topo ---------- */
@@ -42,17 +44,24 @@
   top: 0;
   left: 0;
   width: 100%;
-  height: 180px;
+  height: 160px;
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.92), rgba(0, 0, 0, 0.6) 55%, rgba(0, 0, 0, 0));
 }
 
+/* na Home a barra fica sobre o fundo cinza do destaque; as fileiras que passam
+   para cima já somem sozinhas */
+.topnav.is-home .topnav__shade {
+  display: none;
+}
+
+/* marca à direita, no lugar do logo da referência */
 .topnav__brand {
   position: absolute;
-  top: 34px;
-  left: var(--content-left);
-  width: 46px;
+  top: 59px;
+  right: var(--content-left);
+  width: 44px;
   height: 46px;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--red);
   font-size: 34px;
   line-height: 46px;
@@ -62,10 +71,10 @@
 
 .topnav__bar {
   position: absolute;
-  top: 32px;
+  top: 55px;
   left: var(--content-left);
-  right: var(--content-left);
-  height: 50px;
+  right: calc(var(--content-left) + 80px);
+  height: 54px;
   pointer-events: auto;
 }
 
@@ -73,25 +82,27 @@
   display: flex;
   justify-content: center;
   height: 100%;
+  /* o centro das abas é o centro da tela, não da barra */
+  margin-right: -80px;
 }
 
-.topnav__end {
+.topnav__start {
   position: absolute;
   top: 0;
-  right: 0;
+  left: 0;
   height: 100%;
 }
 
 .topnav__tab {
   display: flex;
   align-items: center;
-  height: 50px;
-  margin: 0 4px;
-  padding: 0 22px;
-  border-radius: 25px;
-  font-size: 22px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.78);
+  height: 54px;
+  margin: 0 3px;
+  padding: 0 24px;
+  border-radius: 27px;
+  font-size: 24px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.86);
   transition: background-color var(--focus-ms) linear, color var(--focus-ms) linear;
 }
 
@@ -100,12 +111,12 @@
 }
 
 .topnav__tab svg {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
 }
 
 .topnav__tab.is-active {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.14);
   color: var(--white);
 }
 
@@ -114,10 +125,73 @@
   color: var(--black);
 }
 
+/* perfil: quadrado com rosto e setinha; em foco ganha um anel branco */
+.topnav__profile {
+  display: flex;
+  align-items: center;
+  height: 54px;
+  padding: 0 6px 0 4px;
+  margin-left: -4px;
+  border-radius: 12px;
+}
+
+.topnav__avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+}
+
+.topnav__avatar rect {
+  fill: var(--red);
+}
+
+.topnav__avatar circle {
+  fill: var(--white);
+}
+
+.topnav__avatar path {
+  fill: none;
+  stroke: var(--white);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.topnav__caret {
+  width: 12px;
+  height: 8px;
+  margin-left: 14px;
+  fill: rgba(255, 255, 255, 0.7);
+}
+
+.topnav__profile:focus .topnav__avatar {
+  box-shadow: 0 0 0 3px var(--black), 0 0 0 6px var(--white);
+}
+
+.topnav__profile:focus .topnav__caret {
+  fill: var(--white);
+}
+
 /* ---------- Destaque em painel ---------- */
 
+/* altura do painel e o respiro até a fileira que aparece embaixo */
 .hero {
-  height: calc(var(--hero-panel-top) + var(--hero-panel-h));
+  height: calc(var(--hero-panel-top) + var(--hero-panel-h) + 44px);
+}
+
+/* fundo cinza quente da tela, mais claro no alto, que some quando o foco desce */
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--stage-w);
+  height: 1080px;
+  background: radial-gradient(ellipse 75% 70% at 50% 0%, #5b5a52 0%, #3a3936 38%, #1e1e1e 70%, #0b0b0c 100%);
+  transition: opacity 320ms linear;
+}
+
+.hero.is-away::before {
+  opacity: 0;
 }
 
 .hero__panel,
@@ -129,18 +203,27 @@
   height: var(--hero-panel-h);
   border-radius: var(--hero-radius);
   overflow: hidden;
+  /* contorno fino e claro em volta do painel */
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.2);
 }
 
 .hero .backdrop {
   height: var(--hero-panel-h);
+  background: #1e1e1e;
 }
 
+/* a imagem cobre o painel inteiro; a sombra preta da tela cheia não entra */
 .hero .backdrop__img,
 .hero .backdrop__img--wide {
   width: 100%;
+  object-position: 50% 25%;
 }
 
-/* texto legível sobre a imagem: escuro à esquerda e embaixo */
+.hero .backdrop__shade {
+  display: none;
+}
+
+/* texto legível sobre a imagem: escuro só à esquerda e embaixo, a imagem aparece */
 .hero > .hero__slide::after {
   content: '';
   position: absolute;
@@ -148,41 +231,115 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(to right, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.35) 45%, rgba(0, 0, 0, 0) 70%),
-    linear-gradient(to top, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0) 40%);
+  border-radius: var(--hero-radius);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.2);
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.3) 38%, rgba(0, 0, 0, 0) 60%),
+    linear-gradient(to top, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0) 35%);
 }
 
 .hero__body {
   top: auto;
-  bottom: 0;
-  left: calc(var(--content-left) + 56px);
-  max-width: 760px;
-  padding-bottom: 48px;
+  bottom: 72px;
+  left: calc(var(--content-left) + var(--hero-pad));
+  right: calc(var(--content-left) + var(--hero-pad) - 2px);
+  max-width: none;
+}
+
+.hero .kind {
+  height: 20px;
+  font-size: 15px;
+  letter-spacing: 0.24em;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.hero .kind__mark {
+  margin-right: 8px;
+  font-size: 22px;
 }
 
 .hero__title {
-  height: 120px;
-  margin-top: 14px;
+  height: 88px;
+  margin-top: 8px;
+  font-size: 84px;
+  line-height: 88px;
+}
+
+.hero__title--long {
+  font-size: 64px;
+}
+
+.hero__title--logo {
+  width: 440px;
+  height: 92px;
+  margin-bottom: 0;
+}
+
+.hero__tagline {
+  display: none;
+}
+
+/* tipo • gênero • ano • duração */
+.heroline {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  margin-top: 22px;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--white);
+  white-space: nowrap;
+}
+
+.heroline > span + span::before {
+  content: '•';
+  margin: 0 14px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .hero__synopsis {
-  max-width: 620px;
+  width: 730px;
+  max-width: none;
+  height: 120px;
+  margin-top: 12px;
+  font-size: 28px;
+  line-height: 40px;
+  font-weight: 500;
   -webkit-line-clamp: 3;
 }
 
 .hero__actions {
-  width: calc(var(--stage-w) - var(--content-left) * 2 - 112px);
-  margin-top: 24px;
+  position: relative;
+  width: calc(var(--stage-w) - var(--content-left) * 2 - var(--hero-pad) * 2);
+  margin-top: 30px;
 }
 
 .hero .btn {
-  height: 56px;
-  border-radius: 28px;
-  padding: 0 30px;
+  height: 76px;
+  margin-right: 16px;
+  border-radius: 38px;
+  padding: 0 42px;
+  font-size: 28px;
 }
 
-.hero .meta {
+.hero .meta,
+.hero__pager {
   display: none;
+}
+
+/* selo no canto de baixo à direita, na linha dos botões */
+.hero__badge {
+  position: absolute;
+  right: 0;
+  bottom: 12px;
+  height: 52px;
+  padding: 0 18px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.62);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 52px;
+  color: var(--white);
 }
 
 /* foco desceu: o painel sobe um pouco e some, sem mexer no layout */
@@ -207,9 +364,14 @@
 }
 
 .row__title {
-  font-size: 26px;
-  height: 26px;
-  line-height: 26px;
+  font-size: 30px;
+  height: 34px;
+  line-height: 34px;
+}
+
+/* fileira fora de foco: título apagado, como a que aparece embaixo do destaque */
+.row:not(.is-active) .row__title {
+  color: rgba(255, 255, 255, 0.55);
 }
 
 /* espaço do card aberto e da informação embaixo; os outros cards só o cartaz */
@@ -240,8 +402,8 @@
   border-radius: var(--card-radius);
   object-fit: cover;
   object-position: 50% 25%;
+  /* sem fade: a seta troca a imagem na hora (só espera ela baixar) */
   opacity: 0;
-  transition: opacity 220ms linear;
 }
 
 .card__wide.is-loaded {
@@ -261,7 +423,6 @@
   justify-content: flex-end;
   border-radius: 0 0 var(--card-radius) var(--card-radius);
   background: linear-gradient(to top, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0));
-  animation: loading-in 220ms linear both;
 }
 
 .card__overlay .kind {
@@ -295,23 +456,19 @@ h1.card__logo {
 
 .card__details {
   width: var(--open-w);
-  padding-top: 18px;
-  animation: loading-in 220ms linear both;
+  padding-top: 20px;
 }
 
-.card__details .meta {
-  font-size: 19px;
-  line-height: 26px;
-}
-
-.card__details .meta > span {
-  margin-right: 18px;
+.card__details .heroline {
+  margin-top: 0;
+  font-size: 22px;
 }
 
 .card__synopsis {
+  width: 760px;
   margin-top: 8px;
-  font-size: 21px;
-  line-height: 29px;
+  font-size: 24px;
+  line-height: 34px;
   color: rgba(255, 255, 255, 0.82);
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -324,10 +481,8 @@ h1.card__logo {
   border-width: 3px;
 }
 
-/* TV antiga: sem fade na arte larga, no texto e no painel */
-.is-legacy-tv .card__wide,
-.is-legacy-tv .card__overlay,
-.is-legacy-tv .card__details,
+/* TV antiga: sem fade no painel e no fundo */
+.is-legacy-tv .hero::before,
 .is-legacy-tv .hero > .hero__slide,
 .is-legacy-tv .hero__body,
 .is-legacy-tv .topnav__tab {

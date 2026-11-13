@@ -29,7 +29,7 @@ function lengthOf(title: Title): string | null {
 }
 
 // o catálogo em português traduz títulos e sinopses, mas manda os gêneros em inglês
-const genreLabel = (genre: string) => (CATALOG.localized && GENRE_LABELS_PT[genre]) || genre;
+export const genreLabel = (genre: string) => (CATALOG.localized && GENRE_LABELS_PT[genre]) || genre;
 
 /** Só o que o catálogo informou; nada aqui é inventado para preencher a linha. */
 export function Meta({ title }: { title: Title }) {
@@ -40,6 +40,23 @@ export function Meta({ title }: { title: Title }) {
       {length && <span>{length}</span>}
       {title.rating && <span className="meta__rating">IMDb {title.rating}</span>}
       {title.genres.length > 0 && <span>{title.genres.slice(0, 3).map(genreLabel).join(', ')}</span>}
+    </div>
+  );
+}
+
+/**
+ * Linha curta do destaque: tipo, gênero principal, ano e duração, separados
+ * por pontos (Home experimental).
+ */
+export function HeroLine({ title, kind = true }: { title: Title; kind?: boolean }) {
+  const parts = [kind && kindLabel(title), title.genres[0] && genreLabel(title.genres[0]), title.year, lengthOf(title)].filter(
+    Boolean,
+  );
+  return (
+    <div className="heroline">
+      {parts.map((part, i) => (
+        <span key={i}>{part}</span>
+      ))}
     </div>
   );
 }

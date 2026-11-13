@@ -6,7 +6,7 @@ import { navigateTo, titlePath } from '../nav';
 import { warmTitle } from '../streams/playback';
 import { TitleArt } from './Hero';
 import { loadLogo } from './logo';
-import { KindTag, Meta } from './Meta';
+import { HeroLine, KindTag } from './Meta';
 
 interface CardProps {
   title: Title;
@@ -73,7 +73,7 @@ export function fallbackArt(id: string) {
  */
 const wideArt = (url?: string) => (url ? url.replace(/\/t\/p\/(w1280|original)\//, '/t/p/w780/') : undefined);
 
-/** Fundo da obra no card aberto: entra por cima do cartaz quando termina de baixar. */
+/** Fundo da obra no card aberto: entra por cima do cartaz assim que baixa, sem fade. */
 function WideArt({ src }: { src: string }) {
   const [ready, setReady] = useState(!!shown[src]);
   return (
@@ -153,6 +153,8 @@ export const Card = memo(function Card({
       className={`card card--${variant}${expand ? ' card--expand' : ''}${expanded ? ' is-expanded' : ''}`}
       aria-label={title.title}
       data-scroll-anchor={anchor}
+      // a fileira já baixa a arte larga dos vizinhos: a seta abre o próximo pronto
+      data-wide={widePicture}
       onFocus={onFocus}
       onBlur={() => {
         if (expand) setFocused(false);
@@ -201,7 +203,7 @@ export const Card = memo(function Card({
       </div>
       {expanded && (
         <div className="card__details">
-          <Meta title={title} />
+          <HeroLine title={title} kind={false} />
           {(info || title.synopsis) && <p className="card__synopsis">{info ?? title.synopsis}</p>}
         </div>
       )}

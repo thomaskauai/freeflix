@@ -4,8 +4,8 @@ import { focusElement, focusPageDefault, forgetPage } from '../focus/FocusContex
 import { useFocusable, useFocusMove } from '../focus/useFocusable';
 import { Icon, type IconName } from './Icon';
 
-// Navegação no topo (experimental): marca à esquerda, abas no centro (busca,
-// Início, Séries, Filmes, Minha lista) e Configurações à direita. A aba da
+// Navegação no topo (experimental): perfil (abre Configurações) à esquerda, abas
+// no centro (busca, Início, Séries, Filmes, Minha lista) e a marca à direita. A aba da
 // página atual fica com fundo cinza; a focada, branca. Para baixo volta ao
 // conteúdo onde o foco estava.
 
@@ -44,6 +44,29 @@ function Tab({
   );
 }
 
+/** Perfil: quadrado colorido com um rosto simples e a setinha de menu. */
+function Profile({ active, onSelect }: { active: boolean; onSelect: () => void }) {
+  const focus = useFocusable();
+  return (
+    <div
+      {...focus}
+      className={`topnav__profile${active ? ' is-active' : ''}`}
+      aria-label="Configurações"
+      onClick={onSelect}
+    >
+      <svg className="topnav__avatar" viewBox="0 0 40 40" aria-hidden="true">
+        <rect width="40" height="40" rx="7" />
+        <circle cx="13.5" cy="16" r="2.6" />
+        <circle cx="26.5" cy="16" r="2.6" />
+        <path d="M11 24.5q9 7 18 0" />
+      </svg>
+      <svg className="topnav__caret" viewBox="0 0 10 6" aria-hidden="true">
+        <path d="M0 0h10L5 6z" />
+      </svg>
+    </div>
+  );
+}
+
 export function TopNav() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -76,7 +99,7 @@ export function TopNav() {
   };
 
   return (
-    <header className="topnav">
+    <header className={`topnav${pathname === '/' ? ' is-home' : ''}`}>
       <div className="topnav__shade" />
       <div className="topnav__brand display" aria-hidden="true">
         F
@@ -105,14 +128,8 @@ export function TopNav() {
             />
           ))}
         </div>
-        <div className="topnav__end">
-          <Tab
-            label="Configurações"
-            icon="settings"
-            active={activePath === SETTINGS}
-            isDefault={false}
-            onSelect={() => select(SETTINGS)}
-          />
+        <div className="topnav__start">
+          <Profile active={activePath === SETTINGS} onSelect={() => select(SETTINGS)} />
         </div>
       </nav>
     </header>

@@ -31,6 +31,21 @@ interface RowProps {
   children: ReactNode;
 }
 
+/** arte larga já pedida (card que abre em 16:9): cada uma só uma vez */
+const wideAsked: Record<string, boolean> = {};
+
+/** Baixa a arte larga do card focado e dos vizinhos, para a seta abrir sem esperar. */
+function preloadWide(item: HTMLElement) {
+  [item, item.nextElementSibling, item.nextElementSibling?.nextElementSibling, item.previousElementSibling].forEach(
+    (el) => {
+      const src = el instanceof HTMLElement ? el.dataset.wide : undefined;
+      if (!src || wideAsked[src]) return;
+      wideAsked[src] = true;
+      new Image().src = src;
+    },
+  );
+}
+
 /** Fileira horizontal: o item focado estaciona na primeira posição. */
 export function Row({ title, variant, anchor = ROW_ANCHOR, passed, far, onActivate, onNearEnd, startIndex, children }: RowProps) {
   const viewport = useRef<HTMLDivElement>(null);
@@ -78,6 +93,7 @@ export function Row({ title, variant, anchor = ROW_ANCHOR, passed, far, onActiva
     const item = (e.target as HTMLElement).closest<HTMLElement>('[data-focusable]');
     if (!t || !item || !t.contains(item)) return;
     if (onNearEnd && Array.prototype.indexOf.call(t.children, item) >= t.children.length - NEAR_END_ITEMS) onNearEnd();
+    preloadWide(item);
     // Foco que veio do ponteiro não rola: o card sairia de baixo do cursor.
     if (isPointerFocus()) return;
     setFree(false);
