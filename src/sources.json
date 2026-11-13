@@ -25,10 +25,7 @@
     },
     {
         "name": "PenguPlay",
-        "url": "https://pengu.uk/%7B%22auth_token%22%3A%22FPf4uFyJoQG7veojqY0XrqXhBSB8bP71AWT51UNX2Qk%22%7D/manifest.json"
-    },
-    {
-        "name": "Muvibox",
-        "url": "https://muvibox.znzcloud.my.id/manifest.json"
+        "url": "https://pengu.uk/%7B%22auth_token%22%3A%22FPf4uFyJoQG7veojqY0XrqXhBSB8bP71AWT51UNX2Qk%22%7D/manifest.json",
+        "optional": true
     }
 ]

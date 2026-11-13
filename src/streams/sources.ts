@@ -44,6 +44,8 @@ export interface ListedSource {
   url: string;
   /** só para títulos com esse idioma original ("pt" = produção brasileira/portuguesa) */
   originalLanguage?: string;
+  /** listada mas inativa: não entra sozinha (e sai, se entrou como padrão); o espectador ativa em Configurações */
+  optional?: boolean;
 }
 
 // o repositório é privado: a lista sai pelo site (api/sources.ts), publicada a cada deploy do main
@@ -234,7 +236,7 @@ let defaults: Promise<void> | null = null;
 export function installDefaultSources(): Promise<void> {
   if (!defaults) {
     defaults = fetchListed().then(() => {
-      const list = listedSources();
+      const list = listedSources().filter((s) => !s.optional);
       const done = installedDefaults();
       if (fresh) {
         const kept = list.map((s) => addonBase(s.url));
