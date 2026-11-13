@@ -272,6 +272,12 @@ interface PlayerShellProps {
   burnedSubtitles?: boolean;
   /** tempo para a fonte começar antes de ser dada como ruim (torrent precisa de mais) */
   startTimeout?: number;
+  /**
+   * O teste antes do play viu este link responder com vídeo: ele tem o tempo
+   * todo (startTimeout) para os metadados, não o corte de link mudo. MP4 com o
+   * índice no começo (7 a 10 MB no FrostStream e no Veyra) leva ~5 s para isso.
+   */
+  confirmed?: boolean;
   /** o vídeo passou a tocar (true) ou parou (false: pausa, fim) */
   onPlaying?: (playing: boolean) => void;
   /** endereço do vídeo no motor de torrent: carregamento com porcentagem e folga maior quando trava */
@@ -312,6 +318,7 @@ export function PlayerShell({
   burnedSubtitles,
   notice,
   startTimeout = START_TIMEOUT_MS,
+  confirmed = false,
   torrentUrl,
   originalLanguage,
   preferredAudio,
@@ -579,6 +586,9 @@ export function PlayerShell({
     let mark = media.currentTime;
     const stallLimit = torrentRef.current ? TORRENT_STALL_MS : STALL_MS;
     const watchdog = window.setInterval(() => {
+      // erro que veio antes de o player escutar (o aparelho recusa o arquivo no
+      // mesmo instante): o vídeo fica pausado e o relógio abaixo nunca contaria
+      if (media.error) return fail();
       const at = media.currentTime;
       const went = at !== mark;
       mark = at;
@@ -589,7 +599,7 @@ export function PlayerShell({
       if (!moving) {
         waited += WATCH_TICK_MS;
         if (media.readyState >= 1) sinceMeta += WATCH_TICK_MS;
-        const silent = !torrentRef.current && media.readyState === 0 && waited >= NO_ANSWER_MS;
+        const silent = !torrentRef.current && !confirmed && media.readyState === 0 && waited >= NO_ANSWER_MS;
         const parked = !torrentRef.current && sinceMeta >= STUCK_AFTER_META_MS;
         if (waited >= startTimeout || silent || parked) fail();
         return;
@@ -612,6 +622,9 @@ export function PlayerShell({
     media.addEventListener('canplay', onReady);
     media.addEventListener('error', fail);
     if (media.readyState >= 1) onMeta();
+    // o aparelho já recusou o arquivo antes de o player escutar (sala: MP4 que
+    // não decodifica dá erro na hora, e o player esperava 31 s)
+    if (media.error) window.setTimeout(fail, 0);
     // Se o aparelho recusar o autoplay, fica pausado com o botão de play em foco.
     const autoplay = media.play();
     if (autoplay && autoplay.catch) autoplay.catch(() => undefined);
@@ -994,9 +1007,11 @@ export function PlayerShell({
     applySubtitle(current.option, true, (current.loaded.index + 1) % current.option.candidates.length);
   };
 
-  // Procura as legendas do título assim que há vídeo e religa o idioma usado da última vez.
+  // Procura as legendas do título quando o vídeo começa a tocar e religa o idioma
+  // usado da última vez. Antes disso não: fonte que nem toca não pede legenda, e
+  // os pedidos e o ranking (centenas de legendas) não disputam com o começo do vídeo.
   useEffect(() => {
-    if (mode !== 'video' || !media || !subtitlesFor) return;
+    if (mode !== 'video' || !media || !subtitlesFor || !started) return;
     let alive = true;
     findSubtitles(subtitlesFor.type, subtitlesFor.videoId, subtitlesFor.release, originalLanguage).then(
       (found) => {
@@ -1022,7 +1037,7 @@ export function PlayerShell({
       clearSubtitle();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, media, subtitlesFor && subtitlesFor.videoId]);
+  }, [mode, media, started, subtitlesFor && subtitlesFor.videoId]);
 
   const pickSubtitle = (option: SubtitleOption | null) => {
     rememberSubtitle(option ? option.language : null);

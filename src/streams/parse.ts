@@ -46,6 +46,13 @@ function needsHeaders(request: Record<string, string> | undefined): boolean {
   return Object.keys(request).some((name) => !(name.toLowerCase() === 'user-agent' && /^Mozilla\//.test(request[name])));
 }
 
+/**
+ * Provedor que só leva a uma página de player (não ao arquivo): o "PrimeWire"
+ * do NoTorrent redireciona para voe.sx/e/… e o servidor só responde 404
+ * depois de ~23 s, segurando o play como link mudo.
+ */
+const PAGE_ONLY = /\bprimewire\b/i;
+
 /** player embutido de site ("MegaEmbed", ".../embed/123") */
 const EMBED = /embed/i;
 
@@ -324,7 +331,7 @@ export function parseStream(stream: AddonStream, addon: string, names?: string[]
   if (!stream.url) unplayable = stream.infoHash ? 'torrent' : 'external';
   // <video> não deixa mandar cabeçalhos próprios na requisição
   else if (needsHeaders(hints.proxyHeaders && hints.proxyHeaders.request)) unplayable = 'headers';
-  else if (PAYWALL.test(stream.url)) unplayable = 'external';
+  else if (PAYWALL.test(stream.url) || PAGE_ONLY.test(text)) unplayable = 'external';
   // página de player embutido (não é o arquivo de vídeo)
   else if (!containerOf(stream.url, filename, '') && EMBED.test(`${stream.url}\n${text}`)) unplayable = 'external';
   else if (NOT_VIDEO.test(filename || ff.file || '')) unplayable = 'not-video';

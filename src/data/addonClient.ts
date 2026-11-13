@@ -143,6 +143,12 @@ const STREAMS_TIMEOUT_MS = 45000;
 const STREAMS_SHARE_MS = 30 * 1000;
 const streamsCache: Record<string, { at: number; list: Promise<AddonStream[]> }> = {};
 
+/** Quando o pedido de fontes guardado (ainda válido) saiu; sem ele, agora. */
+export function streamsAskedAt(base: string, type: string, videoId: string): number {
+  const hit = streamsCache[`${base}/stream/${type}/${encodeURIComponent(videoId)}.json`];
+  return hit && Date.now() - hit.at < STREAMS_SHARE_MS ? hit.at : Date.now();
+}
+
 export function fetchStreams(base: string, type: string, videoId: string): Promise<AddonStream[]> {
   const url = `${base}/stream/${type}/${encodeURIComponent(videoId)}.json`;
   const hit = streamsCache[url];

@@ -1,7 +1,8 @@
 // Teste simples de rede: baixa um arquivo de tamanho conhecido e mede a taxa.
 // Serve para decidir a resolução; não é um medidor de precisão.
 
-const TEST_BYTES = 5_000_000;
+/** 2 MB: o bastante para a resolução; 5 MB disputavam a rede com o começo do vídeo */
+const TEST_BYTES = 2_000_000;
 const TEST_URL = `https://speed.cloudflare.com/__down?bytes=${TEST_BYTES}`;
 const TEST_TIMEOUT_MS = 8000;
 const FRESH_FOR_MS = 30 * 60 * 1000;

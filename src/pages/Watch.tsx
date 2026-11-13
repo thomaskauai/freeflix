@@ -49,6 +49,7 @@ import {
 } from '../streams/audioMemory';
 import { undoSubtitle } from '../streams/subtitles';
 import { resolvePlayback, warmStreams, type Candidate, type NoSourceReason } from '../streams/resolve';
+import { verdictOf } from '../streams/directUrl';
 
 const MESSAGES: Record<NoSourceReason | 'all-failed', { title: string; text: string; settings?: boolean }> = {
   'no-addons': {
@@ -97,6 +98,8 @@ function bufferedAhead(video: HTMLVideoElement): number {
 
 /** Enquanto a fonte é procurada: a mesma cara do player, com o título no alto e só o Voltar. */
 /** pausa que dura isso com o app à vista apaga a anotação do player (ver onPlaying) */
+/** depois de começar a tocar, espera isso para pedir as fontes dos próximos episódios */
+const WARM_FOLLOWING_AFTER_MS = 30000;
 const PAUSE_CLEARS_AFTER_MS = 1500;
 
 function Waiting({ title, subtitle, onExit }: { title: string; subtitle?: string; onExit: () => void }) {
@@ -838,11 +841,16 @@ export default function Watch() {
           // torrent não vira a fonte padrão (dos próximos episódios ou da próxima abertura)
           if (!candidate.torrent) rememberSourceOf(title, candidate.profile);
           syncStarted(title, season, episode);
-          // fonte lenta (BestCine leva 20 a 40 s num episódio nunca pedido): os 2
-          // seguintes já ficam pedidos, e pular de episódio cai na resposta guardada
+          // os 2 episódios seguintes já ficam pedidos (pular de episódio cai na
+          // resposta guardada), mas só depois do começo: no play, os pedidos às
+          // fontes disputariam a rede com os primeiros segundos do vídeo
           const after = following && followingEpisode(list, following.season, following.episode.number);
-          [following, after].forEach(
-            (e) => e && warmStreams(title.type, title.id, e.season, e.episode.number, title.originalLanguage),
+          window.setTimeout(
+            () =>
+              [following, after].forEach(
+                (e) => e && warmStreams(title.type, title.id, e.season, e.episode.number, title.originalLanguage),
+              ),
+            WARM_FOLLOWING_AFTER_MS,
           );
         }}
         onProgress={(time, length, moment) => {
@@ -872,6 +880,7 @@ export default function Watch() {
         burnedSubtitles={candidate.hardSubs}
         notice={notice}
         startTimeout={candidate.torrent ? TORRENT_START_MS : undefined}
+        confirmed={verdictOf(candidate.url) === 'video'}
         torrentUrl={candidate.torrent ? candidate.url : undefined}
         originalLanguage={title.originalLanguage}
         preferredAudio={

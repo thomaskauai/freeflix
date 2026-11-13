@@ -35,7 +35,7 @@ describe('fontes no ar', () => {
     await probeSources(['https://a']);
     expect(isDown('https://a')).toBe(true);
     expect(showsDown(new Error('http 404'))).toBe(false);
-    expect(showsDown(new Error('http 502'))).toBe(true);
+    expect(showsDown(new Error('http 502'))).toBe(false);
     expect(showsDown(new Error('timeout'))).toBe(false);
     expect(showsDown(new TypeError('Failed to fetch'))).toBe(true);
   });

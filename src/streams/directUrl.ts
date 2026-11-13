@@ -9,6 +9,17 @@ const DIRECT_TTL_MS = 60 * 60 * 1000;
 const RESOLVE_TIMEOUT_MS = 4000;
 
 const found: Record<string, { url: string; at: number }> = {};
+
+/**
+ * O que a descoberta viu do link: 'video' (respondeu 2xx com algo que não é
+ * página), 'dead' (4xx/5xx ou página HTML no lugar do vídeo). Sem resposta,
+ * bloqueado (CORS no navegador) ou ainda sem resposta: nada.
+ */
+export type Verdict = 'video' | 'dead';
+const verdicts: Record<string, Verdict | undefined> = {};
+
+/** Veredito já conhecido do link. */
+export const verdictOf = (url: string): Verdict | undefined => verdicts[url];
 const pending: Record<string, Promise<string> | undefined> = {};
 
 /** Endereço final já conhecido (e ainda novo) do link; senão o próprio link. */
@@ -60,7 +71,18 @@ export function resolveDirect(url: string, hls = false): Promise<string> {
     };
     const timer = window.setTimeout(() => finish(url), RESOLVE_TIMEOUT_MS);
     xhr.onreadystatechange = () => {
-      if (xhr.readyState >= 2) finish(xhr.status >= 200 && xhr.status < 400 ? xhr.responseURL || url : url);
+      if (xhr.readyState < 2) return;
+      const status = xhr.status;
+      let type = '';
+      try {
+        type = xhr.getResponseHeader('content-type') || '';
+      } catch {
+        // sem acesso aos cabeçalhos
+      }
+      // status 0: bloqueado (CORS) ou cancelado; aí não se sabe nada
+      if (status >= 400 || (status >= 200 && status < 300 && /text\/html/i.test(type))) verdicts[url] = 'dead';
+      else if (status >= 200 && status < 300) verdicts[url] = 'video';
+      finish(status >= 200 && status < 400 ? xhr.responseURL || url : url);
     };
     xhr.onerror = () => finish(url);
     xhr.send();

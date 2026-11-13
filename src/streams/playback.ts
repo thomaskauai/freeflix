@@ -1,4 +1,4 @@
-import { directFor, forgetDirect, resolveDirect } from './directUrl';
+import { directFor, forgetDirect, resolveDirect, verdictOf } from './directUrl';
 import {
   episodeProgressOf,
   getEpisodeProgress,
@@ -247,7 +247,7 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
       })
       .then((torrent): Plan => (torrent ? { status: 'play', candidates: [torrent], index: 0 } : none))
       .catch(() => none);
-  const plan = torrentFirst.then(
+  const found = torrentFirst.then(
     (torrent): Plan | Promise<Plan> =>
       torrent
         ? {
@@ -258,12 +258,11 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
           }
         : httpPlan.then((p) => (p.status === 'none' ? torrentBackup(p) : p)),
   );
+  const plan = found.then((p) => checkLinks(p, title));
   plans[key] = { at: Date.now(), plan };
   const episodeKey = keyOf(title, season, episode);
   plan.then((p) => {
     if (p.status !== 'play') return;
-    // o endereço final das primeiras fontes já fica descoberto para o play
-    p.candidates.slice(0, DIRECT_AHEAD).forEach((c) => !c.torrent && resolveDirect(c.url, c.hls));
     keepFound(episodeKey, p.candidates);
     if (!p.more) return;
     const first = p.candidates[0];
@@ -276,7 +275,9 @@ export function planFor(title: Title, season?: number, episode?: number): Promis
       if (!more.length || (first && first.torrent)) return;
       if (!plans[key] || plans[key].plan !== plan) return;
       const full: Plan = { status: 'play', candidates: mergeCandidates(more, p.candidates), index: 0 };
-      plans[key] = { at: plans[key].at, plan: Promise.resolve(full) };
+      checkLinks(full, title).then((checked) => {
+        if (plans[key] && plans[key].plan === plan) plans[key] = { at: plans[key].at, plan: Promise.resolve(checked) };
+      });
     });
   });
   // sem fonte, a próxima tentativa pergunta de novo
@@ -384,10 +385,51 @@ export function dropPreloadOf(title: Title, season?: number, episode?: number) {
   if (preloaded && preloaded.key === keyOf(title, season, episode)) dropPreloaded();
 }
 
+/**
+ * Antes do play, os primeiros links da lista são testados ao mesmo tempo (o
+ * mesmo GET que descobre o endereço final, cancelado nos cabeçalhos). Link
+ * morto (4xx/5xx, página no lugar do vídeo) sai da lista; link mudo (sem
+ * resposta até CHECK_WAIT_MS) vai para depois do primeiro vivo que tenha o
+ * mesmo áudio. Antes, cada link morto ou mudo custava 5 s no player, um por vez
+ * (Interstellar na sala: dois mudos, 10 s perdidos). Sem como saber
+ * (navegador bloqueia por CORS), a ordem fica como está.
+ */
+const CHECK_AHEAD = 5;
+/** quanto o plano espera pelos testes; os vivos respondem em 0,3 a 1 s */
+const CHECK_WAIT_MS = 2000;
+
+function checkLinks(plan: Plan, title: Title): Promise<Plan> {
+  if (plan.status !== 'play') return Promise.resolve(plan);
+  const top = plan.candidates.slice(0, CHECK_AHEAD).filter((c) => !c.torrent && !hasFailed(c.url));
+  if (!top.length) return Promise.resolve(plan);
+  const checks = top.map((c) => resolveDirect(c.url, c.hls));
+  const waited = new Promise<void>((done) => window.setTimeout(done, CHECK_WAIT_MS));
+  return Promise.race([Promise.all(checks).then(() => undefined), waited]).then(() => {
+    top.forEach((c) => verdictOf(c.url) === 'dead' && (failedUrls[c.url] = true));
+    const prefs = { audio: audioFor(title), originalLanguage: title.originalLanguage };
+    // testável e sem resposta: mudo (HLS e o motor local não passam pelo teste)
+    const silent = (c: Candidate) => !c.hls && /^https?:\/\//.test(c.url) && !/^https?:\/\/(127\.0\.0\.1|localhost)[:/]/.test(c.url) && !verdictOf(c.url);
+    const list = plan.candidates.slice();
+    let moved = false;
+    for (let i = 0; i < Math.min(CHECK_AHEAD, list.length); i++) {
+      const c = list[i];
+      if (c.torrent || !silent(c)) continue;
+      const audio = offersAudio(c.profile, prefs);
+      const alive = list.findIndex(
+        (o, j) => j > i && j < CHECK_AHEAD && verdictOf(o.url) === 'video' && offersAudio(o.profile, prefs) === audio,
+      );
+      if (alive < 0) continue;
+      list.splice(alive + 1, 0, c);
+      list.splice(i, 1);
+      moved = true;
+      i--;
+    }
+    return moved ? { ...plan, candidates: list, index: 0 } : plan;
+  });
+}
+
 /** fontes com o endereço final já procurado para a pré-carga (achado ou não) */
 const resolving: Record<string, boolean> = {};
-/** quantas das primeiras fontes do plano têm o endereço final descoberto de antemão */
-const DIRECT_AHEAD = 2;
 
 /** Baixa a primeira fonte que não falhou; se esta falhar, passa para a seguinte. */
 function preloadCandidate(

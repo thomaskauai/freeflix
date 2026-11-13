@@ -1,4 +1,4 @@
-import { fetchMeta, fetchStreams } from '../data/addonClient';
+import { fetchMeta, fetchStreams, streamsAskedAt } from '../data/addonClient';
 import { CATALOG } from '../settings';
 import type { Title, TitleType } from '../data/types';
 import { audioFor } from './audioMemory';
@@ -165,6 +165,9 @@ async function resolveOnce(
   if (listSources().length === 0) return { reason: 'no-addons' };
   if (addons.length === 0) return { reason: 'not-found' };
 
+  // o relógio conta desde o pedido: a busca adiantada (foco no card, detalhes)
+  // já correu parte da espera antes do título completo chegar
+  const askedAt = Math.min(...addons.map((a) => streamsAskedAt(a.base, title.type, videoId)));
   const english = englishName(title);
   // com o motor local no ar, fonte que pede cabeçalho toca por ele (headerProxy.ts)
   const proxy = headerProxyAvailable();
@@ -216,12 +219,12 @@ async function resolveOnce(
   const timer = window.setTimeout(() => {
     quick = true;
     arrived();
-  }, QUICK_MS);
+  }, Math.max(0, QUICK_MS - (Date.now() - askedAt)));
   // fonte lenta (até 45 s) só segura o play quando nenhuma outra tem o título
   const cap = window.setTimeout(() => {
     enough = true;
     arrived();
-  }, ENOUGH_MS);
+  }, Math.max(0, ENOUGH_MS - (Date.now() - askedAt)));
   await new Promise<void>((done) => {
     arrived = () => {
       if (pending === 0 || (quick && ready()) || ((enough || mainPending === 0) && rank().length > 0)) done();

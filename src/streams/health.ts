@@ -4,9 +4,8 @@ import { getJson } from '../data/addonClient';
 // manifest; a que não responde (fora do ar, domínio morto, erro do servidor)
 // fica de fora das buscas por um tempo, e quem procura um vídeo não espera por
 // ela. Passado esse tempo, ela é testada de novo em segundo plano e volta
-// sozinha se tiver voltado. Uma busca de vídeo que falha por rede ou erro do
-// servidor também tira a fonte; demora (timeout) não, porque há fontes lentas
-// que funcionam (BestCine).
+// sozinha se tiver voltado. Uma busca de vídeo que falha por rede também tira
+// a fonte; demora (timeout) e erro do servidor para um título não.
 
 /** tempo para o manifest responder no teste */
 const PROBE_TIMEOUT_MS = 8000;
@@ -71,10 +70,15 @@ export function onlyUp<T extends { base: string }>(sources: T[]): T[] {
   return up.length ? up : sources;
 }
 
-/** Erro de busca que mostra a fonte fora: rede (sem resposta) ou erro do servidor (5xx). */
+/**
+ * Erro de busca que mostra a fonte fora: só rede (sem resposta nenhuma). Erro
+ * do servidor (5xx) na busca de um título não conta: o Veyra responde 503
+ * ("get_vod_info indisponível") para alguns títulos e funciona para os outros;
+ * tirar a fonte de todas as buscas por 5 min fazia o título seguinte perder a
+ * fonte mais rápida.
+ */
 export function showsDown(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
   if (message === 'timeout' || /abort/i.test(message)) return false;
-  const http = message.match(/^http (\d+)/);
-  return http ? Number(http[1]) >= 500 : true;
+  return !/^http \d+/.test(message);
 }
