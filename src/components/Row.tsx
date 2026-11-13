@@ -62,21 +62,11 @@ export function Row({ title, variant, anchor = ROW_ANCHOR, passed, onActivate, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startIndex, count]);
 
-  // Fim da fileira guardado por quantidade de cards: ler offsetLeft logo depois
-  // da troca de foco força um layout inteiro, e na TV antiga isso pesa a cada tecla.
-  const measured = useRef<{ count: number; max: number } | null>(null);
-  const cachedLimit = () => {
-    if (measured.current && measured.current.count === count) return measured.current.max;
-    const max = limit();
-    if (max > 0) measured.current = { count, max };
-    return max;
-  };
-
   const onFocus = (e: FocusEvent<HTMLElement>) => {
     touched.current = true;
     setActive(true);
     if (onActivate) onActivate();
-    const max = cachedLimit();
+    const max = limit();
     setMaxX(max);
     const t = track.current;
     const item = (e.target as HTMLElement).closest<HTMLElement>('[data-focusable]');

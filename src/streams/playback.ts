@@ -384,7 +384,7 @@ export function dropPreloadOf(title: Title, season?: number, episode?: number) {
   if (preloaded && preloaded.key === keyOf(title, season, episode)) dropPreloaded();
 }
 
-/** fontes com o endereço final sendo descoberto para a pré-carga */
+/** fontes com o endereço final já procurado para a pré-carga (achado ou não) */
 const resolving: Record<string, boolean> = {};
 /** quantas das primeiras fontes do plano têm o endereço final descoberto de antemão */
 const DIRECT_AHEAD = 2;
@@ -402,12 +402,12 @@ function preloadCandidate(
   if (wanted !== key || !candidate || tries <= 0) return;
   if (preloaded && preloaded.url === candidate.url) return;
   // pré-carga não tem pressa: espera o endereço final (até 4 s) para o vídeo já nascer nele
+  // uma vez por fonte: sem endereço final descoberto, baixa pelo original (antes, pedia de novo a cada 4 s)
   if (!candidate.torrent && directFor(candidate.url) === candidate.url && !resolving[candidate.url]) {
     resolving[candidate.url] = true;
-    resolveDirect(candidate.url, candidate.hls).then(() => {
-      delete resolving[candidate.url];
-      preloadCandidate(key, title, candidates, season, episode, tries);
-    });
+    resolveDirect(candidate.url, candidate.hls).then(() =>
+      preloadCandidate(key, title, candidates, season, episode, tries),
+    );
     return;
   }
   dropPreloaded();
