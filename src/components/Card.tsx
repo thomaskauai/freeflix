@@ -4,7 +4,9 @@ import { kindLabel, type Title } from '../data/types';
 import { useFocusable } from '../focus/useFocusable';
 import { navigateTo, titlePath } from '../nav';
 import { warmTitle } from '../streams/playback';
+import { TitleArt } from './Hero';
 import { loadLogo } from './logo';
+import { KindTag, Meta } from './Meta';
 
 interface CardProps {
   title: Title;
@@ -27,6 +29,11 @@ interface CardProps {
   onDwell?: () => void;
   /** o foco saiu do card */
   onLeave?: () => void;
+  /**
+   * Em foco, o cartaz abre em 16:9 com o fundo da obra, a arte de título e,
+   * abaixo, a linha de informação e a sinopse (Home experimental).
+   */
+  expand?: boolean;
 }
 
 /** foco parado por este tempo conta como interesse no card (onDwell) */
@@ -66,6 +73,23 @@ export function fallbackArt(id: string) {
  */
 const wideArt = (url?: string) => (url ? url.replace(/\/t\/p\/(w1280|original)\//, '/t/p/w780/') : undefined);
 
+/** Fundo da obra no card aberto: entra por cima do cartaz quando termina de baixar. */
+function WideArt({ src }: { src: string }) {
+  const [ready, setReady] = useState(!!shown[src]);
+  return (
+    <img
+      className={`card__wide${ready ? ' is-loaded' : ''}`}
+      src={src}
+      alt=""
+      decoding="async"
+      onLoad={() => {
+        shown[src] = true;
+        setReady(true);
+      }}
+    />
+  );
+}
+
 export const Card = memo(function Card({
   title,
   variant,
@@ -79,11 +103,18 @@ export const Card = memo(function Card({
   onSelect,
   onDwell,
   onLeave,
+  expand,
 }: CardProps) {
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const [focused, setFocused] = useState(false);
+  const expanded = !!expand && focused;
   const [failed, setFailed] = useState(false);
   const focus = useFocusable({ id: focusId, autoFocus });
-  const picture = image ?? (variant === 'wide' ? (wideArt(title.backdrop) ?? title.poster) : title.poster);
+  const picture = expand
+    ? (title.poster ?? image ?? wideArt(title.backdrop))
+    : (image ?? (variant === 'wide' ? (wideArt(title.backdrop) ?? title.poster) : title.poster));
+  /** a arte larga só baixa quando o card abre */
+  const widePicture = expand ? (image ?? wideArt(title.backdrop)) : undefined;
   const hasImage = !!picture && !failed;
   const loaded = !!picture && (loadedSrc === picture || !!shown[picture]);
 
@@ -99,6 +130,7 @@ export const Card = memo(function Card({
     [],
   );
   const onFocus = () => {
+    if (expand) setFocused(true);
     window.clearTimeout(prefetch.current);
     window.clearTimeout(dwell.current);
     if (onDwell) dwell.current = window.setTimeout(onDwell, DWELL_MS);
@@ -118,11 +150,12 @@ export const Card = memo(function Card({
   return (
     <div
       {...focus}
-      className={`card card--${variant}`}
+      className={`card card--${variant}${expand ? ' card--expand' : ''}${expanded ? ' is-expanded' : ''}`}
       aria-label={title.title}
       data-scroll-anchor={anchor}
       onFocus={onFocus}
       onBlur={() => {
+        if (expand) setFocused(false);
         window.clearTimeout(prefetch.current);
         window.clearTimeout(dwell.current);
         if (onLeave) onLeave();
@@ -153,12 +186,25 @@ export const Card = memo(function Card({
             <span className="titlecard__name display">{title.title}</span>
           </div>
         )}
+        {expanded && widePicture && <WideArt src={widePicture} />}
+        {expanded && (
+          <div className="card__overlay">
+            <KindTag title={title} />
+            <TitleArt title={title} className="card__logo" />
+          </div>
+        )}
         {progress != null && (
           <div className="card__progress">
             <i style={{ width: `${Math.round(progress * 100)}%` }} />
           </div>
         )}
       </div>
+      {expanded && (
+        <div className="card__details">
+          <Meta title={title} />
+          {(info || title.synopsis) && <p className="card__synopsis">{info ?? title.synopsis}</p>}
+        </div>
+      )}
       <div className="card__text">
         <div className="card__title">{title.title}</div>
         <div className="card__info">

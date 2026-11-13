@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { Sidebar } from './components/Sidebar';
+import { TopNav } from './components/TopNav';
 import { Splash } from './components/Splash';
 import { Stage } from './components/Stage';
 import { FocusProvider } from './focus/FocusContext';
@@ -145,7 +145,7 @@ export default function App() {
           <Route path="/watch/:type/:id/:season/:episode" element={<Watch />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-        {!inPlayer && <Sidebar />}
+        {!inPlayer && <TopNav />}
         {opening && <Splash onDone={endOpening} />}
       </Stage>
     </FocusProvider>

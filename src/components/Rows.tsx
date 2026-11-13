@@ -47,6 +47,8 @@ const rowKey = (id: string) => `${window.location.hash || '#/'}${SEP}${id}`;
 /** na TV antiga, cada fileira montada custa ~1 s de desenho: só a seguinte */
 const AHEAD = isLegacyTizen() ? 1 : 3;
 const SKELETONS = 8;
+/** fileiras de obras: cartaz que abre em 16:9 no foco (Home experimental) */
+const EXPANDS: Record<string, boolean> = { poster: true, tall: true, wide: true };
 
 /** Separador entre fileira e título no id de foco; ids de título podem ter ":" (tmdb:123). */
 const SEP = '|';
@@ -142,7 +144,7 @@ const LazyRow = memo(function LazyRow({
   return (
     <Row
       title={source.title}
-      variant={source.style}
+      variant={EXPANDS[source.style] ? 'poster' : source.style}
       anchor={anchor}
       passed={passed}
       onActivate={() => onActivate(index)}
@@ -153,7 +155,8 @@ const LazyRow = memo(function LazyRow({
             <Card
               key={title.id}
               title={title}
-              variant={source.style}
+              variant={EXPANDS[source.style] ? 'poster' : source.style}
+              expand={!!EXPANDS[source.style]}
               focusId={`${source.id}${SEP}${title.id}`}
               autoFocus={autoFocusFirst && i === 0}
               progress={source.progress ? source.progress[title.id] : undefined}

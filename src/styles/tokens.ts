@@ -14,7 +14,7 @@ export const TABBAR_H = 104;
 /** quanto da tela sobra abaixo do destaque, para a primeira fileira aparecer */
 export const HERO_PEEK = 248;
 /** y em que o título da fileira focada estaciona */
-export const ROW_ANCHOR = 72;
+export const ROW_ANCHOR = 128;
 /** folga à direita ao chegar no fim de uma fileira */
 export const ROW_END_GAP = 60;
 /** folga do recorte da fileira, para o contorno de foco não ser cortado */
