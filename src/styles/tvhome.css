@@ -239,7 +239,7 @@
 
 .hero__body {
   top: auto;
-  bottom: 72px;
+  bottom: 104px;
   left: calc(var(--content-left) + var(--hero-pad));
   right: calc(var(--content-left) + var(--hero-pad) - 2px);
   max-width: none;
@@ -311,7 +311,7 @@
 .hero__actions {
   position: relative;
   width: calc(var(--stage-w) - var(--content-left) * 2 - var(--hero-pad) * 2);
-  margin-top: 30px;
+  margin-top: 48px;
 }
 
 .hero .btn {

@@ -118,6 +118,9 @@ function continueWatchingRow(
 
 /** a Home abriu: espera isso antes de carregar o último de Continuar assistindo (imagens e fileiras primeiro) */
 /** na TV antiga, a busca e o download na abertura disputam com a navegação: espera mais */
+/** destaques no topo da Home (experimental) */
+const HERO_COUNT = 5;
+
 const OPEN_PRELOAD_DELAY_MS = isLegacyTizen() ? 8000 : 2000;
 
 /** card de Continuar assistindo com o vídeo sendo preparado */
@@ -267,7 +270,7 @@ export default function Home() {
     return focusElement(document.querySelector<HTMLElement>('[data-focus-id="hero-play"]'));
   });
 
-  const featured = data ? data.featured : [];
+  const featured = data ? data.featured.slice(0, HERO_COUNT) : [];
   // série começa de onde o espectador parou (sem a lista de episódios ainda, no episódio guardado)
   const play = (t: Title) => {
     if (t.type !== 'series') return navigate(watchPath(t));
