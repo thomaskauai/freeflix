@@ -43,7 +43,12 @@ const SAVE_EVERY_MS = 5000;
 /** fonte que não começa a tocar nesse tempo é dada como ruim */
 const START_TIMEOUT_MS = 15000;
 /** link HTTP que nem responde (sem metadados) nesse tempo: os bons levam 1-2 s */
-const NO_ANSWER_MS = 8000;
+const NO_ANSWER_MS = 5000;
+/**
+ * link HTTP que respondeu (metadados) e não começa a andar nesse tempo: parado.
+ * Na sala, um link do PenguPlay ficou assim 10 s antes da troca; os bons andam em 1-3 s.
+ */
+const STUCK_AFTER_META_MS = 5000;
 /** fonte que já tocou e travou (tempo parado querendo tocar) por isso é dada como ruim */
 const STALL_MS = 20000;
 /** torrent trava e junta folga sozinho (TORRENT_REBUFFER_MAX_MS por vez): tem mais tempo */
@@ -569,6 +574,7 @@ export function PlayerShell({
     // mais que STALL_MS (ou TORRENT_STALL_MS), é dada como ruim: o player troca
     // de fonte no mesmo segundo. Pausa do espectador ou autoplay recusado não contam.
     let waited = 0;
+    let sinceMeta = 0;
     let stuck = 0;
     let mark = media.currentTime;
     const stallLimit = torrentRef.current ? TORRENT_STALL_MS : STALL_MS;
@@ -582,8 +588,10 @@ export function PlayerShell({
       }
       if (!moving) {
         waited += WATCH_TICK_MS;
+        if (media.readyState >= 1) sinceMeta += WATCH_TICK_MS;
         const silent = !torrentRef.current && media.readyState === 0 && waited >= NO_ANSWER_MS;
-        if (waited >= startTimeout || silent) fail();
+        const parked = !torrentRef.current && sinceMeta >= STUCK_AFTER_META_MS;
+        if (waited >= startTimeout || silent || parked) fail();
         return;
       }
       stuck = went && !media.seeking ? 0 : stuck + WATCH_TICK_MS;
