@@ -12,7 +12,7 @@ import { syncProgress, syncStarted } from '../data/sync';
 import type { Season, Title, TitleType } from '../data/types';
 import { useFocusable, usePageFocus } from '../focus/useFocusable';
 import { useGoBack, watchPath } from '../nav';
-import { TORRENT_LABEL, TORRENT_START_MS, torrentAvailable, torrentCandidate } from '../streams/torrent';
+import { TORRENT_LABEL, TORRENT_START_MS, sweepTorrents, torrentAvailable, torrentCandidate } from '../streams/torrent';
 import {
   firstWorking,
   hasFailed,
@@ -20,6 +20,7 @@ import {
   dropPreloadOf,
   markFailed,
   mergeCandidates,
+  openTorrentIfWeak,
   parkVideo,
   planFor,
   preloadPlayback,
@@ -231,6 +232,8 @@ export default function Watch() {
         if (kept) return show(kept);
         // Se a página de detalhes já procurou (e até pré-carregou), isto volta na hora.
         planFor(t, season, episode).then((next) => alive && show(firstWorking(next, t, season, episode)));
+        // fontes HTTP fracas: o torrent de reserva já abre (playback.ts)
+        openTorrentIfWeak(t, season, episode);
       },
       () => alive && navigate('/', { replace: true }),
     );
@@ -840,6 +843,8 @@ export default function Watch() {
         onStart={() => {
           // torrent não vira a fonte padrão (dos próximos episódios ou da próxima abertura)
           if (!candidate.torrent) rememberSourceOf(title, candidate.profile);
+          // fonte HTTP tocando: o torrent de reserva (se abriu) sai e não divide a banda
+          if (!candidate.torrent) sweepTorrents();
           syncStarted(title, season, episode);
           // os 2 episódios seguintes já ficam pedidos (pular de episódio cai na
           // resposta guardada), mas só depois do começo: no play, os pedidos às

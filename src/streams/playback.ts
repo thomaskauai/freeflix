@@ -368,6 +368,7 @@ export function preloadPlayback(title: Title, season?: number, episode?: number)
   const key = keyOf(title, season, episode);
   window.clearTimeout(releaseTimer);
   wanted = key;
+  openTorrentIfWeak(title, season, episode);
   // o vídeo guardado ao sair do player deste mesmo episódio já serve, se do mesmo idioma
   if (preloaded && preloaded.key === key && preloaded.audio === audioFor(title)) return;
   dropPreloaded();
@@ -383,6 +384,42 @@ export function preloadPlayback(title: Title, season?: number, episode?: number)
  */
 export function dropPreloadOf(title: Title, season?: number, episode?: number) {
   if (preloaded && preloaded.key === keyOf(title, season, episode)) dropPreloaded();
+}
+
+/** torrent com menos seeds que isso não vale abrir de antemão (a sala baixa ~3 Mbps com 11 peers) */
+const RESERVE_TORRENT_SEEDS = 20;
+/** com menos fontes HTTP no áudio preferido que isso, as fontes HTTP são fracas */
+const STRONG_HTTP = 2;
+/** título (episódio + áudio) com o torrent de reserva já aberto, e quando */
+const reserveOpened: Record<string, number> = {};
+
+/**
+ * Título com fontes HTTP fracas (menos de STRONG_HTTP no áudio preferido; ex.:
+ * filme brasileiro que só uma fonte tem, num arquivo que a TV pode nem tocar):
+ * nos detalhes e no player, o melhor torrent no áudio preferido, com seeds
+ * suficientes, já abre no motor e começa a baixar o início, como reserva. Se
+ * as fontes HTTP falharem, o player cai nele (lastResort em Watch.tsx) com o
+ * vídeo já chegando, em vez de começar do zero. Se uma fonte HTTP tocar, o
+ * player tira o torrent do motor (sweepTorrents) para não dividir a banda.
+ * Do foco no card não: abrir torrent a cada card pesaria na TV.
+ */
+export function openTorrentIfWeak(title: Title, season?: number, episode?: number) {
+  const key = `${keyOf(title, season, episode)}/${audioFor(title)}`;
+  if (reserveOpened[key] && Date.now() - reserveOpened[key] < PLAN_TTL_MS) return;
+  planFor(title, season, episode).then((plan) => {
+    // sem fonte HTTP nenhuma, o plano já traz o torrent (torrentBackup)
+    if (plan.status !== 'play' || plan.candidates.some((c) => c.torrent)) return;
+    const prefs = { audio: audioFor(title), originalLanguage: title.originalLanguage };
+    const strong = plan.candidates.filter((c) => !hasFailed(c.url) && offersAudio(c.profile, prefs)).length;
+    if (strong >= STRONG_HTTP || (reserveOpened[key] && Date.now() - reserveOpened[key] < PLAN_TTL_MS)) return;
+    reserveOpened[key] = Date.now();
+    const preferred = torrentInPreferredAudio(title);
+    torrentAvailable()
+      .then((ok) =>
+        ok ? torrentCandidate(title, season, episode, (t) => preferred(t) && t.seeds >= RESERVE_TORRENT_SEEDS) : null,
+      )
+      .catch(() => null);
+  });
 }
 
 /**
