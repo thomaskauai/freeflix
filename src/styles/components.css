@@ -637,7 +637,8 @@
   transition: none;
 }
 
-.is-legacy-tv .rows.has-focus .row.is-passed {
+/* duas ou mais acima: a logo acima precisa continuar focável (seta para cima) */
+.is-legacy-tv .rows.has-focus .row.is-far {
   visibility: hidden;
 }
 

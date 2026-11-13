@@ -56,6 +56,7 @@ interface LazyRowProps {
   wanted: boolean;
   anchor?: 'top';
   passed: boolean;
+  far: boolean;
   autoFocusFirst?: boolean;
   /** posição da fileira na pilha, passada de volta a onActivate e onSettled */
   index: number;
@@ -72,6 +73,7 @@ const LazyRow = memo(function LazyRow({
   wanted,
   anchor,
   passed,
+  far,
   autoFocusFirst,
   index,
   onActivate,
@@ -145,6 +147,7 @@ const LazyRow = memo(function LazyRow({
       variant={source.style}
       anchor={anchor}
       passed={passed}
+      far={far}
       onActivate={() => onActivate(index)}
       onNearEnd={items && source.load ? loadMore : undefined}
     >
@@ -255,6 +258,7 @@ export function Rows({ rows, autoFocusFirst, keepHeader, onFocus, onReady }: Row
           wanted={r <= reach}
           anchor={keepHeader && r === 0 ? 'top' : undefined}
           passed={focused && r < activeRow}
+          far={focused && r < activeRow - 1}
           autoFocusFirst={autoFocusFirst && r === 0}
           index={r}
           onActivate={activate}
