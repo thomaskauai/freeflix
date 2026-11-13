@@ -17,6 +17,12 @@ interface RowProps {
   anchor?: number | 'top';
   /** já ficou acima da fileira em foco: some, em vez de sobrar uma tira no topo */
   passed?: boolean;
+  /**
+   * duas ou mais acima da fileira em foco: na TV antiga nem é desenhada. A logo
+   * acima não, porque elemento com visibility: hidden não recebe foco e a seta
+   * para cima ficava presa.
+   */
+  far?: boolean;
   onActivate?: () => void;
   /** foco ou rolagem perto do último card: hora de trazer mais */
   onNearEnd?: () => void;
@@ -26,7 +32,7 @@ interface RowProps {
 }
 
 /** Fileira horizontal: o item focado estaciona na primeira posição. */
-export function Row({ title, variant, anchor = ROW_ANCHOR, passed, onActivate, onNearEnd, startIndex, children }: RowProps) {
+export function Row({ title, variant, anchor = ROW_ANCHOR, passed, far, onActivate, onNearEnd, startIndex, children }: RowProps) {
   const viewport = useRef<HTMLDivElement>(null);
   const track = useRef<HTMLDivElement>(null);
   const [x, setX] = useState(0);
@@ -113,7 +119,7 @@ export function Row({ title, variant, anchor = ROW_ANCHOR, passed, onActivate, o
 
   return (
     <section
-      className={`row row--${variant}${active ? ' is-active' : ''}${passed ? ' is-passed' : ''}`}
+      className={`row row--${variant}${active ? ' is-active' : ''}${passed ? ' is-passed' : ''}${far ? ' is-far' : ''}`}
       data-focus-group=""
       data-focus-enter="up down"
       // no último card, direita fica onde está (sem isso a geometria achava o banner lá em cima)
