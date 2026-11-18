@@ -1,10 +1,11 @@
-// Posições e histórico de uma casa.
-//   GET  ?code=&device=                          -> { progress: [...], history: [...] }
-//   POST { code, device, progress: [], history: [] } -> { saved }
+// Posições, histórico, avaliações e Minha lista de uma casa.
+//   GET  ?code=&device=                          -> { progress: [...], history: [...], removed: [...], prefs: [...] }
+//   POST { code, device, progress: [], history: [], prefs: [] } -> { saved, prefs }
 //   POST { action: "remove", code, device, titles: [] | all: true } -> { removed }
 // Em conflito vale o registro com updated_at mais recente; posição igual à
 // guardada não grava nada. Título apagado deixa marca em "removed": o que
-// chegar com horário de antes dela não volta.
+// chegar com horário de antes dela não volta. Em prefs (avaliação ou lista,
+// por título) também vale o mais recente; value null é "tirado".
 import { checkHouse, ensureSchema, json, preflight, readBody, sql } from './_lib.js';
 
 /** linhas por envio e por leitura */
@@ -20,7 +21,7 @@ export async function GET(req: Request) {
   const code = params.get('code');
   const refused = await checkHouse(req, code, params.get('device'));
   if (refused) return refused;
-  const [progress, history, removed] = await Promise.all([
+  const [progress, history, removed, prefs] = await Promise.all([
     sql`
       select content_id, title_id, season, episode, position_seconds, duration_seconds, finished, title,
              updated_at
@@ -36,8 +37,12 @@ export async function GET(req: Request) {
       select title_id, removed_at from removed where house_code = ${code}
       order by removed_at desc limit ${MAX_READ}
     `,
+    sql`
+      select kind, title_id, value, updated_at from prefs where house_code = ${code}
+      order by updated_at desc limit ${MAX_READ}
+    `,
   ]);
-  return json({ progress, history, removed });
+  return json({ progress, history, removed, prefs });
 }
 
 const int = (value: unknown, max = 1_000_000) =>
@@ -65,6 +70,39 @@ function snapshot(value: unknown): string | null {
     still: text(v.still),
     year: int(v.year, 3000) ?? undefined,
   });
+}
+
+/** Avaliação: só o que o app usa. */
+function rated(value: unknown): string | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  if (v.rating !== 'dislike' && v.rating !== 'like' && v.rating !== 'love') return null;
+  return JSON.stringify({
+    rating: v.rating,
+    type: v.type === 'series' ? 'series' : 'movie',
+    imdbId: typeof v.imdbId === 'string' && /^tt\d{1,10}$/.test(v.imdbId) ? v.imdbId : undefined,
+  });
+}
+
+interface Pref {
+  kind: 'rating' | 'list';
+  titleId: string;
+  /** JSON do valor; null: tirado */
+  value: string | null;
+  at: string;
+}
+
+function prefOf(value: unknown): Pref | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  if (raw.kind !== 'rating' && raw.kind !== 'list') return null;
+  if (typeof raw.title_id !== 'string' || !CONTENT.test(raw.title_id)) return null;
+  let json: string | null = null;
+  if (raw.value != null) {
+    json = raw.kind === 'rating' ? rated(raw.value) : snapshot(raw.value);
+    if (!json) return null;
+  }
+  return { kind: raw.kind, titleId: raw.title_id, value: json, at: when(raw.updated_at) };
 }
 
 interface Row {
@@ -99,6 +137,20 @@ export async function POST(req: Request) {
 
   const progress = (Array.isArray(body.progress) ? body.progress : []).slice(0, MAX_WRITE).map(rowOf);
   const history = (Array.isArray(body.history) ? body.history : []).slice(0, MAX_WRITE).map(rowOf);
+  const prefs = (Array.isArray(body.prefs) ? body.prefs : [])
+    .slice(0, MAX_WRITE)
+    .map(prefOf)
+    .filter((p): p is Pref => !!p);
+  const prefWrites = prefs.map(
+    (p) => sql`
+      insert into prefs as x (house_code, kind, title_id, value, updated_at)
+      values (${code}, ${p.kind}, ${p.titleId}, ${p.value}::jsonb, ${p.at}::timestamptz)
+      on conflict (house_code, kind, title_id) do update set
+        value = excluded.value,
+        updated_at = excluded.updated_at
+      where x.updated_at < excluded.updated_at
+    `,
+  );
 
   const writes = [
     ...progress.flatMap((r) => {
@@ -152,8 +204,9 @@ export async function POST(req: Request) {
         : [],
     ),
   ];
-  if (writes.length) await sql.transaction(writes);
-  return json({ saved: writes.length });
+  const all = writes.concat(prefWrites);
+  if (all.length) await sql.transaction(all);
+  return json({ saved: writes.length, prefs: prefWrites.length });
 }
 
 /** Apaga títulos (ou tudo) de Continuar assistindo e do histórico da casa. */

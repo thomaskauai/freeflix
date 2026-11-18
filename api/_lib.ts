@@ -59,6 +59,15 @@ export function ensureSchema() {
         removed_at timestamptz not null,
         primary key (house_code, title_id)
       )`;
+      // avaliações e Minha lista da casa (kind "rating" | "list"); value null: tirado
+      await sql`create table if not exists prefs (
+        house_code text not null references houses(code) on delete cascade,
+        kind text not null,
+        title_id text not null,
+        value jsonb,
+        updated_at timestamptz not null,
+        primary key (house_code, kind, title_id)
+      )`;
       await sql`create table if not exists code_attempts (
         key text primary key,
         failures int not null default 0,
